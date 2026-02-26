@@ -1,0 +1,38 @@
+/* ── Mermaid Diagram Containers ── */
+.mermaid-container {
+  text-align: center;
+  overflow-x: auto;
+  margin: 0.75em 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-loading {
+  text-align: center;
+  padding: 12px;
+  color: var(--muted, rgba(255, 255, 255, 0.5));
+  font-size: 13px;
+}
+
+.mermaid-error {
+  text-align: center;
+  padding: 4px 8px;
+  color: #f87171;
+  font-size: 12px;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+/* Light theme */
+[data-theme="light"] .mermaid-container {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+}

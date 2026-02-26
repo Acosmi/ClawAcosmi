@@ -1,0 +1,17 @@
+[package]
+name = "oa-types"
+description = "Core types for OpenAcosmi CLI: config, sessions, health, status"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

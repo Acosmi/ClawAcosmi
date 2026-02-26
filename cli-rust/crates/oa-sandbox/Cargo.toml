@@ -1,0 +1,79 @@
+[package]
+name = "oa-sandbox"
+description = "OS-native sandbox runtime for OpenAcosmi (Linux/macOS/Windows + Docker fallback)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Serialization (JSON IPC with Go layer)
+serde = { workspace = true }
+serde_json.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Internal
+oa-types.workspace = true
+
+# Process detection
+which.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Landlock LSM — unprivileged filesystem & network isolation (ABI 1-6)
+landlock = "0.4"
+# Seccomp-BPF — syscall filtering (requires system libseccomp-dev >= 2.5.0)
+libseccomp = "0.4"
+# POSIX API — namespaces, signals, mount, process management
+nix = { version = "0.29", features = ["sched", "signal", "mount", "user", "process"] }
+# C library bindings — constants (AF_UNIX, EPERM, etc.) for seccomp conditional rules
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS FFI for sandbox_init_with_parameters
+libc = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_Foundation",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "cold_start"
+harness = false
+
+[[bench]]
+name = "worker_bench"
+harness = false
+
+# Cannot use `[lints] workspace = true` because we need to override unsafe_code.
+# Manually replicate workspace lints with the single override.
+[lints.rust]
+# Override workspace `unsafe_code = "forbid"` — this crate requires unsafe for
+# platform FFI (macOS sandbox_init, Linux seccomp, Windows Win32).
+# All unsafe blocks undergo mandatory Skill 4 audit with // SAFETY: comments.
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"

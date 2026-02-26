@@ -1,0 +1,11 @@
+[package]
+name = "nexus-tokenizer"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+jieba-rs = "0.7"
+libc = "0.2"

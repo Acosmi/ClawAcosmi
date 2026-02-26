@@ -1,0 +1,50 @@
+[package]
+name = "oa-coder"
+description = "MCP-based coding sub-agent for OpenAcosmi — 9-layer fuzzy edit, file tools, sandboxed execution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Serialization (MCP JSON-RPC 2.0)
+serde = { workspace = true }
+serde_json.workspace = true
+
+# HTTP (for codesearch/websearch, Phase 3/4)
+reqwest = { workspace = true }
+
+# Atomic file writes (tempfile + rename)
+tempfile.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Diff algorithm (Patience/Myers for edit tool)
+similar = "2.7"
+
+# Glob matching (BurntSushi/ripgrep ecosystem)
+globset = "0.4"
+
+# Internal crates
+oa-sandbox = { workspace = true, optional = true }
+
+# Process detection (for rg binary lookup)
+which.workspace = true
+
+# Regex (for replacers)
+regex.workspace = true
+
+[features]
+default = ["sandbox"]
+sandbox = ["dep:oa-sandbox"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

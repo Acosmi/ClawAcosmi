@@ -1,0 +1,307 @@
+/* ---------- P3: Command Rules Styles ---------- */
+
+.rules-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.rules-section {
+    background: var(--card-bg, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+}
+
+.rules-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.rules-section__title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rules-section__title-icon {
+    display: inline-flex;
+}
+
+.rules-section__actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.rules-section__desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #aaa);
+    margin: 0 0 1rem;
+}
+
+.rules-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--color-danger, #ef4444);
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+/* ---------- 规则分组标题 ---------- */
+
+.rules-group-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary, #aaa);
+    margin: 1rem 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ---------- 规则列表 ---------- */
+
+.rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rule-item {
+    background: var(--item-bg, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.15s;
+}
+
+.rule-item:hover {
+    border-color: var(--accent-border, rgba(255, 255, 255, 0.15));
+}
+
+.rule-item--user {
+    border-left: 3px solid var(--color-info, #3b82f6);
+}
+
+.rule-item--preset {
+    border-left: 3px solid var(--text-tertiary, #666);
+}
+
+.rule-item__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.rule-item__icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.rule-item__pattern {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+.rule-item__action {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.rule-item__badge {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.rule-item__badge--preset {
+    background: rgba(100, 100, 100, 0.3);
+    color: var(--text-secondary, #aaa);
+}
+
+.rule-item__badge--user {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--color-info, #3b82f6);
+}
+
+.rule-item__desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary, #aaa);
+    margin-top: 0.25rem;
+}
+
+.rule-item__footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+}
+
+.rule-item__locked {
+    font-size: 0.75rem;
+    color: var(--text-tertiary, #666);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* ---------- 添加表单 ---------- */
+
+.rules-add-form {
+    background: var(--item-bg, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--accent-border, rgba(99, 102, 241, 0.3));
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.rules-add-form__row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.rules-add-form__row label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary, #aaa);
+}
+
+.rules-input {
+    background: var(--input-bg, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--card-border, rgba(255, 255, 255, 0.1));
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary, #fff);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.rules-input:focus {
+    border-color: var(--accent, #6366f1);
+}
+
+.rules-input::placeholder {
+    color: var(--text-tertiary, #666);
+}
+
+.rules-action-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.rules-action-group .btn--active {
+    background: color-mix(in srgb, var(--btn-active-color, #6366f1) 20%, transparent);
+    border-color: var(--btn-active-color, #6366f1);
+    color: var(--btn-active-color, #6366f1);
+}
+
+.rules-add-form__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+/* ---------- 命令测试 ---------- */
+
+.rules-test__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+}
+
+.rules-test__row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.rules-test__input {
+    flex: 1;
+}
+
+.rules-test-result {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border-left: 3px solid var(--card-border, rgba(255, 255, 255, 0.1));
+    border-radius: 0 6px 6px 0;
+    background: var(--item-bg, rgba(255, 255, 255, 0.02));
+}
+
+.rules-test-result--none {
+    border-left-color: var(--color-ok, #22c55e);
+}
+
+.rules-test-result__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.rules-test-result__detail {
+    font-size: 0.82rem;
+    color: var(--text-secondary, #aaa);
+    margin-top: 0.25rem;
+}
+
+.rules-test-result__rule {
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.rules-test-result__rule code {
+    font-family: var(--font-mono, monospace);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+/* ---------- 按钮扩展 ---------- */
+
+.btn--danger {
+    color: var(--color-danger, #ef4444);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn--danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.btn--primary {
+    background: var(--accent, #6366f1);
+    color: #fff;
+    border-color: var(--accent, #6366f1);
+}
+
+.btn--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent, #6366f1) 80%, #000);
+}
+
+.btn--primary:disabled {
+    opacity: 0.5;
+}

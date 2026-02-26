@@ -1,0 +1,37 @@
+# Rust build artifacts
+cli-rust/target/
+target/
+
+# Go build artifacts
+backend/build/acosmi
+
+# Frontend build output
+dist/
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+tmp/
+temp/
+Acosmo-Code/opencode

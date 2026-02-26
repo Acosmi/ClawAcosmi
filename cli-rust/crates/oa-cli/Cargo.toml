@@ -1,0 +1,70 @@
+[package]
+name = "oa-cli"
+description = "OpenAcosmi CLI binary entry point"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "openacosmi"
+path = "src/main.rs"
+
+[dependencies]
+# All command crates
+oa-cmd-health.workspace = true
+oa-cmd-status.workspace = true
+oa-cmd-sessions.workspace = true
+oa-cmd-channels.workspace = true
+oa-cmd-models.workspace = true
+oa-cmd-agents.workspace = true
+oa-cmd-sandbox.workspace = true
+oa-sandbox.workspace = true
+oa-cmd-coder.workspace = true
+oa-coder.workspace = true
+oa-cmd-auth.workspace = true
+oa-cmd-configure.workspace = true
+oa-cmd-onboard.workspace = true
+oa-cmd-doctor.workspace = true
+oa-cmd-agent.workspace = true
+oa-cmd-supporting.workspace = true
+oa-cmd-gateway.workspace = true
+oa-cmd-logs.workspace = true
+oa-cmd-memory.workspace = true
+oa-cmd-cron.workspace = true
+oa-cmd-config.workspace = true
+oa-cmd-daemon.workspace = true
+# Infrastructure
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+# Framework
+clap.workspace = true
+clap_complete.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_json.workspace = true
+
+# Note: we do NOT use `lints.workspace = true` here because this crate
+# requires limited unsafe code for `std::env::set_var` in Rust 2024.
+# The workspace forbids unsafe_code, so we replicate workspace lints but
+# allow unsafe_code for this crate only.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+
+[build-dependencies]
+clap = { workspace = true }
+clap_complete = { workspace = true }

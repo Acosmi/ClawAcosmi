@@ -1,0 +1,301 @@
+/* ===========================================
+   Channel Cards — Unified card grid
+   =========================================== */
+
+/* ─── Card Container ─── */
+.channel-card {
+    display: flex;
+    flex-direction: column;
+    height: 260px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    animation: rise 0.35s var(--ease-out) backwards;
+    transition:
+        border-color var(--duration-normal) var(--ease-out),
+        box-shadow var(--duration-normal) var(--ease-out),
+        opacity var(--duration-normal) var(--ease-out),
+        transform var(--duration-normal) var(--ease-out);
+    box-shadow:
+        var(--shadow-sm),
+        inset 0 1px 0 var(--card-highlight);
+    position: relative;
+}
+
+.channel-card:hover {
+    border-color: var(--border-strong);
+    box-shadow:
+        var(--shadow-md),
+        inset 0 1px 0 var(--card-highlight);
+}
+
+/* ─── Configured State ─── */
+.channel-card--configured {
+    border-left: 3px solid var(--accent);
+}
+
+.channel-card--configured:hover {
+    box-shadow:
+        var(--shadow-md),
+        inset 0 1px 0 var(--card-highlight),
+        0 0 0 1px var(--accent-glow, rgba(99, 102, 241, 0.08));
+}
+
+/* ─── Unconfigured State ─── */
+.channel-card--unconfigured {
+    border-style: dashed;
+    border-color: var(--border);
+}
+
+.channel-card--unconfigured:hover {
+    border-color: var(--border-strong);
+}
+
+/* Dim only the body content, NOT buttons/actions */
+.channel-card--unconfigured .channel-card__body {
+    opacity: 0.7;
+}
+
+.channel-card--unconfigured:hover .channel-card__body {
+    opacity: 0.85;
+}
+
+/* ─── Card Header ─── */
+.channel-card__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.channel-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--secondary);
+    font-size: 20px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+
+.channel-card--configured .channel-card__icon {
+    background: var(--accent-subtle);
+    border-color: var(--accent);
+}
+
+.channel-card__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.channel-card__name {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+    line-height: 1.2;
+}
+
+.channel-card__desc {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 3px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ─── Status Badge (Capsule) ─── */
+.channel-card__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-full, 999px);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.channel-card__badge--ok {
+    background: rgba(34, 197, 94, 0.12);
+    color: var(--ok, #22c55e);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.channel-card__badge--pending {
+    background: var(--secondary, rgba(255, 255, 255, 0.04));
+    color: var(--muted, #888);
+    border: 1px solid var(--border);
+}
+
+/* ─── Card Body ─── */
+.channel-card__body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ─── Card Actions (pinned to bottom) ─── */
+.channel-card__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 14px;
+    flex-wrap: wrap;
+}
+
+/* ─── Config Modal ─── */
+.channel-config-modal__overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    animation: wizardFadeIn 0.4s ease-out;
+}
+
+.channel-config-modal__card {
+    position: relative;
+    width: min(600px, 92vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: 20px;
+    background: var(--wizard-bg, #1c1c1e);
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.06);
+    padding: 32px 36px 28px;
+    color: var(--wizard-fg, #f5f5f7);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    animation: wizardSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.channel-config-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    gap: 12px;
+}
+
+.channel-config-modal__title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.channel-config-modal__title-icon {
+    font-size: 24px;
+}
+
+.channel-config-modal__close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.channel-config-modal__close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.channel-config-modal__body {
+    margin-bottom: 20px;
+}
+
+.channel-config-modal__footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ─── Config Modal Scrollbar ─── */
+.channel-config-modal__card::-webkit-scrollbar {
+    width: 6px;
+}
+
+.channel-config-modal__card::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.channel-config-modal__card::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ─── Light Theme ─── */
+[data-theme="light"] .channel-card--unconfigured .channel-card__body {
+    opacity: 0.6;
+}
+
+[data-theme="light"] .channel-card__badge--ok {
+    background: rgba(34, 197, 94, 0.08);
+}
+
+[data-theme="light"] .channel-card__badge--pending {
+    background: rgba(0, 0, 0, 0.04);
+    color: rgba(0, 0, 0, 0.45);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .channel-config-modal__card {
+    --wizard-bg: #ffffff;
+    --wizard-fg: #1d1d1f;
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.2),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .channel-config-modal__overlay {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .channel-config-modal__close {
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .channel-config-modal__close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="light"] .channel-config-modal__footer {
+    border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 540px) {
+    .channel-config-modal__card {
+        padding: 24px 20px 20px;
+        border-radius: 16px;
+    }
+}

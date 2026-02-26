@@ -1,0 +1,167 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/oa-types",
+    "crates/oa-runtime",
+    "crates/oa-terminal",
+    "crates/oa-config",
+    "crates/oa-infra",
+    "crates/oa-routing",
+    "crates/oa-gateway-rpc",
+    "crates/oa-agents",
+    "crates/oa-channels",
+    "crates/oa-daemon",
+    "crates/oa-cli-shared",
+    "crates/oa-cmd-health",
+    "crates/oa-cmd-status",
+    "crates/oa-cmd-sessions",
+    "crates/oa-cmd-channels",
+    "crates/oa-cmd-models",
+    "crates/oa-cmd-agents",
+    "crates/oa-sandbox",
+    "crates/oa-cmd-sandbox",
+    "crates/oa-coder",
+    "crates/oa-cmd-coder",
+    "crates/oa-cmd-auth",
+    "crates/oa-cmd-configure",
+    "crates/oa-cmd-onboard",
+    "crates/oa-cmd-doctor",
+    "crates/oa-cmd-agent",
+    "crates/oa-cmd-supporting",
+    "crates/oa-cmd-gateway",
+    "crates/oa-cmd-logs",
+    "crates/oa-cmd-memory",
+    "crates/oa-cmd-cron",
+    "crates/oa-cmd-config",
+    "crates/oa-cmd-daemon",
+    "crates/oa-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/anthropic/open-acosmi"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI framework
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4.5"
+
+# Async runtime
+tokio = { version = "1.49", features = ["full"] }
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# WebSocket
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+
+# Configuration
+figment = { version = "0.10", features = ["toml", "json", "env"] }
+toml = "0.8"
+json5 = "0.4"
+
+# Terminal UI
+colored = "3.1"
+console = "0.16"
+indicatif = "0.18"
+dialoguer = "0.11"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2.5", features = ["serde"] }
+regex = "1.11"
+dirs = "6.0"
+which = "7.0"
+sysinfo = "0.33"
+dotenvy = "0.15"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Platform-specific (sandbox)
+landlock = "0.4"
+libseccomp = "0.4"
+nix = { version = "0.29", features = ["sched", "signal", "mount", "user", "process"] }
+libc = "0.2"
+windows = { version = "0.62" }
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Testing
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.14"
+
+# Internal crates
+oa-sandbox = { path = "crates/oa-sandbox" }
+oa-coder = { path = "crates/oa-coder" }
+oa-cmd-coder = { path = "crates/oa-cmd-coder" }
+oa-types = { path = "crates/oa-types" }
+oa-runtime = { path = "crates/oa-runtime" }
+oa-terminal = { path = "crates/oa-terminal" }
+oa-config = { path = "crates/oa-config" }
+oa-infra = { path = "crates/oa-infra" }
+oa-routing = { path = "crates/oa-routing" }
+oa-gateway-rpc = { path = "crates/oa-gateway-rpc" }
+oa-agents = { path = "crates/oa-agents" }
+oa-channels = { path = "crates/oa-channels" }
+oa-daemon = { path = "crates/oa-daemon" }
+oa-cli-shared = { path = "crates/oa-cli-shared" }
+oa-cmd-health = { path = "crates/oa-cmd-health" }
+oa-cmd-status = { path = "crates/oa-cmd-status" }
+oa-cmd-sessions = { path = "crates/oa-cmd-sessions" }
+oa-cmd-channels = { path = "crates/oa-cmd-channels" }
+oa-cmd-models = { path = "crates/oa-cmd-models" }
+oa-cmd-agents = { path = "crates/oa-cmd-agents" }
+oa-cmd-sandbox = { path = "crates/oa-cmd-sandbox" }
+oa-cmd-auth = { path = "crates/oa-cmd-auth" }
+oa-cmd-configure = { path = "crates/oa-cmd-configure" }
+oa-cmd-onboard = { path = "crates/oa-cmd-onboard" }
+oa-cmd-doctor = { path = "crates/oa-cmd-doctor" }
+oa-cmd-agent = { path = "crates/oa-cmd-agent" }
+oa-cmd-supporting = { path = "crates/oa-cmd-supporting" }
+oa-cmd-gateway = { path = "crates/oa-cmd-gateway" }
+oa-cmd-logs = { path = "crates/oa-cmd-logs" }
+oa-cmd-memory = { path = "crates/oa-cmd-memory" }
+oa-cmd-cron = { path = "crates/oa-cmd-cron" }
+oa-cmd-config = { path = "crates/oa-cmd-config" }
+oa-cmd-daemon = { path = "crates/oa-cmd-daemon" }
+oa-cli = { path = "crates/oa-cli" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,141 @@
+/* ---------- Coder 工具卡片样式 ---------- */
+
+/* 基础 coder 卡片 — 继承 .chat-tool-card 样式 */
+.coder-card {
+  border-left: 3px solid var(--color-accent, #6366f1);
+}
+
+/* 文件路径头 */
+.coder-file-header {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--color-text-secondary, #9ca3af);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Diff 预览 ---------- */
+
+.coder-diff-preview {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--color-bg-secondary, #1e1e2e);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 96px;
+  overflow: hidden;
+}
+
+.coder-diff-add {
+  color: #22c55e;
+  white-space: pre;
+}
+
+.coder-diff-del {
+  color: #ef4444;
+  white-space: pre;
+}
+
+.coder-diff-context {
+  color: var(--color-text-muted, #6b7280);
+  white-space: pre;
+}
+
+/* ---------- 命令预览 ---------- */
+
+.coder-command-mono {
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: var(--color-bg-secondary, #1e1e2e);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-primary, #e2e8f0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 确认卡片 ---------- */
+
+.coder-confirm-card {
+  border: 1px solid var(--color-warning, #f59e0b);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  background: var(--color-bg-primary, #0f0f23);
+}
+
+.coder-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-warning, #f59e0b);
+}
+
+.coder-confirm-preview {
+  margin-bottom: 10px;
+}
+
+.coder-confirm-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.coder-confirm-actions button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.coder-confirm-btn-allow {
+  background: #22c55e;
+  color: #fff;
+  border-color: #16a34a;
+}
+
+.coder-confirm-btn-allow:hover {
+  background: #16a34a;
+}
+
+.coder-confirm-btn-deny {
+  background: transparent;
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.coder-confirm-btn-deny:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.coder-confirm-timer {
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+  margin-left: auto;
+}
+
+.coder-confirm-resolved {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.coder-confirm-resolved--allowed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.coder-confirm-resolved--denied {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}

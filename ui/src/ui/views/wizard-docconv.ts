@@ -1,0 +1,270 @@
+/**
+ * DocConv Configuration Wizard — Document Conversion Setup
+ * Phase D: frontend configuration wizard
+ *
+ * RPC: docconv.config.get / docconv.config.set / docconv.test / docconv.formats
+ */
+import { html, nothing } from "lit";
+import { t } from "../i18n.ts";
+import type { AppViewState } from "../app-view-state.ts";
+
+// ─── Types ───
+
+type DocConvWizardState = {
+  step: string;
+  loading: boolean;
+  error: string | null;
+  providers: Array<{ id: string; label: string; hint?: string }>;
+  presets: Array<{ name: string; label: string; command: string; transport: string; hint?: string }>;
+  selectedProvider: string;
+  mcpServerName: string;
+  mcpTransport: string;
+  mcpCommand: string;
+  mcpUrl: string;
+  pandocPath: string;
+  selectedPreset: string;
+  testResult: { success: boolean; error?: string; formats?: string[] } | null;
+  configured: boolean;
+};
+
+function getWizard(state: AppViewState): DocConvWizardState {
+  return (state.docConvWizard ?? {
+    step: "provider", loading: false, error: null, providers: [], presets: [],
+    selectedProvider: "", mcpServerName: "", mcpTransport: "stdio",
+    mcpCommand: "", mcpUrl: "", pandocPath: "", selectedPreset: "",
+    testResult: null, configured: false,
+  }) as unknown as DocConvWizardState;
+}
+
+function setWizard(state: AppViewState, gw: DocConvWizardState): void {
+  state.docConvWizard = { ...gw } as unknown as Record<string, unknown>;
+  state.requestUpdate();
+}
+
+// ─── Controller ───
+
+export async function loadDocConvConfig(state: AppViewState): Promise<void> {
+  const gw = getWizard(state);
+  gw.loading = true;
+  setWizard(state, gw);
+
+  try {
+    const client = state.client;
+    if (!client) throw new Error("not connected");
+    const data = await client.request<Record<string, unknown>>("docconv.config.get", {});
+    gw.providers = (data.providers as DocConvWizardState["providers"]) ?? [];
+    gw.presets = (data.mcpPresets as DocConvWizardState["presets"]) ?? [];
+    gw.configured = (data.configured as boolean) ?? false;
+    if (gw.configured) {
+      gw.selectedProvider = String(data.provider ?? "");
+      gw.mcpServerName = String(data.mcpServerName ?? "");
+      gw.mcpTransport = String(data.mcpTransport ?? "stdio");
+      gw.mcpCommand = String(data.mcpCommand ?? "");
+      gw.mcpUrl = String(data.mcpUrl ?? "");
+      gw.pandocPath = String(data.pandocPath ?? "");
+    }
+    gw.loading = false;
+    gw.error = null;
+  } catch (err) {
+    gw.loading = false;
+    gw.error = String(err);
+  }
+  setWizard(state, gw);
+}
+
+async function saveDocConvConfig(state: AppViewState): Promise<boolean> {
+  const gw = getWizard(state);
+  gw.loading = true;
+  setWizard(state, gw);
+  try {
+    const client = state.client;
+    if (!client) throw new Error("not connected");
+    const params: Record<string, string> = { provider: gw.selectedProvider };
+    if (gw.selectedProvider === "mcp") {
+      params.mcpServerName = gw.mcpServerName;
+      params.mcpTransport = gw.mcpTransport;
+      if (gw.mcpTransport === "stdio") params.mcpCommand = gw.mcpCommand;
+      if (gw.mcpTransport === "sse") params.mcpUrl = gw.mcpUrl;
+    }
+    if (gw.selectedProvider === "builtin") {
+      params.pandocPath = gw.pandocPath || "pandoc";
+    }
+    await client.request("docconv.config.set", params);
+    gw.loading = false;
+    gw.configured = true;
+    setWizard(state, gw);
+    return true;
+  } catch (err) {
+    gw.loading = false;
+    gw.error = String(err);
+    setWizard(state, gw);
+    return false;
+  }
+}
+
+async function testDocConvConnection(state: AppViewState): Promise<void> {
+  const gw = getWizard(state);
+  gw.loading = true;
+  gw.testResult = null;
+  setWizard(state, gw);
+  try {
+    const client = state.client;
+    if (!client) throw new Error("not connected");
+    gw.testResult = await client.request<{ success: boolean; error?: string; formats?: string[] }>("docconv.test", {});
+    gw.loading = false;
+  } catch (err) {
+    gw.testResult = { success: false, error: String(err) };
+    gw.loading = false;
+  }
+  setWizard(state, gw);
+}
+
+// ─── Navigation ───
+
+function nextStep(state: AppViewState): void {
+  const gw = getWizard(state);
+  switch (gw.step) {
+    case "provider":
+      if (!gw.selectedProvider) {
+        void saveDocConvConfig(state).then(() => { const g = getWizard(state); g.step = "done"; setWizard(state, g); });
+        return;
+      }
+      gw.step = "config";
+      break;
+    case "config":
+      void saveDocConvConfig(state).then((ok) => {
+        if (ok) {
+          const g = getWizard(state);
+          g.step = "test";
+          setWizard(state, g);
+          void testDocConvConnection(state);
+        }
+      });
+      return;
+    case "test":
+      gw.step = "done";
+      break;
+  }
+  setWizard(state, gw);
+}
+
+function prevStep(state: AppViewState): void {
+  const gw = getWizard(state);
+  switch (gw.step) {
+    case "config": gw.step = "provider"; break;
+    case "test": gw.step = "config"; break;
+    default: return;
+  }
+  setWizard(state, gw);
+}
+
+// ─── Render ───
+
+export function renderDocConvWizard(state: AppViewState) {
+  if (!state.docConvWizard) return nothing;
+  const gw = getWizard(state);
+  const steps = ["provider", "config", "test", "done"];
+  const icons = ["📄", "⚙️", "✅", "🎉"];
+  const labels = [
+    t("docconv.wizard.chooseMode"), t("docconv.wizard.configService"),
+    t("docconv.wizard.testConnection"), t("docconv.wizard.done"),
+  ];
+  const idx = steps.indexOf(gw.step);
+
+  return html`
+    <div class="docconv-wizard">
+      <div class="wizard-header">
+        <h2>${icons[idx]} ${labels[idx]}</h2>
+        <div class="wizard-progress">
+          ${steps.map((_, i) => html`<span class="progress-dot ${i <= idx ? "active" : ""}">${i + 1}</span>`)}
+        </div>
+      </div>
+      ${gw.error ? html`<div class="wizard-error">⚠️ ${gw.error}</div>` : nothing}
+      ${gw.loading ? html`<div class="wizard-loading">${t("wizard.preparing")}</div>` : nothing}
+      <div class="wizard-body">
+        ${gw.step === "provider" ? renderProviderStep(state, gw) : nothing}
+        ${gw.step === "config" ? renderConfigStep(state, gw) : nothing}
+        ${gw.step === "test" ? renderTestStep(state, gw) : nothing}
+        ${gw.step === "done" ? html`
+          <div class="wizard-done"><p>🎉 ${t("docconv.wizard.configComplete")}</p></div>
+          <div class="wizard-actions">
+            <button class="btn-primary" @click=${() => { state.docConvWizard = undefined; state.requestUpdate(); }}>${t("wizard.close")}</button>
+          </div>
+        ` : nothing}
+      </div>
+    </div>
+  `;
+}
+
+function renderProviderStep(state: AppViewState, gw: DocConvWizardState) {
+  return html`
+    <div class="wizard-options">
+      ${gw.providers.map((p) => html`
+        <button class="wizard-option ${gw.selectedProvider === p.id ? "selected" : ""}"
+          @click=${() => { gw.selectedProvider = p.id; setWizard(state, gw); }}>
+          <span class="option-label">${p.label}</span>
+          ${p.hint ? html`<span class="option-hint">${p.hint}</span>` : nothing}
+        </button>`)}
+    </div>
+    <div class="wizard-actions">
+      <button class="btn-primary" @click=${() => nextStep(state)}>${t("wizard.continue")}</button>
+    </div>
+  `;
+}
+
+function renderConfigStep(state: AppViewState, gw: DocConvWizardState) {
+  return html`
+    <div class="wizard-form">
+      ${gw.selectedProvider === "mcp" ? html`
+        <label>${t("docconv.wizard.mcpPreset")}</label>
+        <div class="wizard-options compact">
+          ${gw.presets.map((p) => html`
+            <button class="wizard-option ${gw.selectedPreset === p.name ? "selected" : ""}"
+              @click=${() => {
+      gw.selectedPreset = p.name;
+      gw.mcpServerName = p.name;
+      gw.mcpCommand = p.command;
+      gw.mcpTransport = p.transport;
+      setWizard(state, gw);
+    }}>
+              <span class="option-label">${p.label}</span>
+              ${p.hint ? html`<span class="option-hint">${p.hint}</span>` : nothing}
+            </button>`)}
+        </div>
+        <label>${t("docconv.wizard.mcpCommand")}
+          <input type="text" .value=${gw.mcpCommand}
+            @input=${(e: InputEvent) => { gw.mcpCommand = (e.target as HTMLInputElement).value; setWizard(state, gw); }}
+            placeholder="npx -y mcp-pandoc" />
+        </label>
+      ` : nothing}
+      ${gw.selectedProvider === "builtin" ? html`
+        <label>${t("docconv.wizard.pandocPath")}
+          <input type="text" .value=${gw.pandocPath}
+            @input=${(e: InputEvent) => { gw.pandocPath = (e.target as HTMLInputElement).value; setWizard(state, gw); }}
+            placeholder="pandoc" />
+        </label>
+      ` : nothing}
+    </div>
+    <div class="wizard-actions">
+      <button class="btn-secondary" @click=${() => prevStep(state)}>${t("wizard.channel.back")}</button>
+      <button class="btn-primary" @click=${() => nextStep(state)}>${t("stt.wizard.saveAndTest")}</button>
+    </div>
+  `;
+}
+
+function renderTestStep(state: AppViewState, gw: DocConvWizardState) {
+  return html`
+    <div class="wizard-test-result">
+      ${gw.loading ? html`<p>🔄 ${t("docconv.wizard.testing")}</p>` : nothing}
+      ${gw.testResult?.success ? html`
+        <p class="test-success">✅ ${t("docconv.wizard.testSuccess")}</p>
+        ${gw.testResult.formats ? html`<p>${t("docconv.wizard.supportedFormats")}: ${gw.testResult.formats.join(", ")}</p>` : nothing}
+      ` : nothing}
+      ${gw.testResult && !gw.testResult.success ? html`<p class="test-error">❌ ${gw.testResult.error || t("docconv.wizard.testFailed")}</p>` : nothing}
+    </div>
+    <div class="wizard-actions">
+      <button class="btn-secondary" @click=${() => prevStep(state)}>${t("wizard.channel.back")}</button>
+      <button class="btn-primary" @click=${() => nextStep(state)}>${t("wizard.continue")}</button>
+    </div>
+  `;
+}

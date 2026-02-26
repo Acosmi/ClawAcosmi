@@ -1,0 +1,26 @@
+[package]
+name = "oa-cmd-models"
+description = "Model management commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+oa-agents.workspace = true
+oa-routing.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+atty = "0.2"
+
+[lints]
+workspace = true

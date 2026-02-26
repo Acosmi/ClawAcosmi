@@ -1,0 +1,24 @@
+[package]
+name = "oa-cmd-sessions"
+description = "Session management commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+oa-agents.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

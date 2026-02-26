@@ -1,0 +1,22 @@
+[package]
+name = "oa-agents"
+description = "Agent scope, model catalog, and model selection for OpenAcosmi CLI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-routing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+
+[lints]
+workspace = true

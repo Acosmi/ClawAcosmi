@@ -1,0 +1,18 @@
+[package]
+name = "oa-terminal"
+description = "Terminal UI components for OpenAcosmi CLI: theme, palette, table, progress"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+colored.workspace = true
+console.workspace = true
+indicatif.workspace = true
+regex.workspace = true
+dirs.workspace = true
+
+[lints]
+workspace = true

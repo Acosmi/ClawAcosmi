@@ -1,0 +1,17 @@
+[package]
+name = "oa-routing"
+description = "Session key standardization and channel binding for OpenAcosmi CLI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+regex.workspace = true
+
+[lints]
+workspace = true

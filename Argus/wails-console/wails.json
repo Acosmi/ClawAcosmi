@@ -1,0 +1,17 @@
+{
+    "$schema": "https://wails.io/schemas/config.v2.json",
+    "name": "argus-console",
+    "outputfilename": "argus-console",
+    "frontend:install": "",
+    "frontend:build": "",
+    "frontend:dev:watcher": "",
+    "frontend:dev:serverUrl": "http://localhost:3090",
+    "author": {
+        "name": "Argus Team"
+    },
+    "info": {
+        "companyName": "Argus",
+        "productName": "Argus Console",
+        "productVersion": "1.0.0"
+    }
+}

@@ -1,0 +1,33 @@
+# Binaries
+*.exe
+*.out
+*.dylib
+*.so
+
+# Go
+go-sensory/vendor/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+pgdata/
+chromadata/
+
+# Shared memory artifacts (macOS uses /tmp)
+/dev/shm/argus_*

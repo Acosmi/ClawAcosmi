@@ -1,0 +1,11 @@
+[package]
+name = "nexus-graph"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+libc = "0.2"
+petgraph = "0.8"

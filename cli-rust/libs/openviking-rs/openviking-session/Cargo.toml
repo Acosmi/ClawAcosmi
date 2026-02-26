@@ -1,0 +1,19 @@
+[package]
+name = "openviking-session"
+version = "0.1.0"
+edition = "2021"
+description = "Session management and retrieval traits for OpenViking"
+license = "Apache-2.0"
+
+[dependencies]
+openviking-core = { path = "../openviking-core" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

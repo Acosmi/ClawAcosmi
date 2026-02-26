@@ -1,0 +1,32 @@
+[package]
+name = "oa-cmd-onboard"
+description = "Onboarding wizard commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+oa-gateway-rpc.workspace = true
+oa-agents.workspace = true
+oa-channels.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+dialoguer.workspace = true
+chrono.workspace = true
+url.workspace = true
+which.workspace = true
+dirs.workspace = true
+regex.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "oa-cmd-daemon"
+description = "Daemon (legacy gateway alias) commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-cli-shared.workspace = true
+oa-daemon.workspace = true
+oa-cmd-gateway.path = "../oa-cmd-gateway"
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus Sensory — 测试面板</title>
+  <style>
+    /* ===== Reset & Base ===== */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-card: rgba(16, 22, 36, 0.85);
+      --bg-glass: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(99, 144, 255, 0.25);
+      --text-primary: #e8ecf4;
+      --text-secondary: #7a8599;
+      --text-muted: #4a5568;
+      --accent: #6390ff;
+      --accent-hover: #7ba3ff;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --gradient-1: linear-gradient(135deg, #6390ff 0%, #a855f7 100%);
+      --gradient-2: linear-gradient(135deg, #0a0e17 0%, #1a1f36 100%);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    body {
+      font-family: var(--font);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 600px 400px at 20% 20%, rgba(99, 144, 255, 0.08), transparent),
+        radial-gradient(ellipse 500px 300px at 80% 70%, rgba(168, 85, 247, 0.06), transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+    }
+
+    .header {
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      background: rgba(10, 14, 23, 0.7);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: var(--gradient-1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(99, 144, 255, 0.3);
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .header h1 span {
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* ===== Language Switcher ===== */
+    .lang-switch {
+      display: flex;
+      align-items: center;
+      background: var(--bg-glass);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.3s ease;
+    }
+
+    .lang-switch:hover {
+      border-color: var(--border-glow);
+    }
+
+    .lang-btn {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      font-family: var(--font);
+    }
+
+    .lang-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(99, 144, 255, 0.3);
+    }
+
+    .conn-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--bg-glass);
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .conn-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      transition: background 0.3s ease;
+    }
+
+    .conn-badge.connected .dot {
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .main {
+      padding: 24px 32px;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: var(--border-glow);
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .preview-area {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .preview-card .card-body {
+      padding: 0;
+      position: relative;
+      background: #000;
+      aspect-ratio: 16 / 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #previewCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: auto;
+    }
+
+    .preview-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      transition: opacity 0.5s ease;
+      pointer-events: none;
+    }
+
+    .preview-overlay.hidden {
+      opacity: 0;
+    }
+
+    .preview-overlay .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .preview-overlay p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .frame-info {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      padding: 4px 10px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+      backdrop-filter: blur(8px);
+    }
+
+    .actions-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-glass);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--border-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: var(--gradient-1);
+      border-color: transparent;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 4px 20px rgba(99, 144, 255, 0.35);
+      border-color: transparent;
+    }
+
+    .btn .icon {
+      font-size: 16px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .status-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--bg-glass);
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      transition: border-color 0.2s ease;
+    }
+
+    .stat-row:hover {
+      border-color: var(--border);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .stat-value {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--text-primary);
+    }
+
+    .stat-value.sck {
+      color: var(--accent);
+    }
+
+    .stat-value.cg {
+      color: var(--warning);
+    }
+
+    .stat-value.ok {
+      color: var(--success);
+    }
+
+    .stat-value.error {
+      color: var(--danger);
+    }
+
+    .log-panel {
+      max-height: 200px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .log-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .log-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .log-panel::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .log-entry {
+      padding: 6px 0;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      display: flex;
+      gap: 8px;
+    }
+
+    .log-entry .time {
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .log-entry .msg {
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .log-entry.info .msg {
+      color: var(--text-secondary);
+    }
+
+    .log-entry.success .msg {
+      color: var(--success);
+    }
+
+    .log-entry.error .msg {
+      color: var(--danger);
+    }
+
+    .log-entry.warn .msg {
+      color: var(--warning);
+    }
+
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .quick-stat {
+      text-align: center;
+      padding: 14px 8px;
+      background: var(--bg-glass);
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .quick-stat:hover {
+      border-color: var(--border);
+    }
+
+    .quick-stat .value {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      background: var(--gradient-1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .quick-stat .label {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 900px) {
+      .main {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+
+      .header {
+        padding: 16px;
+      }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .sidebar .card:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    .sidebar .card:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .sidebar .card:nth-child(3) {
+      animation-delay: 0.15s;
+    }
+
+    /* 降级警告横幅 */
+    .degradation-banner {
+      display: none;
+      margin: 0 24px;
+      padding: 14px 20px;
+      background: rgba(255, 165, 0, 0.1);
+      border: 1px solid rgba(255, 165, 0, 0.3);
+      border-radius: var(--radius);
+      color: var(--warning);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .degradation-banner.visible {
+      display: block;
+    }
+
+    .degradation-banner .banner-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .degradation-banner ul {
+      margin: 6px 0 0 18px;
+      padding: 0;
+      color: var(--text-secondary);
+    }
+
+    .degradation-banner ul li {
+      margin-bottom: 2px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">A</div>
+        <h1>Argus Sensory <span data-i18n="subtitle">— 测试面板</span></h1>
+      </div>
+      <div class="header-right">
+        <div class="lang-switch">
+          <button class="lang-btn active" id="langZh" onclick="setLang('zh')">中文</button>
+          <button class="lang-btn" id="langEn" onclick="setLang('en')">EN</button>
+        </div>
+        <div class="conn-badge" id="connBadge">
+          <span class="dot"></span>
+          <span id="connText" data-i18n="disconnected">未连接</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 降级警告横幅 -->
+    <div class="degradation-banner" id="degradationBanner">
+      <div class="banner-title">⚠️ <span id="degradationTitle" data-i18n="degradation_title">后端已降级为 CoreGraphics</span></div>
+      <span id="degradationDesc" data-i18n="degradation_desc">ScreenCaptureKit 初始化失败，以下功能不可用：</span>
+      <ul>
+        <li id="degradationItem1" data-i18n="degradation_item1">窗口级过滤与自动排除</li>
+        <li id="degradationItem2" data-i18n="degradation_item2">硬件加速捕获（GPU → CVPixelBuffer）</li>
+        <li id="degradationItem3" data-i18n="degradation_item3">事件驱动帧交付（改为 CPU 轮询）</li>
+      </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+      <!-- Left: Preview + Actions -->
+      <div class="preview-area">
+        <!-- Quick Stats Bar -->
+        <div class="quick-stats fade-in">
+          <div class="quick-stat">
+            <div class="value" id="qsFPS">—</div>
+            <div class="label" data-i18n="qs_fps">帧率</div>
+          </div>
+          <div class="quick-stat">
+            <div class="value" id="qsFrames">0</div>
+            <div class="label" data-i18n="qs_frames">总帧数</div>
+          </div>
+          <div class="quick-stat">
+            <div class="value" id="qsClients">0</div>
+            <div class="label" data-i18n="qs_clients">客户端</div>
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="card preview-card fade-in">
+          <div class="card-header">
+            <h2 data-i18n="live_preview">📺 实时预览</h2>
+            <span class="frame-info-header" id="resolutionBadge"
+              style="font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">—</span>
+          </div>
+          <div class="card-body">
+            <canvas id="previewCanvas"></canvas>
+            <div class="preview-overlay" id="previewOverlay">
+              <div class="spinner"></div>
+              <p data-i18n="waiting_frames">等待画面中…</p>
+            </div>
+            <div class="frame-info" id="frameInfo">—</div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-bar fade-in">
+          <button class="btn btn-primary" onclick="captureOnce()">
+            <span class="icon">📸</span> <span data-i18n="btn_capture">截取屏幕</span>
+          </button>
+          <button class="btn" onclick="toggleStream()">
+            <span class="icon" id="streamIcon">▶️</span>
+            <span id="streamText" data-i18n="btn_connect">连接画面流</span>
+          </button>
+          <button class="btn" onclick="refreshStatus()">
+            <span class="icon">🔄</span> <span data-i18n="btn_refresh">刷新状态</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Sidebar -->
+      <div class="sidebar">
+        <!-- Server Status -->
+        <div class="card fade-in">
+          <div class="card-header">
+            <h2 data-i18n="server_status">⚡ 服务状态</h2>
+          </div>
+          <div class="card-body">
+            <div class="status-grid">
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_status">状态</span>
+                <span class="stat-value ok" id="srvStatus">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_backend">后端</span>
+                <span class="stat-value" id="srvBackend">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_uptime">运行时间</span>
+                <span class="stat-value" id="srvUptime">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_capturing">采集中</span>
+                <span class="stat-value" id="srvCapturing">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Display Info -->
+        <div class="card fade-in">
+          <div class="card-header">
+            <h2 data-i18n="display_info">🖥 显示器信息</h2>
+          </div>
+          <div class="card-body">
+            <div class="status-grid">
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_display_id">显示器 ID</span>
+                <span class="stat-value" id="dispID">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_resolution">分辨率</span>
+                <span class="stat-value" id="dispRes">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_scale">缩放比例</span>
+                <span class="stat-value" id="dispScale">—</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label" data-i18n="label_refresh">刷新率</span>
+                <span class="stat-value" id="dispHz">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card fade-in">
+          <div class="card-header">
+            <h2 data-i18n="event_log">📋 事件日志</h2>
+            <button class="btn" style="padding:4px 10px;font-size:11px;" onclick="clearLogs()"><span
+                data-i18n="btn_clear">清空</span></button>
+          </div>
+          <div class="card-body" style="padding:12px 16px;">
+            <div class="log-panel" id="logPanel"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== i18n System =====
+    const LANG = {
+      zh: {
+        subtitle: '— 测试面板',
+        disconnected: '未连接',
+        connected: '已连接',
+        qs_fps: '帧率',
+        qs_frames: '总帧数',
+        qs_clients: '客户端',
+        live_preview: '📺 实时预览',
+        waiting_frames: '等待画面中…',
+        btn_capture: '截取屏幕',
+        btn_connect: '连接画面流',
+        btn_disconnect: '断开连接',
+        btn_refresh: '刷新状态',
+        server_status: '⚡ 服务状态',
+        label_status: '状态',
+        label_backend: '后端',
+        label_uptime: '运行时间',
+        label_capturing: '采集中',
+        display_info: '🖥 显示器信息',
+        label_display_id: '显示器 ID',
+        label_resolution: '分辨率',
+        label_scale: '缩放比例',
+        label_refresh: '刷新率',
+        event_log: '📋 事件日志',
+        btn_clear: '清空',
+        log_loaded: '面板已加载',
+        log_cleared: '日志已清空',
+        log_connecting: '正在连接画面流…',
+        log_ws_connected: 'WebSocket 已连接 ✓',
+        log_ws_disconnected: 'WebSocket 已断开',
+        log_ws_error: 'WebSocket 错误',
+        log_frame_error: '帧解析错误',
+        log_capturing: '正在截取屏幕…',
+        log_captured: '截图成功 ✓ — 已在新标签页打开',
+        log_capture_fail: '截图失败',
+        log_status_ok: '状态正常',
+        log_status_fail: '状态获取失败',
+        capturing_yes: '是',
+        capturing_no: '否',
+        degradation_title: '后端已降级为 CoreGraphics',
+        degradation_desc: 'ScreenCaptureKit 初始化失败，以下功能不可用：',
+        degradation_item1: '窗口级过滤与自动排除',
+        degradation_item2: '硬件加速捕获（GPU → CVPixelBuffer）',
+        degradation_item3: '事件驱动帧交付（改为 CPU 轮询）',
+        page_title: 'Argus Sensory — 测试面板',
+      },
+      en: {
+        subtitle: '— Test Dashboard',
+        disconnected: 'Disconnected',
+        connected: 'Connected',
+        qs_fps: 'FPS',
+        qs_frames: 'FRAMES',
+        qs_clients: 'CLIENTS',
+        live_preview: '📺 Live Preview',
+        waiting_frames: 'Waiting for frames…',
+        btn_capture: 'Capture Screenshot',
+        btn_connect: 'Connect Stream',
+        btn_disconnect: 'Disconnect',
+        btn_refresh: 'Refresh Status',
+        server_status: '⚡ Server Status',
+        label_status: 'Status',
+        label_backend: 'Backend',
+        label_uptime: 'Uptime',
+        label_capturing: 'Capturing',
+        display_info: '🖥 Display Info',
+        label_display_id: 'Display ID',
+        label_resolution: 'Resolution',
+        label_scale: 'Scale Factor',
+        label_refresh: 'Refresh Rate',
+        event_log: '📋 Event Log',
+        btn_clear: 'Clear',
+        log_loaded: 'Dashboard loaded',
+        log_cleared: 'Logs cleared',
+        log_connecting: 'Connecting to frame stream…',
+        log_ws_connected: 'WebSocket connected ✓',
+        log_ws_disconnected: 'WebSocket disconnected',
+        log_ws_error: 'WebSocket error',
+        log_frame_error: 'Frame parse error',
+        log_capturing: 'Capturing single frame…',
+        log_captured: 'Screenshot captured ✓ — opened in new tab',
+        log_capture_fail: 'Capture failed',
+        log_status_ok: 'Status OK',
+        log_status_fail: 'Status fetch failed',
+        capturing_yes: 'YES',
+        capturing_no: 'NO',
+        degradation_title: 'Backend degraded to CoreGraphics',
+        degradation_desc: 'ScreenCaptureKit init failed. The following features are unavailable:',
+        degradation_item1: 'Window-level filtering & auto-exclude',
+        degradation_item2: 'Hardware-accelerated capture (GPU → CVPixelBuffer)',
+        degradation_item3: 'Event-driven frame delivery (polling fallback)',
+        page_title: 'Argus Sensory — Test Dashboard',
+      }
+    };
+
+    let currentLang = localStorage.getItem('argus_lang') || 'zh';
+
+    function t(key) {
+      return LANG[currentLang][key] || LANG['zh'][key] || key;
+    }
+
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem('argus_lang', lang);
+
+      // Update button styles
+      document.getElementById('langZh').classList.toggle('active', lang === 'zh');
+      document.getElementById('langEn').classList.toggle('active', lang === 'en');
+
+      // Update page title
+      document.title = t('page_title');
+
+      // Update all data-i18n elements
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+
+      // Update dynamic elements that depend on state
+      if (streaming) {
+        document.getElementById('connText').textContent = t('connected');
+        document.getElementById('streamText').textContent = t('btn_disconnect');
+      } else {
+        document.getElementById('connText').textContent = t('disconnected');
+        document.getElementById('streamText').textContent = t('btn_connect');
+      }
+
+      addLog(lang === 'zh' ? '语言切换为中文' : 'Language switched to English', 'info');
+    }
+
+    // ===== State =====
+    let ws = null;
+    let streaming = false;
+    let frameCount = 0;
+    let lastFrameTime = 0;
+    let fpsCounter = 0;
+    let currentFPS = 0;
+
+    const API_BASE = window.location.origin;
+    const WS_BASE = `ws://${window.location.host}`;
+
+    // ===== DOM Refs =====
+    const canvas = document.getElementById('previewCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('previewOverlay');
+    const frameInfo = document.getElementById('frameInfo');
+    const connBadge = document.getElementById('connBadge');
+    const connText = document.getElementById('connText');
+
+    // ===== Logging =====
+    function addLog(msg, level = 'info') {
+      const panel = document.getElementById('logPanel');
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${level}`;
+      entry.innerHTML = `<span class="time">${time}</span><span class="msg">${msg}</span>`;
+      panel.appendChild(entry);
+      panel.scrollTop = panel.scrollHeight;
+      while (panel.children.length > 100) panel.removeChild(panel.firstChild);
+    }
+
+    function clearLogs() {
+      document.getElementById('logPanel').innerHTML = '';
+      addLog(t('log_cleared'), 'info');
+    }
+
+    // ===== FPS Tracking =====
+    setInterval(() => {
+      currentFPS = fpsCounter;
+      fpsCounter = 0;
+      document.getElementById('qsFPS').textContent = currentFPS;
+    }, 1000);
+
+    // ===== Status Polling =====
+    async function refreshStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/status`);
+        const data = await resp.json();
+
+        document.getElementById('srvStatus').textContent = data.status.toUpperCase();
+        document.getElementById('srvStatus').className = `stat-value ${data.status === 'ok' ? 'ok' : 'error'}`;
+
+        const backendEl = document.getElementById('srvBackend');
+        const backendName = (data.backend || 'unknown').toUpperCase();
+        backendEl.textContent = backendName;
+        const isSCK = data.backend === 'sck' || data.backend === 'rust';
+        backendEl.className = `stat-value ${isSCK ? 'sck' : 'cg'}`;
+
+        // 降级警告横幅
+        const banner = document.getElementById('degradationBanner');
+        if (data.backend === 'cg') {
+          banner.classList.add('visible');
+        } else {
+          banner.classList.remove('visible');
+        }
+
+        document.getElementById('srvUptime').textContent = data.uptime;
+        document.getElementById('srvCapturing').textContent = data.capturing ? t('capturing_yes') : t('capturing_no');
+        document.getElementById('srvCapturing').className = `stat-value ${data.capturing ? 'ok' : 'error'}`;
+
+        const d = data.display;
+        document.getElementById('dispID').textContent = `#${d.id}`;
+        document.getElementById('dispRes').textContent = `${d.width} × ${d.height}`;
+        document.getElementById('dispScale').textContent = `${d.scale_factor}x`;
+        document.getElementById('dispHz').textContent = `${d.refresh_rate_hz} Hz`;
+
+        document.getElementById('qsFrames').textContent = data.frame_no;
+        document.getElementById('qsClients').textContent = data.connected_clients;
+        document.getElementById('resolutionBadge').textContent = `${d.width}×${d.height} @${d.scale_factor}x`;
+
+        addLog(`${t('log_status_ok')} — ${d.width}×${d.height}@${d.scale_factor}x, uptime: ${data.uptime}`, 'success');
+      } catch (e) {
+        addLog(`${t('log_status_fail')}: ${e.message}`, 'error');
+        document.getElementById('srvStatus').textContent = 'OFFLINE';
+        document.getElementById('srvStatus').className = 'stat-value error';
+      }
+    }
+
+    // ===== WebSocket Frame Stream =====
+    function connectStream() {
+      if (ws) return;
+      addLog(t('log_connecting'), 'info');
+
+      ws = new WebSocket(`${WS_BASE}/ws/frames`);
+
+      ws.onopen = () => {
+        streaming = true;
+        connBadge.classList.add('connected');
+        connText.textContent = t('connected');
+        document.getElementById('streamIcon').textContent = '⏸';
+        document.getElementById('streamText').textContent = t('btn_disconnect');
+        addLog(t('log_ws_connected'), 'success');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'frame' && data.image_b64) {
+            renderFrame(data);
+            fpsCounter++;
+            frameCount++;
+            document.getElementById('qsFrames').textContent = data.frame_no;
+          }
+        } catch (e) {
+          addLog(`${t('log_frame_error')}: ${e.message}`, 'error');
+        }
+      };
+
+      ws.onclose = () => {
+        ws = null;
+        streaming = false;
+        connBadge.classList.remove('connected');
+        connText.textContent = t('disconnected');
+        document.getElementById('streamIcon').textContent = '▶️';
+        document.getElementById('streamText').textContent = t('btn_connect');
+        addLog(t('log_ws_disconnected'), 'warn');
+      };
+
+      ws.onerror = () => {
+        addLog(t('log_ws_error'), 'error');
+      };
+    }
+
+    function disconnectStream() {
+      if (ws) { ws.close(); ws = null; }
+    }
+
+    function toggleStream() {
+      if (streaming) { disconnectStream(); } else { connectStream(); }
+    }
+
+    function renderFrame(data) {
+      const img = new Image();
+      img.onload = () => {
+        if (canvas.width !== img.width || canvas.height !== img.height) {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+        ctx.drawImage(img, 0, 0);
+        overlay.classList.add('hidden');
+
+        const now = Date.now();
+        const latency = now - data.timestamp;
+        frameInfo.textContent = `#${data.frame_no}  ${data.width}×${data.height}  ${currentFPS} fps  ${latency}ms`;
+      };
+      img.src = `data:image/jpeg;base64,${data.image_b64}`;
+    }
+
+    // ===== Capture Once =====
+    async function captureOnce() {
+      addLog(t('log_capturing'), 'info');
+      try {
+        const resp = await fetch(`${API_BASE}/api/capture/once`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+
+        const w = window.open('', '_blank');
+        if (w) {
+          w.document.write(`
+        <!DOCTYPE html><html><head><title>Argus Capture</title>
+        <style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+        img{max-width:100%;max-height:100vh;object-fit:contain;}</style></head>
+        <body><img src="${url}" alt="Screenshot"></body></html>
+      `);
+        }
+
+        addLog(t('log_captured'), 'success');
+      } catch (e) {
+        addLog(`${t('log_capture_fail')}: ${e.message}`, 'error');
+      }
+    }
+
+    // ===== Init =====
+    // Apply saved language on load
+    setLang(currentLang);
+    addLog(t('log_loaded'), 'info');
+    refreshStatus();
+    setInterval(refreshStatus, 5000);
+    setTimeout(() => connectStream(), 500);
+  </script>
+</body>
+
+</html>

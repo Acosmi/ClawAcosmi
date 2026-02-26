@@ -1,0 +1,22 @@
+[package]
+name = "openviking-transaction"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Path-level transaction locking for OpenViking memory operations"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+openviking-session = { path = "../openviking-session" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+async-trait = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }

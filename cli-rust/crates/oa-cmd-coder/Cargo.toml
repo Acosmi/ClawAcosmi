@@ -1,0 +1,17 @@
+[package]
+name = "oa-cmd-coder"
+description = "Coder sub-agent CLI commands for OpenAcosmi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-coder = { workspace = true, features = ["sandbox"] }
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

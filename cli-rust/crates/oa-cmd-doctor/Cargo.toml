@@ -1,0 +1,38 @@
+[package]
+name = "oa-cmd-doctor"
+description = "System diagnostics commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+oa-gateway-rpc.workspace = true
+oa-agents.workspace = true
+oa-channels.workspace = true
+oa-daemon.workspace = true
+oa-routing.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+which.workspace = true
+sysinfo.workspace = true
+reqwest.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+regex.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

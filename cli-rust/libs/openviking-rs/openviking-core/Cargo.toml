@@ -1,0 +1,20 @@
+[package]
+name = "openviking-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Core data structures for OpenViking memory system (Rust port)"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+regex = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+pretty_assertions = "1"

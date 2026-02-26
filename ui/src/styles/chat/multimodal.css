@@ -1,0 +1,232 @@
+/* =============================================
+   MULTIMODAL ATTACHMENTS - Document, Audio, Video previews
+   Only additive styles; does NOT modify existing chat CSS files.
+   ============================================= */
+
+/* --- Compose area: Attach button --- */
+.chat-compose__attach {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* --- Compose area: Drag-over highlight --- */
+.chat-compose--dragover {
+  outline: 2px dashed var(--accent, #6366f1);
+  outline-offset: -2px;
+  background: rgba(99, 102, 241, 0.06);
+  border-radius: 12px;
+  transition: outline 150ms ease-out, background 150ms ease-out;
+}
+
+/* --- Attachment preview variants (document / audio) --- */
+.chat-attachment--document,
+.chat-attachment--audio,
+.chat-attachment--video {
+  width: auto;
+  min-width: 120px;
+  max-width: 220px;
+  height: auto;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+}
+
+.chat-attachment__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+.chat-attachment__icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.chat-attachment__icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5px;
+}
+
+.chat-attachment__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-attachment__size {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* --- Message documents (chat history) --- */
+.chat-message-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-message-document {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  max-width: 280px;
+}
+
+.chat-message-document__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.chat-message-document__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-message-document__size {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* --- Message audio (chat history) --- */
+.chat-message-audio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-message-audio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  max-width: 360px;
+}
+
+.chat-message-audio__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.chat-message-audio__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.chat-message-audio__player {
+  height: 32px;
+  min-width: 120px;
+  flex: 1;
+  border-radius: 6px;
+}
+
+/* --- Message video (chat history) --- */
+.chat-message-video-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-message-video {
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 480px;
+}
+
+.chat-message-video__player {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+}
+
+.chat-message-video__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* --- User message document alignment (right) --- */
+.chat-group.user .chat-message-documents {
+  justify-content: flex-end;
+}
+
+.chat-group.user .chat-message-audio-list {
+  align-items: flex-end;
+}
+
+.chat-group.user .chat-message-video-list {
+  align-items: flex-end;
+}
+
+/* --- Light theme overrides --- */
+:root[data-theme="light"] .chat-message-document {
+  background: #f8fafc;
+  border-color: rgba(16, 24, 40, 0.1);
+}
+
+:root[data-theme="light"] .chat-message-audio {
+  background: #f8fafc;
+  border-color: rgba(16, 24, 40, 0.1);
+}
+
+:root[data-theme="light"] .chat-compose--dragover {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+/* --- Voice recording button --- */
+.chat-compose__voice {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.chat-compose__voice--active {
+  color: #ef4444;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.voice-recording-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-timer {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #ef4444;
+}

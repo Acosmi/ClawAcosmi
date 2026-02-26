@@ -1,0 +1,55 @@
+/* === Metrics Row === */
+.metrics-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 1200px) {
+    .metrics-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.metric-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 14px 16px;
+    transition: transform 0.15s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+
+.metric-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.metric-value {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.metric-value.green {
+    color: var(--accent-green);
+}
+
+.metric-value.cyan {
+    color: var(--accent-cyan);
+}
+
+.metric-value.purple {
+    color: var(--accent-purple);
+}
+
+.metric-value.amber {
+    color: var(--accent-amber);
+}

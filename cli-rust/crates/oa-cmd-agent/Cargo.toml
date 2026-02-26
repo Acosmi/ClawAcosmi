@@ -1,0 +1,29 @@
+[package]
+name = "oa-cmd-agent"
+description = "Single agent commands: agent run, agent-via-gateway, session resolution, delivery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-config.workspace = true
+oa-infra.workspace = true
+oa-terminal.workspace = true
+oa-cli-shared.workspace = true
+oa-agents.workspace = true
+oa-routing.workspace = true
+oa-channels.workspace = true
+oa-gateway-rpc.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+
+[lints]
+workspace = true

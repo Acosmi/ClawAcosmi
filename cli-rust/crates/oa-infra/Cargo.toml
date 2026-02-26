@@ -1,0 +1,38 @@
+[package]
+name = "oa-infra"
+description = "Infrastructure utilities: env vars, error formatting, time, device ID"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+oa-runtime.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+sysinfo.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+dotenvy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Note: we do NOT use `lints.workspace = true` here because this crate
+# requires limited unsafe code for `std::env::set_var` / `remove_var`,
+# which became unsafe in Rust 2024 edition. The workspace forbids unsafe_code,
+# so we replicate the workspace lints but allow unsafe_code for this crate.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"

@@ -1,0 +1,158 @@
+/* === Control Panel === */
+.control-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.panel-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    transition: border-color 0.2s ease;
+}
+
+.panel-card:hover {
+    border-color: var(--border-active);
+}
+
+.panel-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.panel-card .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.panel-card .card-value {
+    font-size: 28px;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* === Action Buttons === */
+.actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+    border-color: var(--accent-indigo);
+    color: var(--text-primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.action-btn.primary {
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+}
+
+.action-btn.primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+.action-btn .btn-icon {
+    font-size: 14px;
+}
+
+/* === HITL Panel === */
+.hitl-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 320px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.hitl-message {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 85%;
+}
+
+.hitl-message.agent {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    color: var(--text-primary);
+    align-self: flex-start;
+}
+
+.hitl-message.human {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--text-primary);
+    align-self: flex-end;
+}
+
+.hitl-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.hitl-input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+}
+
+.hitl-input:focus {
+    border-color: var(--accent-indigo);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.hitl-send {
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.hitl-send:hover {
+    opacity: 0.9;
+}

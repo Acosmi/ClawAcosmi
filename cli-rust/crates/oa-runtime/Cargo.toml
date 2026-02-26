@@ -1,0 +1,16 @@
+[package]
+name = "oa-runtime"
+description = "Runtime environment abstraction for OpenAcosmi CLI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-types.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+dirs.workspace = true
+
+[lints]
+workspace = true

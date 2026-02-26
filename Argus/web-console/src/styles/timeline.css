@@ -1,0 +1,198 @@
+/* === Timeline Container (Dashboard) === */
+.timeline-container {
+    margin-top: 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+}
+
+.timeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.timeline-track {
+    position: relative;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.timeline-thumb {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    gap: 1px;
+}
+
+.timeline-thumb img {
+    height: 100%;
+    object-fit: cover;
+    flex: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
+}
+
+.timeline-thumb img:hover {
+    opacity: 1;
+}
+
+.timeline-scrubber {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: var(--accent-indigo);
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
+    left: 80%;
+    transition: left 0.1s ease;
+}
+
+/* === Timeline keyframe thumbs in bottom bar === */
+.timeline-kf-thumb {
+    flex: 1;
+    height: 100%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.timeline-kf-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.7;
+}
+
+.timeline-kf-thumb:hover img {
+    opacity: 1;
+}
+
+.kf-mini-label {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* === Timeline Grid (Sub-Page) === */
+.timeline-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.timeline-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.timeline-card:hover {
+    border-color: var(--border-active);
+    transform: translateY(-2px);
+}
+
+.timeline-card.selected {
+    border-color: var(--accent-indigo);
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+}
+
+.kf-thumbnail {
+    height: 120px;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.kf-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.kf-placeholder {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.kf-info {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kf-frame {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-cyan);
+}
+
+.kf-reason {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kf-time {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Timeline Bar */
+.timeline-bar-container {
+    padding: 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.timeline-bar {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+}
+
+.timeline-marker {
+    position: absolute;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-indigo);
+    border: 2px solid var(--bg-card);
+    cursor: pointer;
+    transform: translateX(-50%);
+    transition: all 0.15s ease;
+}
+
+.timeline-marker:hover,
+.timeline-marker.active {
+    background: var(--accent-cyan);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    transform: translateX(-50%) scale(1.3);
+}
+
+.timeline-progress {
+    height: 100%;
+    background: var(--gradient-accent);
+    border-radius: 3px;
+    width: 100%;
+    opacity: 0.3;
+}

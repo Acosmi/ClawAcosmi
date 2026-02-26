@@ -1,0 +1,15 @@
+[package]
+name = "nexus-unified"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+nexus-tokenizer = { path = "../nexus-tokenizer" }
+nexus-vector = { path = "../nexus-vector" }
+nexus-crypto = { path = "../nexus-crypto" }
+nexus-decay = { path = "../nexus-decay" }
+nexus-graph = { path = "../nexus-graph" }
+nexus-memfs = { path = "../nexus-memfs" }

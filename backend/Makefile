@@ -1,0 +1,109 @@
+# Open Acosmi — 构建系统
+#
+# 架构: Rust CLI (openacosmi) + Go Gateway (acosmi)
+# 参见 docs/adr/001-rust-cli-go-gateway.md
+#
+# 用法:
+#   make gateway        # 编译 Go Gateway
+#   make cli            # 编译 Rust CLI (release)
+#   make build-all      # 编译 Gateway + CLI + C++
+#   make test           # 运行全部测试
+#   make lint           # 静态分析
+#   make clean          # 清理构建产物
+
+.PHONY: gateway cli build-all build-cpp test lint clean fmt vet help \
+        gateway-dev gateway-run test-rust install-cli build-go-cli-deprecated
+
+# 版本信息
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
+
+# 目录
+CPP_BUILD_DIR := build/cpp
+GATEWAY_BIN := build/acosmi
+
+# --- 默认目标 ---
+help: ## 显示帮助信息
+	@echo "Open Acosmi 构建命令："
+	@echo ""
+	@echo "  架构: Rust CLI (openacosmi) + Go Gateway (acosmi)"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+
+# --- Go Gateway 构建 ---
+gateway: fmt vet ## 编译 Go Gateway (acosmi)
+	@echo "🔨 编译 Go Gateway..."
+	go build $(LDFLAGS) -o $(GATEWAY_BIN) ./cmd/acosmi
+	@echo "✅ 编译完成: $(GATEWAY_BIN)"
+
+gateway-run: gateway ## 编译并启动 Gateway
+	./$(GATEWAY_BIN)
+
+gateway-dev: gateway ## 编译并启动 Gateway (dev profile)
+	./$(GATEWAY_BIN) -dev -port 19001
+
+# --- Rust CLI 构建 ---
+cli: ## 编译 Rust CLI (release)
+	@echo "🦀 编译 Rust CLI..."
+	cd ../cli-rust && cargo build --workspace --release
+	@echo "✅ Rust CLI 编译完成: ../cli-rust/target/release/openacosmi"
+
+test-rust: ## 运行 Rust CLI 测试
+	cd ../cli-rust && cargo test --workspace
+
+install-cli: cli ## 安装 Rust CLI 到 ~/.local/bin
+	@mkdir -p $(HOME)/.local/bin
+	cp ../cli-rust/target/release/openacosmi $(HOME)/.local/bin/openacosmi
+	@echo "✅ Rust CLI 已安装: $(HOME)/.local/bin/openacosmi"
+
+# --- C++ 构建 ---
+build-cpp: ## 编译 C++ 库
+	@echo "🔨 编译 C++ 库..."
+	@mkdir -p $(CPP_BUILD_DIR)
+	cd $(CPP_BUILD_DIR) && cmake ../.. -DCMAKE_BUILD_TYPE=Release && make -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+	@echo "✅ C++ 库编译完成"
+
+# --- 完整构建 ---
+build-all: gateway cli ## 编译 Gateway + Rust CLI
+	@echo "✅ 全部编译完成"
+
+# --- Go CLI (已弃用) ---
+build-go-cli-deprecated: fmt vet ## [已弃用] 编译 Go CLI
+	@echo "⚠️  Go CLI (openacosmi) 已弃用，请使用 Rust CLI"
+	@echo "   运行 'make cli' 编译 Rust CLI"
+	@echo "   运行 'make gateway' 编译 Go Gateway"
+	go build $(LDFLAGS) -o build/openacosmi-go ./cmd/openacosmi
+	@echo "✅ 编译完成: build/openacosmi-go (已弃用)"
+
+# --- 测试 ---
+test: ## 运行全部 Go 测试
+	@echo "🧪 运行测试..."
+	go test -race -cover ./...
+	@echo "✅ 测试通过"
+
+test-verbose: ## 运行测试（详细输出）
+	go test -race -cover -v ./...
+
+test-all: test test-rust ## 运行 Go + Rust 全部测试
+
+# --- 代码质量 ---
+fmt: ## 格式化代码
+	@gofmt -w .
+
+vet: ## 静态分析
+	go vet ./...
+
+lint: vet ## 完整 lint 检查（需安装 golangci-lint）
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run ./... || echo "⚠️  golangci-lint 未安装，跳过"
+
+# --- 清理 ---
+clean: ## 清理构建产物
+	@echo "🧹 清理..."
+	rm -rf build/
+	@echo "✅ 清理完成"
+
+# --- 开发工具 ---
+dev: ## 开发模式（热重载，需安装 air）
+	@which air > /dev/null 2>&1 && air || echo "⚠️  air 未安装，使用 make gateway-run"

@@ -1,0 +1,247 @@
+name: oa-sandbox CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "cli-rust/crates/oa-sandbox/**"
+      - "cli-rust/crates/oa-cmd-sandbox/**"
+      - ".github/workflows/oa-sandbox-ci.yml"
+  pull_request:
+    paths:
+      - "cli-rust/crates/oa-sandbox/**"
+      - "cli-rust/crates/oa-cmd-sandbox/**"
+      - ".github/workflows/oa-sandbox-ci.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # Lint: clippy + rustfmt (Linux only — needs libseccomp-dev)
+  # ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint (clippy + fmt)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rust/target
+          key: lint-${{ runner.os }}-${{ hashFiles('cli-rust/Cargo.lock') }}
+          restore-keys: lint-${{ runner.os }}-
+
+      - name: Check formatting
+        run: cargo fmt -p oa-sandbox -p oa-cmd-sandbox -- --check
+
+      - name: Clippy (oa-sandbox)
+        run: cargo clippy -p oa-sandbox -- -D warnings
+
+      - name: Clippy (oa-cmd-sandbox)
+        run: cargo clippy -p oa-cmd-sandbox -- -D warnings
+
+  # ──────────────────────────────────────────────────────────
+  # Test: Linux (Ubuntu 24.04 — kernel 6.8+, Landlock + Seccomp)
+  # ──────────────────────────────────────────────────────────
+  test-linux:
+    name: Test (Linux)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rust/target
+          key: test-linux-${{ hashFiles('cli-rust/Cargo.lock') }}
+          restore-keys: test-linux-
+
+      - name: Unit tests (oa-sandbox)
+        run: cargo test -p oa-sandbox --lib
+
+      - name: Unit tests (oa-cmd-sandbox)
+        run: cargo test -p oa-cmd-sandbox --lib
+
+      - name: Linux integration tests
+        run: cargo test -p oa-sandbox --test linux_integration
+
+      - name: Docker integration tests
+        run: cargo test -p oa-sandbox --test docker_integration
+
+      - name: Doc tests
+        run: cargo test -p oa-sandbox --doc
+
+      # Verify Landlock detection works on this kernel
+      - name: Check Landlock availability
+        run: |
+          echo "Kernel: $(uname -r)"
+          cat /sys/kernel/security/lsm 2>/dev/null || echo "LSM list not readable"
+          echo "Landlock ABI: $(cat /sys/fs/landlock/abi_version 2>/dev/null || echo 'not available')"
+
+  # ──────────────────────────────────────────────────────────
+  # Test: macOS (Seatbelt sandbox)
+  # ──────────────────────────────────────────────────────────
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rust/target
+          key: test-macos-${{ hashFiles('cli-rust/Cargo.lock') }}
+          restore-keys: test-macos-
+
+      - name: Unit tests (oa-sandbox)
+        run: cargo test -p oa-sandbox --lib
+
+      - name: Unit tests (oa-cmd-sandbox)
+        run: cargo test -p oa-cmd-sandbox --lib
+
+      - name: macOS integration tests
+        run: cargo test -p oa-sandbox --test macos_integration
+
+      - name: Doc tests
+        run: cargo test -p oa-sandbox --doc
+
+      # Verify Seatbelt availability
+      - name: Check Seatbelt availability
+        run: |
+          echo "macOS: $(sw_vers -productVersion)"
+          ls -la /usr/bin/sandbox-exec 2>/dev/null || echo "sandbox-exec not found"
+
+  # ──────────────────────────────────────────────────────────
+  # Test: Windows (Job Object + Restricted Token)
+  # ──────────────────────────────────────────────────────────
+  test-windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rust/target
+          key: test-windows-${{ hashFiles('cli-rust/Cargo.lock') }}
+          restore-keys: test-windows-
+
+      - name: Unit tests (oa-sandbox)
+        run: cargo test -p oa-sandbox --lib
+
+      - name: Unit tests (oa-cmd-sandbox)
+        run: cargo test -p oa-cmd-sandbox --lib
+
+      - name: Windows integration tests
+        run: cargo test -p oa-sandbox --test windows_integration
+
+      - name: Docker integration tests
+        run: cargo test -p oa-sandbox --test docker_integration
+
+      - name: Doc tests
+        run: cargo test -p oa-sandbox --doc
+
+  # ──────────────────────────────────────────────────────────
+  # Cross-check: verify compilation on all targets
+  # ──────────────────────────────────────────────────────────
+  cross-check:
+    name: Cross-check (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: cli-rust
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Check Linux compilation from Linux (with system libs)
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            install: sudo apt-get update && sudo apt-get install -y libseccomp-dev
+          # Check macOS ARM compilation
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            install: ""
+          # Check Windows MSVC compilation
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            install: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        if: matrix.install != ''
+        run: ${{ matrix.install }}
+        shell: bash
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rust/target
+          key: cross-${{ matrix.target }}-${{ hashFiles('cli-rust/Cargo.lock') }}
+          restore-keys: cross-${{ matrix.target }}-
+
+      - name: Check compilation
+        run: cargo check -p oa-sandbox -p oa-cmd-sandbox --target ${{ matrix.target }}

@@ -1,0 +1,194 @@
+/* ── Code Block Wrapper ── */
+.chat-text .code-block-wrapper {
+  position: relative;
+  margin-top: 0.75em;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-text .code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 28px;
+}
+
+.chat-text .code-block-lang {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted, rgba(255, 255, 255, 0.5));
+  font-family: var(--mono);
+}
+
+.chat-text .code-block-copy-trigger {
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted, rgba(255, 255, 255, 0.4));
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+  font-family: var(--mono);
+}
+
+.chat-text .code-block-copy-trigger:hover {
+  color: var(--text, #fff);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-text .code-block-copy-trigger[data-copied="1"] {
+  color: #4ade80;
+}
+
+.chat-text .code-block-copy-trigger[data-copied="0"] {
+  color: #f87171;
+}
+
+/* Override default pre styles inside wrapper */
+.chat-text .code-block-wrapper pre {
+  margin: 0;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+}
+
+.chat-text .code-block-wrapper pre code {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* ── Prism Token Colors (Dark Theme) ── */
+.chat-text .token.comment,
+.chat-text .token.prolog,
+.chat-text .token.doctype,
+.chat-text .token.cdata {
+  color: #6a9955;
+}
+
+.chat-text .token.punctuation {
+  color: #d4d4d4;
+}
+
+.chat-text .token.property,
+.chat-text .token.tag,
+.chat-text .token.boolean,
+.chat-text .token.number,
+.chat-text .token.constant,
+.chat-text .token.symbol {
+  color: #b5cea8;
+}
+
+.chat-text .token.selector,
+.chat-text .token.attr-name,
+.chat-text .token.string,
+.chat-text .token.char,
+.chat-text .token.builtin {
+  color: #ce9178;
+}
+
+.chat-text .token.operator,
+.chat-text .token.entity,
+.chat-text .token.url {
+  color: #d4d4d4;
+}
+
+.chat-text .token.atrule,
+.chat-text .token.attr-value,
+.chat-text .token.keyword {
+  color: #569cd6;
+}
+
+.chat-text .token.function,
+.chat-text .token.class-name {
+  color: #dcdcaa;
+}
+
+.chat-text .token.regex,
+.chat-text .token.important,
+.chat-text .token.variable {
+  color: #d16969;
+}
+
+.chat-text .token.important,
+.chat-text .token.bold {
+  font-weight: bold;
+}
+
+.chat-text .token.italic {
+  font-style: italic;
+}
+
+/* ── Light Theme Overrides ── */
+[data-theme="light"] .chat-text .code-block-wrapper {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .chat-text .code-block-header {
+  background: rgba(0, 0, 0, 0.06);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .chat-text .code-block-copy-trigger:hover {
+  color: var(--text, #1a1a1a);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .chat-text .token.comment,
+[data-theme="light"] .chat-text .token.prolog,
+[data-theme="light"] .chat-text .token.doctype,
+[data-theme="light"] .chat-text .token.cdata {
+  color: #6a737d;
+}
+
+[data-theme="light"] .chat-text .token.punctuation {
+  color: #24292e;
+}
+
+[data-theme="light"] .chat-text .token.property,
+[data-theme="light"] .chat-text .token.tag,
+[data-theme="light"] .chat-text .token.boolean,
+[data-theme="light"] .chat-text .token.number,
+[data-theme="light"] .chat-text .token.constant,
+[data-theme="light"] .chat-text .token.symbol {
+  color: #005cc5;
+}
+
+[data-theme="light"] .chat-text .token.selector,
+[data-theme="light"] .chat-text .token.attr-name,
+[data-theme="light"] .chat-text .token.string,
+[data-theme="light"] .chat-text .token.char,
+[data-theme="light"] .chat-text .token.builtin {
+  color: #032f62;
+}
+
+[data-theme="light"] .chat-text .token.atrule,
+[data-theme="light"] .chat-text .token.attr-value,
+[data-theme="light"] .chat-text .token.keyword {
+  color: #d73a49;
+}
+
+[data-theme="light"] .chat-text .token.function,
+[data-theme="light"] .chat-text .token.class-name {
+  color: #6f42c1;
+}
+
+[data-theme="light"] .chat-text .token.regex,
+[data-theme="light"] .chat-text .token.important,
+[data-theme="light"] .chat-text .token.variable {
+  color: #e36209;
+}
