@@ -31,7 +31,7 @@
 .shell--chat {
   min-height: 100vh;
   height: 100vh;
-  overflow: hidden;
+  overflow: visible;
 }
 
 @supports (height: 100dvh) {
@@ -64,7 +64,7 @@
   padding-top: 0;
 }
 
-.shell--chat-focus .content > * + * {
+.shell--chat-focus .content>*+* {
   margin-top: 0;
 }
 
@@ -83,37 +83,69 @@
   gap: 16px;
   padding: 0 20px;
   height: var(--shell-topbar-height);
-  border-bottom: 1px solid var(--border);
   background: var(--bg);
+  /* Removed border-bottom for macOS seamless look, using a subtle inset shadow instead */
+  box-shadow: inset 0 -0.5px 0 var(--border);
+  -webkit-app-region: drag;
+  /* Support custom dragging window if running in Tauri/Electron */
+}
+
+/* Inject macOS window controls (Traffic Lights) */
+.topbar::before {
+  content: "";
+  display: block;
+  width: 54px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  background-image: radial-gradient(circle at 6px 6px, #ff5f56 6px, transparent 6px), radial-gradient(circle at 26px 6px, #ffbd2e 6px, transparent 6px), radial-gradient(circle at 46px 6px, #27c93f 6px, transparent 6px);
+  background-repeat: no-repeat;
+  /* Hover state: darken slightly to mimic macOS interactivity */
+  transition: opacity 0.2s;
+  opacity: 0.8;
+  -webkit-app-region: no-drag;
+}
+
+.topbar:hover::before {
+  opacity: 1;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  -webkit-app-region: no-drag;
 }
 
 .topbar .nav-collapse-toggle {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+}
+
+.topbar .nav-collapse-toggle:hover {
+  background: var(--bg-hover);
 }
 
 .topbar .nav-collapse-toggle__icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 .topbar .nav-collapse-toggle__icon svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 /* Brand */
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  -webkit-app-region: no-drag;
 }
 
 .brand-logo {
@@ -198,9 +230,15 @@
   grid-area: nav;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 12px;
-  background: var(--bg);
-  scrollbar-width: none; /* Firefox */
+  padding: 20px 12px;
+  /* macOS sidebar Vibrancy effect */
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
+  border-right: 0.5px solid var(--border);
+
+  scrollbar-width: none;
+  /* Firefox */
   transition:
     width var(--shell-focus-duration) var(--shell-focus-ease),
     padding var(--shell-focus-duration) var(--shell-focus-ease),
@@ -209,7 +247,8 @@
 }
 
 .nav::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
+  /* Chrome/Safari */
 }
 
 .shell--chat-focus .nav {
@@ -420,14 +459,16 @@
 
 .content {
   grid-area: content;
-  padding: 12px 16px 32px;
+  padding: 12px 24px 32px;
   display: block;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* subtle contrasting background for content area vs sidebar */
+  background: var(--bg);
 }
 
-.content > * + * {
+.content>*+* {
   margin-top: 24px;
 }
 
@@ -438,12 +479,12 @@
 .content--chat {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  overflow: hidden;
+  gap: 8px;
+  overflow: visible;
   padding-bottom: 0;
 }
 
-.content--chat > * + * {
+.content--chat>*+* {
   margin-top: 0;
 }
 
@@ -454,7 +495,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 4px 8px;
-  overflow: hidden;
+  overflow: visible;
   transform-origin: top center;
   transition:
     opacity var(--shell-focus-duration) var(--shell-focus-ease),
@@ -501,7 +542,7 @@
   gap: 16px;
 }
 
-.content--chat .content-header > div:first-child {
+.content--chat .content-header>div:first-child {
   text-align: left;
 }
 
