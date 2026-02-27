@@ -6,6 +6,8 @@ last_updated: 2026-02-27
 scope: "多模态输入链路 + 飞书出站媒体发送能力 全面审计"
 verdict: PASS with gaps (2 functional gaps identified, 1 design gap)
 skill5_verified: true
+follow_up_fix: docs/claude/audit/audit-2026-02-27-gap2-mediabase64.md
+full_review: docs/claude/audit/audit-2026-02-27-multimodal-full-review.md
 ---
 
 # 审计报告：多模态链路 & 飞书出站媒体发送

@@ -6,6 +6,8 @@ last_updated: 2026-02-27
 scope: "GAP-2 修复：send RPC 扩展 mediaBase64 支持"
 verdict: PASS
 skill5_verified: true
+parent_audit: docs/claude/audit/audit-2026-02-27-multimedia-feishu-outbound.md
+full_review: docs/claude/audit/audit-2026-02-27-multimodal-full-review.md
 ---
 
 # 审计报告：GAP-2 修复 — send RPC mediaBase64 扩展
