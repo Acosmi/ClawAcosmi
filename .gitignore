@@ -34,3 +34,7 @@ npm-debug.log*
 # Temporary files
 tmp/
 temp/
+
+# Argus Build 
+Argus/build/
+
