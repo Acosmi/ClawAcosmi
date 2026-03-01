@@ -1,6 +1,6 @@
 <div align="center">
 
-# Claw Acosmi (创宇太虚)
+# <span style="color: #FF5A5F;">Claw Acosmi (创宇太虚)</span>
 
 **「在虚空中创建新秩序，构筑太虚之境」**<br>
 **"Creating new order in the void, building the realm of Acosmi"**<br><br>
@@ -161,6 +161,7 @@ Welcome to submit Issues and Pull Requests to explore the ultimate form of Large
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
 ## 🤝 参与构筑太虚
 
 在混沌中建立秩序离不开每一位开发者的力量。
