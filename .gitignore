@@ -49,3 +49,6 @@ Argus/go-sensory/server
 
 # Large docs
 Rust 沙箱设计方案文档.md
+
+backend/acosmi
+backend/openacosmi
