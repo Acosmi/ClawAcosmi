@@ -46,9 +46,16 @@ type ChannelAttachment struct {
 	DataURL string
 }
 
+// DispatchReply 多模态分发回复（支持文本 + 媒体）。
+type DispatchReply struct {
+	Text          string // 文本回复
+	MediaData     []byte // 二进制媒体（可选）
+	MediaMimeType string // MIME 类型（可选）
+}
+
 // DispatchMultimodalFunc 多模态消息分发回调类型。
 // 与 DispatchFunc 并存：优先使用此回调，未设置则回退 DispatchFunc(text)。
 type DispatchMultimodalFunc func(
 	channel, accountID, chatID, userID string,
 	msg *ChannelMessage,
-) string
+) *DispatchReply

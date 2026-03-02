@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
 	"github.com/go-playground/validator/v10"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // validate 全局验证器实例（只初始化一次）
@@ -322,6 +322,45 @@ func validateDeepConstraints(cfg *types.OpenAcosmiConfig) []ValidationError {
 				Tag:     "enum",
 				Value:   cfg.Update.Channel,
 				Message: fmt.Sprintf("update.channel must be one of: %s", strings.Join(validChannels, ", ")),
+			})
+		}
+	}
+
+	// stt.provider 枚举
+	if cfg.STT != nil && cfg.STT.Provider != "" {
+		validProviders := []string{"openai", "groq", "azure", "qwen", "ollama", "local-whisper"}
+		if !isValidEnum(cfg.STT.Provider, validProviders) {
+			errs = append(errs, ValidationError{
+				Field:   "stt.provider",
+				Tag:     "enum",
+				Value:   cfg.STT.Provider,
+				Message: fmt.Sprintf("stt.provider must be one of: %s", strings.Join(validProviders, ", ")),
+			})
+		}
+	}
+
+	// docConv.provider 枚举
+	if cfg.DocConv != nil && cfg.DocConv.Provider != "" {
+		validProviders := []string{"mcp", "builtin"}
+		if !isValidEnum(cfg.DocConv.Provider, validProviders) {
+			errs = append(errs, ValidationError{
+				Field:   "docConv.provider",
+				Tag:     "enum",
+				Value:   cfg.DocConv.Provider,
+				Message: fmt.Sprintf("docConv.provider must be one of: %s", strings.Join(validProviders, ", ")),
+			})
+		}
+	}
+
+	// imageUnderstanding.provider 枚举
+	if cfg.ImageUnderstanding != nil && cfg.ImageUnderstanding.Provider != "" {
+		validProviders := []string{"qwen-vl", "openai", "ollama", "google", "anthropic"}
+		if !isValidEnum(cfg.ImageUnderstanding.Provider, validProviders) {
+			errs = append(errs, ValidationError{
+				Field:   "imageUnderstanding.provider",
+				Tag:     "enum",
+				Value:   cfg.ImageUnderstanding.Provider,
+				Message: fmt.Sprintf("imageUnderstanding.provider must be one of: %s", strings.Join(validProviders, ", ")),
 			})
 		}
 	}

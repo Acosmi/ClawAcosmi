@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Slack 消息发送 — 继承自 src/slack/send.ts (207L)

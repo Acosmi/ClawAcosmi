@@ -3,7 +3,7 @@ package scope
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- Agent 身份 ----------

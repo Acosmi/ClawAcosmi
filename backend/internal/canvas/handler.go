@@ -16,8 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/internal/media"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/media"
 )
 
 // ---------- 默认 Index HTML ----------

@@ -56,3 +56,30 @@ func (c *STTConfig) IsSTTEnabled() bool {
 func (c *DocConvConfig) IsDocConvEnabled() bool {
 	return c != nil && c.Provider != ""
 }
+
+// ImageUnderstandingConfig 图片理解 Fallback 配置（Phase E 新增）。
+// 当主模型不支持多模态时，通过独立视觉 API 将图片转为文字描述。
+type ImageUnderstandingConfig struct {
+	// Provider 提供商: "qwen-vl" | "openai" | "ollama" | "google" | "anthropic" | ""(禁用)
+	Provider string `json:"provider" label:"Image Understanding Provider"`
+
+	// APIKey API 密钥
+	APIKey string `json:"apiKey,omitempty" label:"API Key" sensitive:"true"`
+
+	// Model 视觉模型标识
+	Model string `json:"model,omitempty" label:"Model"`
+
+	// BaseURL 自定义 API 端点
+	BaseURL string `json:"baseUrl,omitempty" label:"Base URL"`
+
+	// Prompt 图片描述提示词（默认："请详细描述这张图片的内容"）
+	Prompt string `json:"prompt,omitempty" label:"Description Prompt"`
+
+	// MaxTokens 最大输出 token 数（默认 1024）
+	MaxTokens int `json:"maxTokens,omitempty" label:"Max Tokens"`
+}
+
+// IsImageUnderstandingEnabled 判断图片理解是否已启用
+func (c *ImageUnderstandingConfig) IsImageUnderstandingEnabled() bool {
+	return c != nil && c.Provider != ""
+}

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/helpers"
+	"github.com/openacosmi/claw-acismi/internal/agents/helpers"
 )
 
 // ---------- 失败切换错误 ----------

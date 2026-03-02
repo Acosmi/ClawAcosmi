@@ -3,8 +3,8 @@ package gateway
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/session"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/session"
 )
 
 // TS 对照: config/sessions/metadata.ts (173L)

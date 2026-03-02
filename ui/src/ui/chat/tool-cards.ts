@@ -4,7 +4,6 @@ import type { ToolCard } from "../types/chat-types.ts";
 import { icons } from "../icons.ts";
 import { formatToolDetail, resolveToolDisplay } from "../tool-display.ts";
 import { TOOL_INLINE_THRESHOLD } from "./constants.ts";
-import { isCoderTool, renderCoderCard } from "./coder-tool-cards.ts";
 import { extractTextCached } from "./message-extract.ts";
 import { isToolResultMessage } from "./message-normalizer.ts";
 import { formatToolOutputForSidebar, getTruncatedPreview } from "./tool-helpers.ts";
@@ -51,13 +50,6 @@ export function extractToolCards(message: unknown): ToolCard[] {
 }
 
 export function renderToolCardSidebar(card: ToolCard, onOpenSidebar?: (content: string) => void) {
-  // TODO(coder-terminal): Coder 增强卡片渲染已禁用，待终端式 UI 重设计。
-  // 恢复: 取消下方注释。见 docs/claude/deferred/oa-coder.md
-  // if (isCoderTool(card.name)) {
-  //   const coderCard = renderCoderCard(card, onOpenSidebar);
-  //   if (coderCard) return coderCard;
-  // }
-
   const display = resolveToolDisplay({ name: card.name, args: card.args });
   const detail = formatToolDetail(display);
   const hasText = Boolean(card.text?.trim());

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/anthropic/open-acosmi/internal/agents/prompt"
+	"github.com/openacosmi/claw-acismi/internal/agents/prompt"
 )
 
 // ---------- Context Files ----------
@@ -145,6 +145,34 @@ func ResolveContextFiles(workspaceDir string) []ContextFile {
 	})
 
 	return files
+}
+
+// ---------- ResolveProjectRootContextDir ----------
+
+// ResolveProjectRootContextDir 从 CWD 向上遍历，查找包含已知 context 文件的项目根目录。
+// 返回第一个包含 SOUL.md / CLAUDE.md 等文件的目录路径。找不到返回空字符串。
+// 用于补充 workspace 目录的 context 文件扫描（workspace 可能是 ~/.openacosmi/workspace/，
+// 而 SOUL.md 等文件位于项目源码根目录）。
+func ResolveProjectRootContextDir() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	current := cwd
+	for depth := 0; depth < 5; depth++ {
+		for _, known := range knownContextFiles {
+			candidate := filepath.Join(current, known.name)
+			if _, err := os.Stat(candidate); err == nil {
+				return current
+			}
+		}
+		next := filepath.Dir(current)
+		if next == current {
+			break
+		}
+		current = next
+	}
+	return ""
 }
 
 // ---------- ApplyContextPruning ----------

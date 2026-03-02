@@ -1,7 +1,7 @@
 package agents
 
 import (
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- Agent 运行时限制常量 ----------

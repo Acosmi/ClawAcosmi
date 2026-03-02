@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/retry"
+	"github.com/openacosmi/claw-acismi/pkg/retry"
 )
 
 // Discord REST API 客户端 — 继承自 src/discord/api.ts (137L)

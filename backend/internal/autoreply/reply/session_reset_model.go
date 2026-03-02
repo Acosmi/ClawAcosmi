@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/session-reset-model.ts (203L)

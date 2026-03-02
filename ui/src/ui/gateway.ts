@@ -283,6 +283,11 @@ export class GatewayBrowserClient {
           });
         }
         this.backoffMs = 800;
+        // Reset seq counter on reconnect: lastSeq is an instance-level field that
+        // persists across auto-reconnects (scheduleReconnect reuses the same instance).
+        // Without this reset, the first event after reconnect always triggers a false
+        // gap detection (seq=710 vs lastSeq=667 → "expected 668, got 710").
+        this.lastSeq = null;
         this.opts.onHello?.(hello);
       })
       .catch(() => {

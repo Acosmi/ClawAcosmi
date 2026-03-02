@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/retry"
+	"github.com/openacosmi/claw-acismi/pkg/retry"
 )
 
 // maxParallelReactionRemovals 限制并行移除反应的最大并发数，以避免触发 429。

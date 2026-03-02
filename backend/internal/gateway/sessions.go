@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/session"
+	"github.com/openacosmi/claw-acismi/internal/session"
 )
 
 // ---------- Session 存储 (移植自 sessions.ts / store.ts) ----------

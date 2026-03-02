@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 func TestPickHost(t *testing.T) {
@@ -56,9 +56,9 @@ func TestBuildBeaconLabel(t *testing.T) {
 			&infra.GatewayBonjourBeacon{
 				DisplayName: "My Gateway",
 				Host:        "192.168.1.1",
-				GatewayPort: 18789,
+				GatewayPort: 19001,
 			},
-			"My Gateway (192.168.1.1:18789)",
+			"My Gateway (192.168.1.1:19001)",
 		},
 		{
 			"instance name fallback",
@@ -82,7 +82,7 @@ func TestBuildBeaconLabel(t *testing.T) {
 				DisplayName: "GW",
 				Host:        "localhost",
 			},
-			"GW (localhost:18789)",
+			"GW (localhost:19001)",
 		},
 	}
 
@@ -103,7 +103,7 @@ func TestEnsureWsUrl(t *testing.T) {
 	}{
 		{"", defaultGatewayURL},
 		{"  ", defaultGatewayURL},
-		{"ws://example.com:18789", "ws://example.com:18789"},
+		{"ws://example.com:19001", "ws://example.com:19001"},
 		{"wss://secure.example.com", "wss://secure.example.com"},
 	}
 
@@ -120,7 +120,7 @@ func TestPromptRemoteGatewayConfig_DefaultURL(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
 	if cfg.Gateway == nil || cfg.Gateway.Remote == nil {
 		// 期望 suggestedURL 为 defaultGatewayURL
-		expected := "ws://127.0.0.1:18789"
+		expected := "ws://127.0.0.1:19001"
 		if defaultGatewayURL != expected {
 			t.Errorf("defaultGatewayURL = %q, want %q", defaultGatewayURL, expected)
 		}
@@ -132,13 +132,13 @@ func TestPromptRemoteGatewayConfig_ExistingURL(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{
 		Gateway: &types.GatewayConfig{
 			Remote: &types.GatewayRemoteConfig{
-				URL: "wss://my-server.com:18789",
+				URL: "wss://my-server.com:19001",
 			},
 		},
 	}
 
 	// 验证读取现有 URL
-	if cfg.Gateway.Remote.URL != "wss://my-server.com:18789" {
+	if cfg.Gateway.Remote.URL != "wss://my-server.com:19001" {
 		t.Errorf("unexpected URL: %s", cfg.Gateway.Remote.URL)
 	}
 }

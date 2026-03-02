@@ -223,6 +223,25 @@ type geminiUsageMetadata struct {
 
 // toGeminiContents 将统一 ChatMessage 转换为 Gemini Contents 格式。
 // Gemini 角色: "user" 和 "model"（非 "assistant"）。
+// geminiToolResultText 提取 tool_result 的文本内容（Gemini 不支持 image tool results）。
+func geminiToolResultText(b ContentBlock) string {
+	if b.ResultText != "" {
+		return b.ResultText
+	}
+	if len(b.ResultBlocks) > 0 {
+		var parts []string
+		for _, rb := range b.ResultBlocks {
+			if rb.Type == "text" && rb.Text != "" {
+				parts = append(parts, rb.Text)
+			} else if rb.Type == "image" {
+				parts = append(parts, "[image attached]")
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return ""
+}
+
 func toGeminiContents(msgs []ChatMessage) []geminiContent {
 	out := make([]geminiContent, 0, len(msgs))
 	for _, m := range msgs {
@@ -266,7 +285,7 @@ func toGeminiContents(msgs []ChatMessage) []geminiContent {
 					FunctionResp: &geminiFunctionResp{
 						Name: fnName,
 						Response: map[string]interface{}{
-							"result": b.ResultText,
+							"result": geminiToolResultText(b),
 						},
 					},
 				})

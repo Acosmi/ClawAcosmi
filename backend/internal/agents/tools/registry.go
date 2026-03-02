@@ -85,22 +85,23 @@ func (r *ToolRegistry) Count() int {
 // OpenAcosmiToolsOptions 构建 OpenAcosmi 工具集的选项。
 // TS 参考: openacosmi-tools.ts L11-20
 type OpenAcosmiToolsOptions struct {
-	Workspace      string
-	AgentID        string
-	SessionKey     string
-	Sandbox        bool
-	SandboxRoot    string
-	EnableBrowser  bool
-	EnableCanvas   bool
-	EnableCron     bool
-	EnableGateway  bool
-	EnableMemory   bool
-	EnableNodes    bool
-	EnableMessage  bool
-	EnableTTS      bool
-	EnableWebTools bool
-	EnableImage    bool
-	EnableSessions bool
+	Workspace       string
+	AgentID         string
+	SessionKey      string
+	Sandbox         bool
+	SandboxRoot     string
+	EnableBrowser   bool
+	EnableCanvas    bool
+	EnableCron      bool
+	EnableGateway   bool
+	EnableMemory    bool
+	EnableNodes     bool
+	EnableMessage   bool
+	EnableTTS       bool
+	EnableWebTools  bool
+	EnableImage     bool
+	EnableSessions  bool
+	EnableSendMedia bool // 默认 false — 备用媒体发送工具
 }
 
 // CreateOpenAcosmiTools 构建 OpenAcosmi 的全量工具集。
@@ -147,6 +148,9 @@ func CreateOpenAcosmiTools(opts OpenAcosmiToolsOptions) *ToolRegistry {
 	}
 	if opts.EnableImage {
 		registerImageTool(reg, opts)
+	}
+	if opts.EnableSendMedia {
+		registerSendMediaTool(reg, opts)
 	}
 
 	return reg
@@ -234,4 +238,10 @@ func registerImageTool(reg *ToolRegistry, opts OpenAcosmiToolsOptions) {
 	// image_tool.go: 图像生成工具
 	// ImageProvider 由运行时注入, workspace 从 opts 获取。
 	reg.Register(CreateImageTool(nil, opts.Workspace))
+}
+
+func registerSendMediaTool(reg *ToolRegistry, opts OpenAcosmiToolsOptions) {
+	// send_media_tool.go: 媒体发送工具（备用，默认不启用）
+	// MediaSender 由运行时注入。
+	reg.Register(CreateSendMediaTool(nil))
 }

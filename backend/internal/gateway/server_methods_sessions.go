@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/routing"
-	"github.com/anthropic/open-acosmi/pkg/types"
 	"github.com/google/uuid"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- sessions handler (移植自 server-methods/sessions.ts) ----------

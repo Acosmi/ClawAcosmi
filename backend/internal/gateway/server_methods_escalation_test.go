@@ -19,6 +19,7 @@ func TestEscalationRequest_Success(t *testing.T) {
 	bc := NewBroadcaster()
 	auditLogger := NewEscalationAuditLogger()
 	mgr := NewEscalationManager(bc, auditLogger, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	err := mgr.RequestEscalation("esc_001", "full", "Need write access", "run-1", "session-1", "", "", 30)
@@ -45,6 +46,7 @@ func TestEscalationRequest_DuplicateRejected(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	if err := mgr.RequestEscalation("esc_001", "full", "reason", "", "", "", "", 30); err != nil {
@@ -73,6 +75,7 @@ func TestEscalationApprove(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	mgr.RequestEscalation("esc_001", "full", "reason", "run-1", "", "", "", 30)
@@ -131,6 +134,7 @@ func TestEscalationAutoDeescalate(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	mgr.RequestEscalation("esc_001", "full", "reason", "", "", "", "", 1) // 1 minute TTL
@@ -165,6 +169,7 @@ func TestEscalationTaskComplete(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	mgr.RequestEscalation("esc_001", "full", "reason", "run-1", "", "", "", 30)
@@ -186,6 +191,7 @@ func TestEscalationTaskComplete_WrongRunID(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	mgr.RequestEscalation("esc_001", "full", "reason", "run-1", "", "", "", 30)
@@ -259,6 +265,7 @@ func TestEscalationHandlers_RequestAndStatus(t *testing.T) {
 	bc := NewBroadcaster()
 	auditLogger := NewEscalationAuditLogger()
 	mgr := NewEscalationManager(bc, auditLogger, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	r := NewMethodRegistry()
@@ -308,6 +315,7 @@ func TestEscalationHandlers_Resolve(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	r := NewMethodRegistry()
@@ -350,6 +358,7 @@ func TestEscalationHandlers_Revoke(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	mgr := NewEscalationManager(nil, nil, nil)
+	mgr.SetMaxAllowedLevel("full")
 	defer mgr.Close()
 
 	r := NewMethodRegistry()

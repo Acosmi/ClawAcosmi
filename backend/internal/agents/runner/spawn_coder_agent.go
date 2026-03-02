@@ -12,8 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
 )
 
 // ---------- 子智能体生成回调类型 ----------
@@ -30,6 +31,12 @@ type SpawnSubagentParams struct {
 	TimeoutMs int64
 	// Label 子智能体标签（前端显示用）。
 	Label string
+	// Channel 异步消息通道（可选，nil = 不支持求助通道）。
+	// Phase 4: 三级指挥体系 — 子智能体执行中异步向主智能体求助。
+	Channel *AgentChannel
+	// AgentType 子智能体类型: "coder" | "argus"。
+	// Phase 5: 灵瞳完全子智能体化 — gateway 根据此字段差异化注入工具后端。
+	AgentType string
 }
 
 // SpawnSubagentFunc 子智能体生成回调。
@@ -55,7 +62,7 @@ type spawnCoderAgentInput struct {
 func SpawnCoderAgentToolDef() llmclient.ToolDef {
 	return llmclient.ToolDef{
 		Name:        "spawn_coder_agent",
-		Description: "Spawn a coding sub-agent with a delegation contract. The sub-agent runs as an independent LLM session with scoped permissions. Use this instead of directly editing/running code when the task is complex enough to delegate.",
+		Description: "Spawn an Open Coder sub-agent with a delegation contract. The sub-agent runs as an independent LLM session with scoped permissions. Use this for complex coding tasks that benefit from delegation.",
 		InputSchema: json.RawMessage(`{
 	"type": "object",
 	"properties": {
@@ -149,11 +156,32 @@ func executeSpawnCoderAgent(ctx context.Context, inputJSON json.RawMessage, para
 		contract.TimeoutMs = *input.TimeoutMs
 	}
 
+	// Phase 6: 加载父合约恢复上下文（如果是续接）
+	var resumeContext string
+	var iterationIndex int
+	if input.ParentContract != "" && params.ContractStore != nil {
+		_, parentThought, err := params.ContractStore.LoadContract(input.ParentContract)
+		if err != nil {
+			slog.Warn("spawn_coder_agent: failed to load parent contract (continuing without resume context)",
+				"parentContract", input.ParentContract, "error", err)
+		} else if parentThought != nil {
+			resumeContext = parentThought.ResumeHint
+			iterationIndex = int(parentThought.IterationCount) + 1
+		}
+	}
+
+	// Phase 6: 迭代上限检查（硬上限 3 轮，防止 LLM 失控循环）
+	if iterationIndex > 3 {
+		return fmt.Sprintf("[spawn_coder_agent] Negotiation round limit exceeded (%d > 3). "+
+			"Please handle this task directly or escalate to the user.", iterationIndex), nil
+	}
+
 	slog.Info("spawn_coder_agent: contract created",
 		"contractID", contract.ContractID,
 		"taskBrief", contract.TaskBrief,
 		"scopeCount", len(contract.Scope),
 		"parentContract", contract.ParentContract,
+		"iterationIndex", iterationIndex,
 	)
 
 	// 3.5 单调衰减校验: 合约不能超出当前 agent 的权限
@@ -163,11 +191,14 @@ func executeSpawnCoderAgent(ctx context.Context, inputJSON json.RawMessage, para
 		return fmt.Sprintf("[spawn_coder_agent] Permission monotonic decay violation: %s", err), nil
 	}
 
-	// 4. 构建子智能体系统提示词（含合约段）
-	systemPrompt := BuildSubagentSystemPrompt(SubagentSystemPromptParams{
-		Task:     input.TaskBrief,
-		Contract: contract,
-		Label:    "coder",
+	// 4. 构建 oa-coder 专用系统提示词（含合约段 + 编码行为准则 + 恢复上下文）
+	systemPrompt := BuildCoderSubagentSystemPrompt(CoderSubagentPromptParams{
+		Task:                input.TaskBrief,
+		SuccessCriteria:     input.SuccessCriteria,
+		Contract:            contract,
+		RequesterSessionKey: params.SessionKey,
+		ResumeContext:       resumeContext,
+		IterationIndex:      iterationIndex,
 	})
 
 	// 5. 检查 SpawnSubagent 回调
@@ -179,23 +210,111 @@ func executeSpawnCoderAgent(ctx context.Context, inputJSON json.RawMessage, para
 
 	// 6. 启动子智能体 session
 	contract.Status = ContractActive
+
+	// Phase 7: 绑定活动合约到审批路由器
+	if params.CoderConfirmation != nil {
+		params.CoderConfirmation.SetActiveContract(contract)
+		defer params.CoderConfirmation.ClearActiveContract()
+	}
+
 	outcome, err := params.SpawnSubagent(ctx, SpawnSubagentParams{
 		Contract:     contract,
 		Task:         input.TaskBrief,
 		SystemPrompt: systemPrompt,
 		TimeoutMs:    int64(contract.TimeoutMs),
 		Label:        fmt.Sprintf("coder-%s", contract.ContractID[:8]),
+		Channel:      params.AgentChannel, // Phase 4: 注入异步消息通道
 	})
 	if err != nil {
 		contract.Status = ContractFailed
 		return fmt.Sprintf("[spawn_coder_agent] Sub-agent spawn failed: %s", err), nil
 	}
 
-	// 7. 格式化返回结果
+	// 7. Phase 2 + Phase 3: 质量审核 + 最终交付门控（三级指挥体系）
+	var qualityReviewSummary string
+
+	// Phase 2: 质量审核门控
+	// 子智能体返回结果后，主智能体审核质量 → 通过后才交付。
+	// R3 混合模式: 规则预检 + 可选 LLM 语义审核。
+	if outcome != nil && outcome.ThoughtResult != nil && outcome.ThoughtResult.Status == ThoughtCompleted {
+		reviewParams := QualityReviewParams{
+			Contract:        contract,
+			Outcome:         outcome,
+			TaskBrief:       input.TaskBrief,
+			SuccessCriteria: input.SuccessCriteria,
+		}
+
+		reviewResult := ReviewSubagentResult(reviewParams, params.QualityReviewFn)
+		if reviewResult != nil && !reviewResult.Approved {
+			contract.Status = ContractFailed
+			slog.Info("spawn_coder_agent: quality review failed",
+				"contractID", contract.ContractID,
+				"issues", reviewResult.Issues,
+			)
+			return FormatReviewFailedResult(contract, outcome, reviewResult), nil
+		}
+
+		// 审核通过 — 保存 review summary 供 Phase 3 展示
+		if reviewResult != nil && reviewResult.ReviewSummary != "" {
+			qualityReviewSummary = reviewResult.ReviewSummary
+			slog.Debug("spawn_coder_agent: quality review passed",
+				"contractID", contract.ContractID,
+				"summary", qualityReviewSummary,
+			)
+		}
+	}
+
+	// Phase 3: 最终交付门控
+	// 质量审核通过后，将结果呈现给用户做最终签收。
+	// 用户 approve → 返回正常结果；reject → 返回 "用户要求修改" 给主智能体。
+	if params.ResultApprovalMgr != nil && outcome != nil && outcome.ThoughtResult != nil &&
+		outcome.ThoughtResult.Status == ThoughtCompleted {
+
+		tr := outcome.ThoughtResult
+
+		approvalReq := ResultApprovalRequest{
+			OriginalTask:  input.TaskBrief,
+			ContractID:    contract.ContractID,
+			Result:        truncate(tr.Result, 500),
+			Artifacts:     tr.Artifacts,
+			ReviewSummary: qualityReviewSummary,
+		}
+
+		// 使用独立 context（同 Phase 1 R1 策略）
+		approvalCtx, approvalCancel := context.WithTimeout(context.Background(), params.ResultApprovalMgr.Timeout())
+		defer approvalCancel()
+
+		approvalDecision, approvalErr := params.ResultApprovalMgr.RequestResultApproval(approvalCtx, approvalReq)
+		if approvalErr != nil {
+			slog.Warn("spawn_coder_agent: result approval error, proceeding with result",
+				"contractID", contract.ContractID,
+				"error", approvalErr,
+			)
+		} else if approvalDecision.Action == "reject" {
+			slog.Info("spawn_coder_agent: result rejected by user",
+				"contractID", contract.ContractID,
+				"feedback", approvalDecision.Feedback,
+			)
+			return fmt.Sprintf("[Coder Agent Result - User Rejected]\nContract: %s\n\n"+
+				"The user rejected the sub-agent's result.\nFeedback: %s\n\n"+
+				"ACTION: Review the user's feedback and either:\n"+
+				"  1. Re-delegate with adjusted parameters\n"+
+				"  2. Handle the task differently\n"+
+				"  3. Ask the user for clarification\n",
+				contract.ContractID, approvalDecision.Feedback), nil
+		}
+		// approve — 继续返回正常结果
+	}
+
+	// 8. 合约状态转换到终态
+	contract.Status = ContractCompleted
+
+	// 9. 格式化返回结果
 	return formatSpawnResult(contract, outcome), nil
 }
 
 // formatSpawnResult 格式化子智能体执行结果为主智能体可读文本。
+// Phase 6: needs_auth 状态输出可操作指引（scope 扩展、约束放宽、parent_contract 提示）。
 func formatSpawnResult(contract *DelegationContract, outcome *SubagentRunOutcome) string {
 	if outcome == nil {
 		return fmt.Sprintf("[spawn_coder_agent] Contract %s: no outcome returned", contract.ContractID)
@@ -203,6 +322,11 @@ func formatSpawnResult(contract *DelegationContract, outcome *SubagentRunOutcome
 
 	// 有 ThoughtResult 时返回结构化摘要
 	if tr := outcome.ThoughtResult; tr != nil {
+		// Phase 6: needs_auth 专用可操作指引
+		if tr.Status == ThoughtNeedsAuth {
+			return formatNeedsAuthResult(contract, tr)
+		}
+
 		result := fmt.Sprintf("[Coder Agent Result]\nContract: %s\nStatus: %s\n",
 			contract.ContractID, tr.Status)
 
@@ -220,9 +344,6 @@ func formatSpawnResult(contract *DelegationContract, outcome *SubagentRunOutcome
 				result += fmt.Sprintf("\nFiles created: %v\n", tr.Artifacts.FilesCreated)
 			}
 		}
-		if tr.AuthRequest != nil {
-			result += fmt.Sprintf("\n⚠️ Auth Request: %s (risk: %s)\n", tr.AuthRequest.Reason, tr.AuthRequest.RiskLevel)
-		}
 		if tr.ResumeHint != "" {
 			result += fmt.Sprintf("\nResume hint: %s\n", tr.ResumeHint)
 		}
@@ -239,4 +360,48 @@ func formatSpawnResult(contract *DelegationContract, outcome *SubagentRunOutcome
 		result += fmt.Sprintf("Error: %s\n", outcome.Error)
 	}
 	return result
+}
+
+// formatNeedsAuthResult 格式化 needs_auth 状态的可操作指引。
+// 主 Agent 收到此信息后，可根据 prompt 引导决策是否重新委托。
+func formatNeedsAuthResult(contract *DelegationContract, tr *ThoughtResult) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("[Coder Agent - Needs Authorization]\nContract: %s\nStatus: needs_auth\n", contract.ContractID))
+
+	if tr.AuthRequest != nil {
+		b.WriteString(fmt.Sprintf("\nReason: %s\n", tr.AuthRequest.Reason))
+		b.WriteString(fmt.Sprintf("Risk level: %s\n", tr.AuthRequest.RiskLevel))
+
+		if len(tr.AuthRequest.RequestedScopeExtension) > 0 {
+			b.WriteString("\nRequested scope extensions:\n")
+			for _, s := range tr.AuthRequest.RequestedScopeExtension {
+				perms := make([]string, len(s.Permissions))
+				for i, p := range s.Permissions {
+					perms[i] = string(p)
+				}
+				b.WriteString(fmt.Sprintf("  - %s [%s]\n", s.Path, strings.Join(perms, ", ")))
+			}
+		}
+
+		if len(tr.AuthRequest.RequestedConstraintRelaxation) > 0 {
+			b.WriteString(fmt.Sprintf("\nRequested constraint relaxations: %v\n", tr.AuthRequest.RequestedConstraintRelaxation))
+		}
+	}
+
+	if tr.ResumeHint != "" {
+		b.WriteString(fmt.Sprintf("\nResume hint: %s\n", tr.ResumeHint))
+	}
+
+	if tr.Result != "" {
+		b.WriteString(fmt.Sprintf("\nPartial result: %s\n", tr.Result))
+	}
+
+	// 可操作指引
+	b.WriteString("\n---\n")
+	b.WriteString(fmt.Sprintf("ACTION: To resume, use spawn_coder_agent with parent_contract=\"%s\"\n", contract.ContractID))
+	b.WriteString("- Expand the scope to include the requested paths\n")
+	b.WriteString("- Relax the constraints as requested (if risk is acceptable)\n")
+	b.WriteString("- Include the resume_hint in the new task_brief for continuity\n")
+
+	return b.String()
 }

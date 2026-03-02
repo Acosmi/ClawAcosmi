@@ -14,8 +14,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- NonInteractive 选项 ----------
@@ -362,7 +362,7 @@ func applyNonInteractiveGatewayConfig(opts NonInteractiveOptions, cfg *types.Ope
 			port = *cfg.Gateway.Port
 		}
 		if port <= 0 {
-			port = 18789
+			port = 19001
 		}
 	}
 

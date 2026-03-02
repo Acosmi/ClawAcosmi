@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Discord 账户解析 — 继承自 src/discord/accounts.ts (83L)

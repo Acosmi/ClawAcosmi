@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
 	"github.com/bwmarrin/discordgo"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // 已注册的原生命令

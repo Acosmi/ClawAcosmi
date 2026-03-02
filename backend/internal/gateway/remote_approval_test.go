@@ -109,6 +109,92 @@ func TestRemoteApprovalNotifier_NotifyAllNoProviders(t *testing.T) {
 	})
 }
 
+func TestRemoteApprovalNotifier_UpdateLastKnownFeishuTarget(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	n := NewRemoteApprovalNotifier(nil)
+	// Inject feishu channel config (simulating server startup)
+	n.InjectChannelFeishuConfig("cli_test123", "secret_test", "")
+
+	// Initially no LastKnown values
+	cfg := n.GetConfig()
+	if cfg.Feishu.LastKnownChatID != "" {
+		t.Errorf("expected empty LastKnownChatID, got %q", cfg.Feishu.LastKnownChatID)
+	}
+
+	// Simulate receiving a feishu message
+	n.UpdateLastKnownFeishuTarget("oc_test_chat_123", "ou_test_user_456")
+
+	cfg = n.GetConfig()
+	if cfg.Feishu.LastKnownChatID != "oc_test_chat_123" {
+		t.Errorf("expected LastKnownChatID='oc_test_chat_123', got %q", cfg.Feishu.LastKnownChatID)
+	}
+	if cfg.Feishu.LastKnownUserID != "ou_test_user_456" {
+		t.Errorf("expected LastKnownUserID='ou_test_user_456', got %q", cfg.Feishu.LastKnownUserID)
+	}
+
+	// Simulate restart: create new notifier and verify persistence
+	n2 := NewRemoteApprovalNotifier(nil)
+	cfg2 := n2.GetConfig()
+	if cfg2.Feishu == nil {
+		t.Fatal("Feishu config should be persisted after restart")
+	}
+	if cfg2.Feishu.LastKnownChatID != "oc_test_chat_123" {
+		t.Errorf("after restart: expected LastKnownChatID='oc_test_chat_123', got %q", cfg2.Feishu.LastKnownChatID)
+	}
+	if cfg2.Feishu.LastKnownUserID != "ou_test_user_456" {
+		t.Errorf("after restart: expected LastKnownUserID='ou_test_user_456', got %q", cfg2.Feishu.LastKnownUserID)
+	}
+}
+
+func TestRemoteApprovalNotifier_UpdateLastKnownIdempotent(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	n := NewRemoteApprovalNotifier(nil)
+	n.InjectChannelFeishuConfig("cli_test", "secret", "")
+
+	// First update
+	n.UpdateLastKnownFeishuTarget("oc_chat", "ou_user")
+	// Same values — should be idempotent (no extra disk write)
+	n.UpdateLastKnownFeishuTarget("oc_chat", "ou_user")
+	// Empty values — should be ignored
+	n.UpdateLastKnownFeishuTarget("", "")
+
+	cfg := n.GetConfig()
+	if cfg.Feishu.LastKnownChatID != "oc_chat" {
+		t.Errorf("expected 'oc_chat', got %q", cfg.Feishu.LastKnownChatID)
+	}
+}
+
+func TestRemoteApprovalNotifier_InjectPreservesLastKnown(t *testing.T) {
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	// Step 1: Create notifier, inject config, learn target
+	n1 := NewRemoteApprovalNotifier(nil)
+	n1.InjectChannelFeishuConfig("cli_app", "secret_app", "")
+	n1.UpdateLastKnownFeishuTarget("oc_preserved", "ou_preserved")
+
+	// Step 2: Simulate restart — new notifier loads from disk
+	// Then InjectChannelFeishuConfig is called again (as server.go does on startup)
+	n2 := NewRemoteApprovalNotifier(nil)
+	// The loaded config already has Feishu enabled with AppID, so Inject should skip
+	n2.InjectChannelFeishuConfig("cli_app", "secret_app", "")
+
+	cfg := n2.GetConfig()
+	if cfg.Feishu.LastKnownChatID != "oc_preserved" {
+		t.Errorf("Inject should preserve LastKnownChatID, got %q", cfg.Feishu.LastKnownChatID)
+	}
+}
+
 // ---------- TaskPresetManager ----------
 
 func TestTaskPresetManager_AddAndList(t *testing.T) {

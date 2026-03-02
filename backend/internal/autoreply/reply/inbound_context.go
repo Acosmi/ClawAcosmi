@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/inbound-context.ts (82L)

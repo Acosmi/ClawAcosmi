@@ -24,9 +24,16 @@ func TextMessage(role, text string) ChatMessage {
 	}
 }
 
+// ImageSource 图片数据来源（Anthropic API 格式）。
+type ImageSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/png", "image/jpeg", "image/gif", "image/webp"
+	Data      string `json:"data"`       // base64 编码数据
+}
+
 // ContentBlock 消息内容块。
 type ContentBlock struct {
-	Type string `json:"type"` // "text" | "tool_use" | "tool_result" | "thinking"
+	Type string `json:"type"` // "text" | "tool_use" | "tool_result" | "thinking" | "image"
 
 	// text
 	Text string `json:"text,omitempty"`
@@ -40,9 +47,13 @@ type ContentBlock struct {
 	Input json.RawMessage `json:"input,omitempty"` // tool input JSON
 
 	// tool_result
-	ToolUseID  string `json:"tool_use_id,omitempty"`
-	IsError    bool   `json:"is_error,omitempty"`
-	ResultText string `json:"result_text,omitempty"` // tool result 纯文本
+	ToolUseID    string         `json:"tool_use_id,omitempty"`
+	IsError      bool           `json:"is_error,omitempty"`
+	ResultText   string         `json:"result_text,omitempty"`   // tool result 纯文本
+	ResultBlocks []ContentBlock `json:"result_blocks,omitempty"` // tool result 多模态内容（含 image blocks）
+
+	// image (Anthropic API: type="image" + source={type, media_type, data})
+	Source *ImageSource `json:"source,omitempty"`
 
 	// thinking block 签名 (Anthropic extended thinking)
 	// 规范化为统一字段名，序列化时输出 thinkingSignature。

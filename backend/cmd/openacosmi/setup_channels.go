@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 频道设置入口 ----------

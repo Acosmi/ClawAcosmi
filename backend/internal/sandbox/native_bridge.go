@@ -84,7 +84,7 @@ type NativeSandboxConfig struct {
 	BinaryPath string
 	// Workspace 工作目录（挂载 R/W）。
 	Workspace string
-	// SecurityLevel "deny" / "sandbox" / "full"。
+	// SecurityLevel "deny" / "allowlist" / "sandboxed" (legacy: "sandbox" / "full")。
 	SecurityLevel string
 	// IdleTimeout Worker 空闲超时（0 = 不超时）。
 	IdleTimeout time.Duration
@@ -98,7 +98,7 @@ type NativeSandboxConfig struct {
 func DefaultNativeSandboxConfig() NativeSandboxConfig {
 	return NativeSandboxConfig{
 		BinaryPath:     "openacosmi",
-		SecurityLevel:  "sandbox",
+		SecurityLevel:  "allowlist",
 		HealthInterval: nativeHealthInterval,
 		MaxRetries:     nativeMaxRestartAttempts,
 	}
@@ -552,6 +552,145 @@ func (b *NativeSandboxBridge) processMonitor(ctx context.Context) {
 			backoff = nativeInitialBackoff
 		}
 	}
+}
+
+// ---------- NativeSandboxRouter ----------
+
+// SandboxMountParam 沙箱挂载参数（sandbox 包本地类型）。
+type SandboxMountParam struct {
+	HostPath  string // 宿主机绝对路径
+	MountMode string // "ro" 或 "rw"
+}
+
+// NativeSandboxRouter 根据安全级别路由到对应的沙箱执行方式:
+//   - L1 (allowlist): 持久 Worker IPC（<1ms，默认快速路径）
+//   - L2 (sandboxed): 一次性 `sandbox run` CLI 执行（~50ms，仅提权期间使用）
+//   - L3 (full): 不进沙箱（SandboxMode=false），不经过此路由
+//
+// 设计理由: 持久 Worker 的 Seatbelt/Landlock 策略在启动时固定，无法运行时变更。
+// L2 提权是临时的（人工审批+TTL），使用一次性执行完全可接受。
+type NativeSandboxRouter struct {
+	l1Bridge   *NativeSandboxBridge // 持久 L1 Worker（快速路径）
+	binaryPath string               // CLI 路径（一次性 L2 执行）
+	workspace  string
+}
+
+// NewNativeSandboxRouter 创建路由器。l1Bridge 可为 nil（仅 L2 可用）。
+func NewNativeSandboxRouter(l1Bridge *NativeSandboxBridge, binaryPath, workspace string) *NativeSandboxRouter {
+	return &NativeSandboxRouter{
+		l1Bridge:   l1Bridge,
+		binaryPath: binaryPath,
+		workspace:  workspace,
+	}
+}
+
+// ExecuteSandboxed 根据 securityLevel 路由到持久 Worker 或一次性 CLI。
+// workspace: 实际项目工作目录（L2 一次性执行时作为 --workspace 参数）。
+// mounts: L2 临时挂载请求（转为 --mount CLI 参数）。
+func (r *NativeSandboxRouter) ExecuteSandboxed(ctx context.Context, cmd string, args []string, env map[string]string, timeoutMs int64, securityLevel, workspace string, mounts []SandboxMountParam) (stdout, stderr string, exitCode int, err error) {
+	switch securityLevel {
+	case "allowlist":
+		// L1 → 持久 Worker IPC（快速路径，<1ms）
+		if r.l1Bridge == nil {
+			return "", "", -1, fmt.Errorf("native sandbox L1 worker not available")
+		}
+		return r.l1Bridge.Execute(ctx, cmd, args, env, timeoutMs)
+
+	case "sandboxed":
+		// L2 → 一次性 CLI 执行（~50ms，仅提权期间使用）
+		effectiveWorkspace := workspace
+		if effectiveWorkspace == "" {
+			effectiveWorkspace = r.workspace // 兜底到 Router 默认值
+		}
+		return r.executeOneShot(ctx, cmd, args, env, timeoutMs, securityLevel, effectiveWorkspace, mounts)
+
+	default:
+		return "", "", -1, fmt.Errorf("unsupported security level for native sandbox: %q (expected allowlist or sandboxed)", securityLevel)
+	}
+}
+
+// oneShotOutput 一次性 CLI JSON 输出结构（对齐 Rust SandboxOutput）。
+type oneShotOutput struct {
+	Stdout         string  `json:"stdout"`
+	Stderr         string  `json:"stderr"`
+	ExitCode       int     `json:"exit_code"`
+	Error          *string `json:"error,omitempty"`
+	DurationMs     uint64  `json:"duration_ms"`
+	SandboxBackend string  `json:"sandbox_backend"`
+}
+
+// executeOneShot 通过 `openacosmi sandbox run` CLI 一次性执行命令。
+// 复用 Rust sandbox run 的完整沙箱隔离（Seatbelt/Landlock），
+// 支持 --security sandboxed（L2 全权限 + 全网络）。
+// workspace: 实际工作目录（F-07 修复，不再写死 os.TempDir()）。
+// mounts: L2 临时挂载请求，转为 --mount host:sandbox:mode CLI 参数。
+func (r *NativeSandboxRouter) executeOneShot(ctx context.Context, cmd string, args []string, env map[string]string, timeoutMs int64, securityLevel, workspace string, mounts []SandboxMountParam) (string, string, int, error) {
+	binaryPath := r.binaryPath
+	if binaryPath == "" {
+		binaryPath = "openacosmi"
+	}
+
+	timeoutSecs := timeoutMs / 1000
+	if timeoutSecs <= 0 {
+		timeoutSecs = 120
+	}
+
+	// 构建 CLI 参数
+	cliArgs := []string{
+		"sandbox", "run",
+		"--security", securityLevel,
+		"--workspace", workspace,
+		"--format", "json",
+		"--timeout", fmt.Sprintf("%d", timeoutSecs),
+	}
+	// Phase 3.4: 临时挂载请求 → --mount host:sandbox:mode
+	for _, mount := range mounts {
+		mode := mount.MountMode
+		if mode == "" {
+			mode = "ro"
+		}
+		cliArgs = append(cliArgs, "--mount", fmt.Sprintf("%s:%s:%s", mount.HostPath, mount.HostPath, mode))
+	}
+	cliArgs = append(cliArgs, "--", cmd)
+	cliArgs = append(cliArgs, args...)
+
+	execCmd := exec.CommandContext(ctx, binaryPath, cliArgs...)
+
+	// 设置环境变量
+	if len(env) > 0 {
+		execCmd.Env = os.Environ()
+		for k, v := range env {
+			execCmd.Env = append(execCmd.Env, k+"="+v)
+		}
+	}
+
+	slog.Info("sandbox oneshot exec",
+		"security", securityLevel,
+		"command", cmd,
+		"args", args,
+	)
+
+	output, execErr := execCmd.Output()
+
+	// 解析 JSON 输出
+	var result oneShotOutput
+	if len(output) > 0 {
+		if jsonErr := json.Unmarshal(output, &result); jsonErr != nil {
+			// JSON 解析失败 — 返回原始输出
+			return string(output), "", -1, fmt.Errorf("oneshot JSON parse: %w (raw: %s)", jsonErr, string(output))
+		}
+	}
+
+	if result.Error != nil {
+		return result.Stdout, result.Stderr, result.ExitCode, fmt.Errorf("sandbox error: %s", *result.Error)
+	}
+
+	// exec.ExitError 是正常的非零退出码
+	if execErr != nil && result.ExitCode == 0 {
+		return result.Stdout, result.Stderr, -1, fmt.Errorf("oneshot exec: %w", execErr)
+	}
+
+	return result.Stdout, result.Stderr, result.ExitCode, nil
 }
 
 // IsNativeSandboxAvailable 检查原生沙箱 CLI 二进制是否可用。

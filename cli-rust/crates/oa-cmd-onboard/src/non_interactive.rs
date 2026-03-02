@@ -124,7 +124,7 @@ async fn run_non_interactive_remote(
     let remote_url = opts
         .remote_url
         .as_deref()
-        .unwrap_or("ws://127.0.0.1:18789");
+        .unwrap_or("ws://127.0.0.1:19001");
     let remote_token = opts.remote_token.clone();
 
     let mut gw = cfg.gateway.unwrap_or_default();

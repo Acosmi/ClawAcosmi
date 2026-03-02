@@ -209,7 +209,7 @@ const (
 // GatewayConfig 网关总配置
 // 原版: export type GatewayConfig (249 行)
 type GatewayConfig struct {
-	Port           *int                    `json:"port,omitempty"` // 默认 18789
+	Port           *int                    `json:"port,omitempty"` // 默认 19001
 	Mode           GatewayMode             `json:"mode,omitempty"`
 	Bind           GatewayBindMode         `json:"bind,omitempty"`
 	CustomBindHost string                  `json:"customBindHost,omitempty"`

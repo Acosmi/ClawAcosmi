@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/internal/plugins"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/plugins"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Telegram 原生命令 — 继承自 src/telegram/bot-native-commands.ts (727L)

@@ -17,7 +17,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // 包级全局状态（对应原版 state.ts）

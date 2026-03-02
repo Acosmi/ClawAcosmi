@@ -17,7 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ---------- 公开 API ----------

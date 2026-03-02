@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/tools"
-	"github.com/anthropic/open-acosmi/internal/infra"
-	"github.com/anthropic/open-acosmi/internal/nodehost"
 	"github.com/google/uuid"
+	"github.com/openacosmi/claw-acismi/internal/agents/tools"
+	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/nodehost"
 )
 
 // ========== ExecToolConfig ==========

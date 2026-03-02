@@ -3,7 +3,7 @@ package telegram
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // Telegram 入站管线 DI 依赖 — 定义外部模块注入点。

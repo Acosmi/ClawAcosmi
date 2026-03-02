@@ -19,6 +19,21 @@ type BrowserController interface {
 	GoBack(ctx context.Context) error
 	GoForward(ctx context.Context) error
 	GetURL(ctx context.Context) (string, error)
+
+	// Phase 1: ARIA 快照 + ref 元素交互（接入 pw_role_snapshot / pw_ai_loop 基础设施）
+	// SnapshotAI 返回 ARIA 无障碍树快照，包含 ref 标注的可交互元素。
+	// 返回 map 包含 "snapshot" (string) 和 "refs" (RoleRefMap)。
+	// 如底层不支持可返回 nil, nil。
+	SnapshotAI(ctx context.Context) (map[string]any, error)
+	// ClickRef 通过 ARIA ref 标识符（如 "e1"）点击元素，比 CSS selector 更健壮。
+	ClickRef(ctx context.Context, ref string) error
+	// FillRef 通过 ARIA ref 标识符填入文本。
+	FillRef(ctx context.Context, ref, text string) error
+
+	// Phase 4: Mariner AI 循环 — 意图级浏览任务。
+	// AIBrowse 执行 observe→plan→act 循环，返回 JSON 结果。
+	// 需要注入 AIPlanner（通过 SetAIPlanner），否则返回不支持错误。
+	AIBrowse(ctx context.Context, goal string) (string, error)
 }
 
 // CreateBrowserTool 创建浏览器工具。
@@ -103,8 +118,7 @@ func CreateBrowserTool(controller BrowserController) *AgentTool {
 				if err != nil {
 					return nil, err
 				}
-				_ = data
-				return JsonResult(map[string]any{"status": "captured", "mimeType": mimeType}), nil
+				return JsonResult(map[string]any{"status": "captured", "mimeType": mimeType, "size": len(data)}), nil
 
 			case "evaluate":
 				script, err := ReadStringParam(args, "script", &StringParamOptions{Required: true})

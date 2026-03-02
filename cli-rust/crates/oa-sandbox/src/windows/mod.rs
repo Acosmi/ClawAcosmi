@@ -122,7 +122,7 @@ impl SandboxRunner for WindowsRunner {
             // Workspace: read-only for L0, read-write for L1+
             let workspace_mode = match config.security_level {
                 SecurityLevel::L0Deny => MountMode::ReadOnly,
-                SecurityLevel::L1Sandbox | SecurityLevel::L2Full => MountMode::ReadWrite,
+                SecurityLevel::L1Allowlist | SecurityLevel::L2Sandboxed => MountMode::ReadWrite,
             };
 
             // Get the token's user SID for ACL entries.

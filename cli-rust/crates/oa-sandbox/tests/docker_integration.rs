@@ -55,7 +55,7 @@ fn docker_echo_hello() {
     }
 
     let runner = make_runner();
-    let config = make_config("echo", &["hello", "world"], SecurityLevel::L1Sandbox);
+    let config = make_config("echo", &["hello", "world"], SecurityLevel::L1Allowlist);
     let output = runner.run(&config).unwrap();
 
     assert_eq!(output.exit_code, 0);
@@ -75,7 +75,7 @@ fn docker_nonzero_exit() {
     }
 
     let runner = make_runner();
-    let config = make_config("sh", &["-c", "exit 42"], SecurityLevel::L1Sandbox);
+    let config = make_config("sh", &["-c", "exit 42"], SecurityLevel::L1Allowlist);
     let output = runner.run(&config).unwrap();
 
     assert_eq!(output.exit_code, 42);
@@ -89,7 +89,7 @@ fn docker_command_not_found() {
     }
 
     let runner = make_runner();
-    let config = make_config("/nonexistent/binary", &[], SecurityLevel::L1Sandbox);
+    let config = make_config("/nonexistent/binary", &[], SecurityLevel::L1Allowlist);
     let result = runner.run(&config);
 
     assert!(result.is_err());
@@ -106,7 +106,7 @@ fn docker_timeout() {
 
     let runner = make_runner();
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "sleep".into(),
         args: vec!["60".into()],
         workspace: std::env::temp_dir(),
@@ -144,7 +144,7 @@ fn docker_env_vars() {
     }
 
     let runner = make_runner();
-    let mut config = make_config("sh", &["-c", "echo $MY_VAR"], SecurityLevel::L1Sandbox);
+    let mut config = make_config("sh", &["-c", "echo $MY_VAR"], SecurityLevel::L1Allowlist);
     config.env_vars.insert("MY_VAR".into(), "test_value".into());
 
     let output = runner.run(&config).unwrap();
@@ -171,7 +171,7 @@ fn docker_workspace_mounted() {
 
     let runner = make_runner();
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "cat".into(),
         args: vec!["/workspace/marker.txt".into()],
         workspace: tmpdir.path().to_path_buf(),
@@ -233,7 +233,7 @@ fn select_runner_docker_backend() {
     }
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "echo".into(),
         args: vec!["test".into()],
         workspace: std::env::temp_dir(),

@@ -34,6 +34,23 @@ members = [
     "crates/oa-cmd-cron",
     "crates/oa-cmd-config",
     "crates/oa-cmd-daemon",
+    "crates/oa-cmd-acp",
+    "crates/oa-cmd-approvals",
+    "crates/oa-cmd-devices",
+    "crates/oa-cmd-directory",
+    "crates/oa-cmd-dns",
+    "crates/oa-cmd-node",
+    "crates/oa-cmd-pairing",
+    "crates/oa-cmd-system",
+    "crates/oa-cmd-tui",
+    "crates/oa-cmd-update",
+    "crates/oa-cmd-voicecall",
+    "crates/oa-cmd-webhooks",
+    "crates/oa-cmd-skills",
+    "crates/oa-cmd-plugins",
+    "crates/oa-cmd-security",
+    "crates/oa-cmd-hooks",
+    "crates/oa-cmd-browser",
     "crates/oa-cli",
 ]
 
@@ -42,7 +59,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-repository = "https://github.com/anthropic/open-acosmi"
+repository = "https://github.com/openacosmi/claw-acismi"
 
 [workspace.dependencies]
 # Serialization
@@ -145,6 +162,23 @@ oa-cmd-memory = { path = "crates/oa-cmd-memory" }
 oa-cmd-cron = { path = "crates/oa-cmd-cron" }
 oa-cmd-config = { path = "crates/oa-cmd-config" }
 oa-cmd-daemon = { path = "crates/oa-cmd-daemon" }
+oa-cmd-acp = { path = "crates/oa-cmd-acp" }
+oa-cmd-approvals = { path = "crates/oa-cmd-approvals" }
+oa-cmd-devices = { path = "crates/oa-cmd-devices" }
+oa-cmd-directory = { path = "crates/oa-cmd-directory" }
+oa-cmd-dns = { path = "crates/oa-cmd-dns" }
+oa-cmd-node = { path = "crates/oa-cmd-node" }
+oa-cmd-pairing = { path = "crates/oa-cmd-pairing" }
+oa-cmd-system = { path = "crates/oa-cmd-system" }
+oa-cmd-tui = { path = "crates/oa-cmd-tui" }
+oa-cmd-update = { path = "crates/oa-cmd-update" }
+oa-cmd-voicecall = { path = "crates/oa-cmd-voicecall" }
+oa-cmd-webhooks = { path = "crates/oa-cmd-webhooks" }
+oa-cmd-skills = { path = "crates/oa-cmd-skills" }
+oa-cmd-plugins = { path = "crates/oa-cmd-plugins" }
+oa-cmd-security = { path = "crates/oa-cmd-security" }
+oa-cmd-hooks = { path = "crates/oa-cmd-hooks" }
+oa-cmd-browser = { path = "crates/oa-cmd-browser" }
 oa-cli = { path = "crates/oa-cli" }
 
 [workspace.lints.rust]

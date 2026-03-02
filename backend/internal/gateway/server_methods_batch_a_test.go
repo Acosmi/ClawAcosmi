@@ -3,9 +3,9 @@ package gateway
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- config.get ----------

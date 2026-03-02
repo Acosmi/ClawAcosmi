@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
-	"github.com/anthropic/open-acosmi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
 )
 
 // ============================================================================

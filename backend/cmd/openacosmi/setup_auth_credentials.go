@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 内部 helper ----------

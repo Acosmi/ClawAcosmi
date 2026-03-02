@@ -288,9 +288,64 @@ func StripEnvelopeFromMessages(msgs []map[string]interface{}) []map[string]inter
 		for _, key := range removeKeys {
 			delete(cleaned, key)
 		}
+
+		// 安全兜底：清理 assistant 消息中的 reply tag（如 [[reply_to_current]]）
+		if role, _ := cleaned["role"].(string); role == "assistant" {
+			stripReplyTagsFromContent(cleaned)
+		}
+
 		result = append(result, cleaned)
 	}
 	return result
+}
+
+// stripReplyTagsFromContent 清理 transcript 消息 content 中的 reply 标签。
+// 处理两种格式：content 为字符串（旧格式）或 content block 数组（新格式）。
+func stripReplyTagsFromContent(msg map[string]interface{}) {
+	switch c := msg["content"].(type) {
+	case string:
+		if stripped := stripReplyTagsText(c); stripped != c {
+			msg["content"] = stripped
+		}
+	case []interface{}:
+		for _, block := range c {
+			if b, ok := block.(map[string]interface{}); ok {
+				if b["type"] == "text" {
+					if t, ok := b["text"].(string); ok {
+						b["text"] = stripReplyTagsText(t)
+					}
+				}
+			}
+		}
+	}
+}
+
+// stripReplyTagsText 剥离文本中的 [[reply_to_current]] / [[reply_to:...]] / [[reply:...]] 标签。
+// 与 dispatch_inbound.go 中 stripReplyTags 逻辑一致。
+func stripReplyTagsText(text string) string {
+	result := text
+	searchFrom := 0
+	for {
+		idx := strings.Index(result[searchFrom:], "[[")
+		if idx < 0 {
+			break
+		}
+		openIdx := searchFrom + idx
+		closeIdx := strings.Index(result[openIdx+2:], "]]")
+		if closeIdx < 0 {
+			break
+		}
+		closeIdx += openIdx + 2
+		inner := strings.TrimSpace(strings.ToLower(result[openIdx+2 : closeIdx]))
+		if inner == "reply_to_current" ||
+			strings.HasPrefix(inner, "reply_to:") ||
+			strings.HasPrefix(inner, "reply:") {
+			result = result[:openIdx] + result[closeIdx+2:]
+		} else {
+			searchFrom = closeIdx + 2
+		}
+	}
+	return strings.TrimSpace(result)
 }
 
 // CapArrayByJSONBytes 按 JSON 字节限制裁剪数组（从尾部保留）。

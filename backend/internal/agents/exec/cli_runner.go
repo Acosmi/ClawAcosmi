@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/helpers"
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/agents/workspace"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/helpers"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/agents/workspace"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // CliRunnerParams CLI Agent 运行参数。

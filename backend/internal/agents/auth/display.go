@@ -3,7 +3,7 @@ package auth
 // display.go — profile 显示标签
 // 对应 TS src/agents/auth-profiles/display.ts (18L)
 
-import "github.com/anthropic/open-acosmi/pkg/types"
+import "github.com/openacosmi/claw-acismi/pkg/types"
 
 // ResolveAuthProfileDisplayLabel 解析 profile 的显示标签。
 // 对应 TS: resolveAuthProfileDisplayLabel

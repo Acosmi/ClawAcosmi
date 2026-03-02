@@ -2,9 +2,11 @@ package reply
 
 import (
 	"context"
+	"math/rand"
+	"path/filepath"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/get-reply-run.ts (435L)
@@ -106,6 +108,12 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 		sessionID = generateSessionID()
 	}
 
+	// 解析 transcript 文件路径（storePath 目录 + sessionID.jsonl）
+	var sessionFile string
+	if params.StorePath != "" {
+		sessionFile = filepath.Join(filepath.Dir(params.StorePath), sessionID+".jsonl")
+	}
+
 	followupRun := FollowupRun{
 		Prompt:               commandBody,
 		OriginatingChannel:   msgCtx.OriginatingChannel,
@@ -117,6 +125,8 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 			SessionID:         sessionID,
 			SessionKey:        params.SessionKey,
 			AgentID:           params.AgentID,
+			SessionFile:       sessionFile,
+			WorkspaceDir:      params.WorkspaceDir,
 			MessageProvider:   strings.ToLower(strings.TrimSpace(msgCtx.Provider)),
 			AgentAccountID:    msgCtx.AccountID,
 			Provider:          params.Provider,
@@ -175,7 +185,7 @@ func randomHex(n int) string {
 	const chars = "0123456789abcdef"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = chars[i%len(chars)]
+		b[i] = chars[rand.Intn(len(chars))]
 	}
 	return string(b)
 }

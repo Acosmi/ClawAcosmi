@@ -309,8 +309,8 @@ func FormatControlUiSshHint(port int, basePath, token string) string {
 	}
 	lines = append(lines,
 		"Docs:",
-		"https://docs.openacosmi.ai/gateway/remote",
-		"https://docs.openacosmi.ai/web/control-ui",
+		"docs/skills/gateway/remote/SKILL.md",
+		"docs/skills/web/control-ui/SKILL.md",
 	)
 	return strings.Join(lines, "\n")
 }

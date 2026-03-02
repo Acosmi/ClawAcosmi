@@ -4,15 +4,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/agents/runner"
-	"github.com/anthropic/open-acosmi/internal/agents/skills"
-	"github.com/anthropic/open-acosmi/internal/argus"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/internal/memory/uhms"
-	"github.com/anthropic/open-acosmi/pkg/mcpremote"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/agents/skills"
+	"github.com/openacosmi/claw-acismi/internal/argus"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- Handler 类型定义 (移植自 server-methods/types.ts) ----------
@@ -113,9 +114,24 @@ type GatewayMethodContext struct {
 
 	// UHMS 记忆系统管理器（可选）
 	UHMSManager *uhms.DefaultManager
+	// UHMS Boot 文件管理器（可选，用于 skills.distribute 标记 Boot 状态）
+	UHMSBootMgr *uhms.BootManager
 
 	// Coder 确认管理器（可选，nil = 不需要确认）
 	CoderConfirmMgr *runner.CoderConfirmationManager
+	// 方案确认管理器（可选，nil = 不需要方案确认）
+	PlanConfirmMgr *runner.PlanConfirmationManager
+	// 结果签收管理器（可选，nil = 不需要结果签收）
+	ResultApprovalMgr *runner.ResultApprovalManager
+
+	// Phase 8: 合约持久化（可选，nil = contract.* RPC 返回空）
+	ContractStore *VFSContractPersistence
+
+	// Phase 4: 网关状态（用于 subagent.help.resolve 查找活跃通道）
+	State *GatewayState
+
+	// Phase 5+6: 媒体子系统（可选，nil = media.* RPC 不可用）
+	MediaSubsystem *media.MediaSubsystem
 }
 
 // ---------- 权限常量 ----------
@@ -149,6 +165,9 @@ var (
 		"memory.uhms.status", "memory.uhms.search", // P3: UHMS 状态/搜索 (修复授权缺失)
 		"memory.uhms.llm.get",                       // UHMS 独立 LLM 配置查询
 		"memory.list", "memory.get", "memory.stats", // memory.* 直接操作 (读)
+		"contract.list", "contract.get", "contract.audit", // Phase 8: 合约生命周期
+		"media.trending.fetch", "media.trending.sources", // Phase 5: 媒体热点
+		"media.drafts.list", "media.drafts.get", // Phase 5: 媒体草稿 (读)
 	)
 
 	writeMethods = newStringSet(
@@ -162,6 +181,7 @@ var (
 		"memory.uhms.add",                                                                               // P3: UHMS 添加 (修复授权缺失)
 		"memory.uhms.llm.set",                                                                           // UHMS 独立 LLM 配置设置
 		"memory.delete", "memory.compress", "memory.commit", "memory.decay.run", "memory.import.skills", // memory.* 直接操作 (写)
+		"media.drafts.delete", // Phase 5: 媒体草稿 (写)
 	)
 
 	approvalMethods = newStringSet(

@@ -6,9 +6,9 @@ export function getTabGroups() {
     { label: t("nav.group.chat"), tabs: ["chat"] as const },
     {
       label: t("nav.group.control"),
-      tabs: ["overview", "channels", "instances", "memory", "usage", "cron"] as const,
+      tabs: ["overview", "channels", "plugins", "instances", "memory", "usage", "cron"] as const,
     },
-    { label: t("nav.group.agent"), tabs: ["agents", "skills", "nodes", "subagents"] as const },
+    { label: t("nav.group.agent"), tabs: ["agents", "skills", "nodes", "subagents", "media"] as const },
     { label: t("nav.group.settings"), tabs: ["security", "config", "debug", "logs"] as const },
   ];
 }
@@ -17,6 +17,7 @@ export type Tab =
   | "agents"
   | "overview"
   | "channels"
+  | "plugins"
   | "instances"
   | "usage"
   | "cron"
@@ -28,12 +29,14 @@ export type Tab =
   | "config"
   | "debug"
   | "logs"
-  | "subagents";
+  | "subagents"
+  | "media";
 
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
   overview: "/overview",
   channels: "/channels",
+  plugins: "/plugins",
   instances: "/instances",
   usage: "/usage",
   cron: "/cron",
@@ -46,6 +49,7 @@ const TAB_PATHS: Record<Tab, string> = {
   debug: "/debug",
   logs: "/logs",
   subagents: "/subagents",
+  media: "/media",
 };
 
 const PATH_TO_TAB = new Map(Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab]));
@@ -144,6 +148,8 @@ export function iconForTab(tab: Tab): IconName {
       return "barChart";
     case "channels":
       return "link";
+    case "plugins":
+      return "puzzle";
     case "instances":
       return "radio";
     case "usage":
@@ -166,6 +172,8 @@ export function iconForTab(tab: Tab): IconName {
       return "scrollText";
     case "subagents":
       return "monitor";
+    case "media":
+      return "barChart";
     default:
       return "folder";
   }

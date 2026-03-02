@@ -14,9 +14,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -29,6 +31,10 @@ const (
 type feishuProvider struct {
 	config *FeishuProviderConfig
 	client *http.Client
+	// token cache
+	tokenMu     sync.Mutex
+	cachedToken string
+	tokenExpiry time.Time
 }
 
 // newFeishuProvider 创建飞书 Provider。
@@ -66,51 +72,24 @@ func (p *feishuProvider) SendApprovalRequest(ctx context.Context, req ApprovalCa
 	// 2. 构建互动卡片
 	card := p.buildApprovalCard(req)
 
-	// 3. 群发：收集所有目标（去重）
-	type target struct {
-		idType string
-		id     string
-	}
-	seen := make(map[string]bool)
-	var targets []target
-	addTarget := func(idType, id string) {
-		if id == "" {
-			return
-		}
-		key := idType + ":" + id
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		targets = append(targets, target{idType, id})
-	}
-
-	// 静态配置的群聊 / 用户
-	addTarget("chat_id", p.config.ChatID)
-	addTarget("open_id", p.config.UserID)
-	// 运行时动态获取的发起群聊（飞书消息事件的 chat_id）
-	addTarget("chat_id", req.OriginatorChatID)
-	// 运行时动态获取的发起用户（飞书消息事件的 open_id）
-	addTarget("open_id", req.OriginatorUserID)
-
-	if len(targets) == 0 {
-		return fmt.Errorf("飞书消息接收方为空: 需要配置 chatId/userId 或由飞书消息事件自动填充")
-	}
-
-	// 4. 逐一发送，收集错误
-	var firstErr error
-	for _, t := range targets {
-		if err := p.sendMessageTo(ctx, token, card, t.idType, t.id); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-		}
-	}
-	return firstErr
+	// 3. 群发到静态配置目标 + 运行时动态 originator 目标
+	return p.broadcastCard(ctx, token, card,
+		feishuTarget{"chat_id", req.OriginatorChatID},
+		feishuTarget{"open_id", req.OriginatorUserID},
+	)
 }
 
-// getTenantAccessToken 获取飞书 tenant_access_token。
+// getTenantAccessToken 获取飞书 tenant_access_token（带缓存）。
+// 飞书 token 有效期 2 小时，提前 5 分钟刷新。
 func (p *feishuProvider) getTenantAccessToken(ctx context.Context) (string, error) {
+	p.tokenMu.Lock()
+	defer p.tokenMu.Unlock()
+
+	// 缓存命中（提前 5 分钟刷新）
+	if p.cachedToken != "" && time.Now().Before(p.tokenExpiry) {
+		return p.cachedToken, nil
+	}
+
 	body, _ := json.Marshal(map[string]string{
 		"app_id":     p.config.AppID,
 		"app_secret": p.config.AppSecret,
@@ -139,15 +118,18 @@ func (p *feishuProvider) getTenantAccessToken(ctx context.Context) (string, erro
 	if result.Code != 0 {
 		return "", fmt.Errorf("飞书 token API 错误: code=%d, msg=%s", result.Code, result.Msg)
 	}
-	return result.TenantAccessToken, nil
+
+	p.cachedToken = result.TenantAccessToken
+	p.tokenExpiry = time.Now().Add(115 * time.Minute) // 2h - 5min buffer
+	return p.cachedToken, nil
 }
 
 // buildApprovalCard 构建飞书互动卡片 JSON。
 func (p *feishuProvider) buildApprovalCard(req ApprovalCardRequest) map[string]interface{} {
 	levelLabel := map[string]string{
-		"full":      "🔴 L2 — 完全权限 / Full Access",
+		"full":      "🔴 L3 — 完全权限 / Full Access",
+		"sandboxed": "🟠 L2 — 沙盒执行 / Sandboxed",
 		"allowlist": "🟡 L1 — 受限执行 / Allowlist",
-		"sandbox":   "🟡 L1 — 沙盒执行 / Sandbox",
 	}[req.RequestedLevel]
 	if levelLabel == "" {
 		levelLabel = req.RequestedLevel
@@ -238,14 +220,17 @@ func (p *feishuProvider) buildApprovalCard(req ApprovalCardRequest) map[string]i
 	return card
 }
 
-// broadcastCard 群发飞书卡片到所有已配置的目标（群聊+用户）。
-func (p *feishuProvider) broadcastCard(ctx context.Context, token string, card map[string]interface{}) error {
-	type target struct {
-		idType string
-		id     string
-	}
+// feishuTarget 飞书消息发送目标。
+type feishuTarget struct {
+	idType string // "chat_id" 或 "open_id"
+	id     string
+}
+
+// broadcastCard 群发飞书卡片到所有已配置的目标（群聊+用户）+ 可选额外目标。
+// Fix 10: 统一目标收集逻辑，消除与 SendApprovalRequest 的重复代码。
+func (p *feishuProvider) broadcastCard(ctx context.Context, token string, card map[string]interface{}, extraTargets ...feishuTarget) error {
 	seen := make(map[string]bool)
-	var targets []target
+	var targets []feishuTarget
 	addTarget := func(idType, id string) {
 		if id == "" {
 			return
@@ -255,25 +240,32 @@ func (p *feishuProvider) broadcastCard(ctx context.Context, token string, card m
 			return
 		}
 		seen[key] = true
-		targets = append(targets, target{idType, id})
+		targets = append(targets, feishuTarget{idType, id})
 	}
 
+	// 静态配置目标
 	addTarget("chat_id", p.config.ChatID)
 	addTarget("open_id", p.config.UserID)
+	addTarget("chat_id", p.config.ApprovalChatID) // 固定审批群 fallback
+	addTarget("chat_id", p.config.LastKnownChatID)
+	addTarget("open_id", p.config.LastKnownUserID)
+
+	// 动态额外目标（如 originator）
+	for _, t := range extraTargets {
+		addTarget(t.idType, t.id)
+	}
 
 	if len(targets) == 0 {
-		return fmt.Errorf("飞书消息接收方为空: 需要配置 chatId 或 userId")
+		return fmt.Errorf("飞书消息接收方为空: 需要配置 chatId/userId 或由飞书消息事件自动填充")
 	}
 
-	var firstErr error
+	var errs []error
 	for _, t := range targets {
 		if err := p.sendMessageTo(ctx, token, card, t.idType, t.id); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = append(errs, err)
 		}
 	}
-	return firstErr
+	return errors.Join(errs...)
 }
 
 // sendMessageTo 发送飞书消息到指定接收方。
@@ -393,6 +385,165 @@ func (p *feishuProvider) buildResultCard(result ApprovalResultNotification) map[
 					map[string]interface{}{
 						"tag":     "plain_text",
 						"content": fmt.Sprintf("ID: %s", result.EscalationID),
+					},
+				},
+			},
+		},
+	}
+}
+
+// ---------- CoderConfirmation 操作确认卡片 ----------
+
+// SendCoderConfirmRequest 实现 CoderConfirmNotifier 接口，发送操作确认卡片。
+func (p *feishuProvider) SendCoderConfirmRequest(ctx context.Context, req CoderConfirmCardRequest) error {
+	if err := p.ValidateConfig(); err != nil {
+		return err
+	}
+
+	token, err := p.getTenantAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("获取飞书 access token 失败: %w", err)
+	}
+
+	card := p.buildCoderConfirmCard(req)
+	// D5-F3: 与 SendApprovalRequest 对齐，同时推送到群聊(chat_id)和私聊(open_id)。
+	return p.broadcastCard(ctx, token, card,
+		feishuTarget{"chat_id", req.OriginatorChatID},
+		feishuTarget{"open_id", req.OriginatorUserID},
+	)
+}
+
+// SendCoderConfirmResult 实现 CoderConfirmNotifier 接口，发送操作确认结果卡片。
+func (p *feishuProvider) SendCoderConfirmResult(ctx context.Context, id string, approved bool) error {
+	if err := p.ValidateConfig(); err != nil {
+		return err
+	}
+
+	token, err := p.getTenantAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("获取飞书 access token 失败: %w", err)
+	}
+
+	card := p.buildCoderConfirmResultCard(id, approved)
+	return p.broadcastCard(ctx, token, card)
+}
+
+// buildCoderConfirmCard 构建操作确认互动卡片（黄色主题）。
+func (p *feishuProvider) buildCoderConfirmCard(req CoderConfirmCardRequest) map[string]interface{} {
+	preview := req.Preview
+	if preview == "" {
+		preview = req.ToolName
+	}
+	// 截断预览文本
+	previewRunes := []rune(preview)
+	if len(previewRunes) > 200 {
+		preview = string(previewRunes[:200]) + "..."
+	}
+
+	return map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"title": map[string]interface{}{
+				"tag":     "plain_text",
+				"content": "⚠️ 操作确认 / Action Confirmation",
+			},
+			"template": "yellow",
+		},
+		"elements": []interface{}{
+			map[string]interface{}{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"tag":     "lark_md",
+					"content": fmt.Sprintf("**工具**: %s\n**内容预览**:\n```\n%s\n```", req.ToolName, preview),
+				},
+			},
+			map[string]interface{}{
+				"tag": "hr",
+			},
+			map[string]interface{}{
+				"tag": "action",
+				"actions": []interface{}{
+					map[string]interface{}{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"tag":     "plain_text",
+							"content": "✅ 允许 / Allow",
+						},
+						"type": "primary",
+						"value": map[string]interface{}{
+							"type":   "coder_confirm",
+							"action": "allow",
+							"id":     req.ConfirmID,
+						},
+					},
+					map[string]interface{}{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"tag":     "plain_text",
+							"content": "❌ 拒绝 / Deny",
+						},
+						"type": "danger",
+						"value": map[string]interface{}{
+							"type":   "coder_confirm",
+							"action": "deny",
+							"id":     req.ConfirmID,
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"tag": "note",
+				"elements": []interface{}{
+					map[string]interface{}{
+						"tag":     "plain_text",
+						"content": fmt.Sprintf("ID: %s | 超时: %d 分钟", req.ConfirmID, req.TTLMinutes),
+					},
+				},
+			},
+		},
+	}
+}
+
+// buildCoderConfirmResultCard 构建操作确认结果卡片。
+func (p *feishuProvider) buildCoderConfirmResultCard(id string, approved bool) map[string]interface{} {
+	var headerTitle, headerTemplate, bodyText string
+	if approved {
+		headerTitle = "✅ 操作已批准 / Action Approved"
+		headerTemplate = "green"
+		bodyText = "操作确认请求已批准，正在执行。"
+	} else {
+		headerTitle = "❌ 操作已拒绝 / Action Denied"
+		headerTemplate = "red"
+		bodyText = "操作确认请求已拒绝，任务将跳过此操作。"
+	}
+
+	return map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"title": map[string]interface{}{
+				"tag":     "plain_text",
+				"content": headerTitle,
+			},
+			"template": headerTemplate,
+		},
+		"elements": []interface{}{
+			map[string]interface{}{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"tag":     "lark_md",
+					"content": bodyText,
+				},
+			},
+			map[string]interface{}{
+				"tag": "note",
+				"elements": []interface{}{
+					map[string]interface{}{
+						"tag":     "plain_text",
+						"content": fmt.Sprintf("ID: %s", id),
 					},
 				},
 			},

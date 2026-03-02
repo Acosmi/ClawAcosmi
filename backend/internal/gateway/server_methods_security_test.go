@@ -44,13 +44,13 @@ func TestSecurityHandlers_GetDefault(t *testing.T) {
 		t.Errorf("expected isPermanentFull=false, got %v", result["isPermanentFull"])
 	}
 
-	// 应该返回 3 个级别描述
+	// 应该返回 4 个级别描述（L0 deny, L1 allowlist, L2 sandboxed, L3 full）
 	levels, ok := result["levels"].([]map[string]interface{})
 	if !ok {
 		t.Fatalf("expected levels to be []map, got %T", result["levels"])
 	}
-	if len(levels) != 3 {
-		t.Errorf("expected 3 levels, got %d", len(levels))
+	if len(levels) != 4 {
+		t.Errorf("expected 4 levels, got %d", len(levels))
 	}
 
 	// hash 不为空

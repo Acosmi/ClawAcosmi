@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
 )
 
 // TS 对照: media/parse.ts (221L)

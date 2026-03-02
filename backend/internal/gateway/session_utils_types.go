@@ -1,6 +1,6 @@
 package gateway
 
-import "github.com/anthropic/open-acosmi/internal/session"
+import "github.com/openacosmi/claw-acismi/internal/session"
 
 // ---------- Session Utils DTO 类型 (移植自 session-utils.types.ts) ----------
 

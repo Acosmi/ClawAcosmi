@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/directive-handling.impl.ts (504L)

@@ -58,7 +58,7 @@ fn echo_hello_in_sandbox() {
     let config = make_config(
         "cmd.exe",
         &["/C", "echo hello world"],
-        SecurityLevel::L1Sandbox,
+        SecurityLevel::L1Allowlist,
     );
     let output = runner.run(&config).unwrap();
 
@@ -77,7 +77,7 @@ fn command_with_nonzero_exit() {
         return;
     }
 
-    let config = make_config("cmd.exe", &["/C", "exit /b 42"], SecurityLevel::L1Sandbox);
+    let config = make_config("cmd.exe", &["/C", "exit /b 42"], SecurityLevel::L1Allowlist);
     let output = runner.run(&config).unwrap();
 
     assert_eq!(output.exit_code, 42);
@@ -90,7 +90,7 @@ fn command_not_found_returns_error() {
         return;
     }
 
-    let config = make_config("C:\\nonexistent\\binary.exe", &[], SecurityLevel::L1Sandbox);
+    let config = make_config("C:\\nonexistent\\binary.exe", &[], SecurityLevel::L1Allowlist);
     let result = runner.run(&config);
 
     assert!(result.is_err());
@@ -106,7 +106,7 @@ fn timeout_kills_long_running_process() {
     }
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "cmd.exe".into(),
         args: vec!["/C".into(), "timeout /t 60 /nobreak".into()],
         workspace: std::env::temp_dir(),
@@ -147,7 +147,7 @@ fn can_write_to_workspace_in_l1() {
     let output_file = tmpdir.path().join("output.txt");
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "cmd.exe".into(),
         args: vec![
             "/C".into(),
@@ -182,7 +182,7 @@ fn env_vars_passed_to_sandbox() {
     env.insert("MY_TEST_VAR".into(), "test_value_123".into());
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "cmd.exe".into(),
         args: vec!["/C".into(), "echo %MY_TEST_VAR%".into()],
         workspace: std::env::temp_dir(),
@@ -212,7 +212,7 @@ fn job_object_limits_process_count() {
 
     // Try to spawn many processes — Job Object should limit
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "cmd.exe".into(),
         args: vec!["/C".into(), "echo limited".into()],
         workspace: std::env::temp_dir(),

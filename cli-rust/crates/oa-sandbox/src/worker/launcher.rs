@@ -43,7 +43,7 @@ pub struct WorkerLaunchConfig {
 impl Default for WorkerLaunchConfig {
     fn default() -> Self {
         Self {
-            security_level: SecurityLevel::L1Sandbox,
+            security_level: SecurityLevel::L1Allowlist,
             workspace: std::env::temp_dir(),
             network_policy: None,
             mounts: vec![],
@@ -96,15 +96,26 @@ pub fn launch_worker(config: &WorkerLaunchConfig) -> Result<WorkerHandle, Sandbo
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit()); // Worker logs flow to parent's stderr
 
-    // Apply platform-specific sandbox
+    // Apply platform-specific sandbox via pre_exec.
+    // Set OA_SANDBOX_APPLIED=1 so the Worker skips self-sandboxing
+    // (the launcher's pre_exec sandbox is already active before exec).
     #[cfg(target_os = "macos")]
-    apply_macos_sandbox(&mut cmd, config)?;
+    {
+        cmd.env("OA_SANDBOX_APPLIED", "1");
+        apply_macos_sandbox(&mut cmd, config)?;
+    }
 
     #[cfg(target_os = "linux")]
-    apply_linux_sandbox(&mut cmd, config)?;
+    {
+        cmd.env("OA_SANDBOX_APPLIED", "1");
+        apply_linux_sandbox(&mut cmd, config)?;
+    }
 
     #[cfg(target_os = "windows")]
-    apply_windows_sandbox(&mut cmd, config)?;
+    {
+        cmd.env("OA_SANDBOX_APPLIED", "1");
+        apply_windows_sandbox(&mut cmd, config)?;
+    }
 
     let child = cmd.spawn().map_err(|e| SandboxError::Io {
         context: format!(
@@ -172,8 +183,8 @@ pub fn launch_worker_unsandboxed(config: &WorkerLaunchConfig) -> Result<WorkerHa
 fn security_level_to_str(level: SecurityLevel) -> &'static str {
     match level {
         SecurityLevel::L0Deny => "deny",
-        SecurityLevel::L1Sandbox => "sandbox",
-        SecurityLevel::L2Full => "full",
+        SecurityLevel::L1Allowlist => "allowlist",
+        SecurityLevel::L2Sandboxed => "sandboxed",
     }
 }
 

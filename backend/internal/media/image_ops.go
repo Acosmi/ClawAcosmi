@@ -2,7 +2,6 @@ package media
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -22,6 +21,10 @@ import (
 
 // TS 对照: media/image-ops.ts (474L)
 // RUST_CANDIDATE: P2 — 图像编解码密集运算
+//
+// 拆分说明：
+//   - EXIF 方向读取 → image_exif.go
+//   - 方向规范化（旋转/翻转） → image_orient.go
 
 // ---------- 类型 ----------
 
@@ -38,119 +41,6 @@ type ImageMetadata struct {
 // TS 对照: image-ops.ts L17-22
 func prefersSips() bool {
 	return runtime.GOOS == "darwin"
-}
-
-// ---------- EXIF 方向读取 ----------
-
-// ReadJpegExifOrientation 从 JPEG buffer 读取 EXIF 方向值 (1-8)。
-// 返回 0 表示未找到或非 JPEG。
-// TS 对照: image-ops.ts L30-125
-func ReadJpegExifOrientation(buffer []byte) int {
-	if len(buffer) < 12 {
-		return 0
-	}
-	// JPEG SOI 标记
-	if buffer[0] != 0xFF || buffer[1] != 0xD8 {
-		return 0
-	}
-
-	pos := 2
-	for pos+4 < len(buffer) {
-		if buffer[pos] != 0xFF {
-			break
-		}
-		marker := buffer[pos+1]
-		// APP1 (EXIF)
-		if marker == 0xE1 {
-			return readExifOrientation(buffer, pos)
-		}
-		// 跳过其他段
-		if pos+4 > len(buffer) {
-			break
-		}
-		segLen := int(binary.BigEndian.Uint16(buffer[pos+2 : pos+4]))
-		pos += 2 + segLen
-	}
-	return 0
-}
-
-// readExifOrientation 从 APP1 段中解析 EXIF 方向。
-func readExifOrientation(buffer []byte, app1Start int) int {
-	if app1Start+4 > len(buffer) {
-		return 0
-	}
-	segLen := int(binary.BigEndian.Uint16(buffer[app1Start+2 : app1Start+4]))
-	segEnd := app1Start + 2 + segLen
-	if segEnd > len(buffer) {
-		segEnd = len(buffer)
-	}
-	exifStart := app1Start + 4
-	// 检查 "Exif\0\0"
-	if exifStart+6 > segEnd {
-		return 0
-	}
-	if string(buffer[exifStart:exifStart+4]) != "Exif" {
-		return 0
-	}
-
-	tiffStart := exifStart + 6
-	if tiffStart+8 > segEnd {
-		return 0
-	}
-
-	// 字节序
-	var bigEndian bool
-	if buffer[tiffStart] == 'M' && buffer[tiffStart+1] == 'M' {
-		bigEndian = true
-	} else if buffer[tiffStart] == 'I' && buffer[tiffStart+1] == 'I' {
-		bigEndian = false
-	} else {
-		return 0
-	}
-
-	readU16 := func(offset int) uint16 {
-		if offset+2 > segEnd {
-			return 0
-		}
-		if bigEndian {
-			return binary.BigEndian.Uint16(buffer[offset : offset+2])
-		}
-		return binary.LittleEndian.Uint16(buffer[offset : offset+2])
-	}
-
-	// IFD0 偏移
-	ifdOffsetRaw := tiffStart + 4
-	if ifdOffsetRaw+4 > segEnd {
-		return 0
-	}
-	var ifdOffset uint32
-	if bigEndian {
-		ifdOffset = binary.BigEndian.Uint32(buffer[ifdOffsetRaw : ifdOffsetRaw+4])
-	} else {
-		ifdOffset = binary.LittleEndian.Uint32(buffer[ifdOffsetRaw : ifdOffsetRaw+4])
-	}
-
-	ifdPos := tiffStart + int(ifdOffset)
-	if ifdPos+2 > segEnd {
-		return 0
-	}
-	numEntries := int(readU16(ifdPos))
-	ifdPos += 2
-
-	for i := 0; i < numEntries; i++ {
-		entryPos := ifdPos + i*12
-		if entryPos+12 > segEnd {
-			break
-		}
-		tag := readU16(entryPos)
-		if tag == 0x0112 { // Orientation
-			value := readU16(entryPos + 8)
-			if value >= 1 && value <= 8 {
-				return int(value)
-			}
-		}
-	}
-	return 0
 }
 
 // ---------- 图像元数据 ----------
@@ -281,6 +171,8 @@ func sipsResizeToJpeg(buffer []byte, maxSide, quality int) ([]byte, error) {
 	return os.ReadFile(outPath)
 }
 
+// ---------- 格式转换 ----------
+
 // ConvertHeicToJpeg 将 HEIC 图像转换为 JPEG。
 // TS 对照: image-ops.ts L349-355
 func ConvertHeicToJpeg(buffer []byte) ([]byte, error) {
@@ -310,132 +202,7 @@ func sipsConvertToJpeg(buffer []byte) ([]byte, error) {
 	return os.ReadFile(outPath)
 }
 
-// NormalizeExifOrientation 规范化图像的 EXIF 方向。
-// 将图像像素旋转到正确方向。失败时返回原始 buffer。
-// TS 对照: image-ops.ts L276-302
-func NormalizeExifOrientation(buffer []byte) []byte {
-	orientation := ReadJpegExifOrientation(buffer)
-	if orientation <= 1 || orientation > 8 {
-		return buffer
-	}
-
-	// macOS 路径：使用 sips 执行旋转
-	if prefersSips() {
-		result, err := sipsNormalizeOrientation(buffer)
-		if err == nil {
-			return result
-		}
-	}
-
-	// 跨平台 fallback：使用 Go image 变换
-	result, err := goNormalizeOrientation(buffer, orientation)
-	if err != nil {
-		return buffer // 失败时返回原始
-	}
-	return result
-}
-
-// sipsNormalizeOrientation 使用 macOS sips 自动修正 EXIF 方向。
-// sips -r 0 会根据 EXIF 方向自动旋转像素并重置 orientation tag。
-func sipsNormalizeOrientation(buffer []byte) ([]byte, error) {
-	tmpDir, err := os.MkdirTemp("", "sips-orient-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	inPath := filepath.Join(tmpDir, "input.jpg")
-	if err := os.WriteFile(inPath, buffer, 0600); err != nil {
-		return nil, err
-	}
-	// sips --rotate 0 会触发 EXIF 方向自动修正
-	if err := exec.Command("sips", "-r", "0", inPath).Run(); err != nil {
-		return nil, err
-	}
-	return os.ReadFile(inPath)
-}
-
-// goNormalizeOrientation 使用 Go image 变换修正 EXIF 方向。
-// EXIF orientation 值含义：
-//
-//	1 = 正常
-//	2 = 水平翻转
-//	3 = 旋转 180°
-//	4 = 垂直翻转
-//	5 = 转置（水平翻转 + 顺时针 270°）
-//	6 = 顺时针旋转 90°
-//	7 = 转位（水平翻转 + 顺时针 90°）
-//	8 = 顺时针旋转 270°
-func goNormalizeOrientation(buffer []byte, orientation int) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(buffer))
-	if err != nil {
-		return nil, fmt.Errorf("解码图像失败: %w", err)
-	}
-
-	bounds := img.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
-
-	var result *image.RGBA
-	switch orientation {
-	case 2: // 水平翻转
-		result = image.NewRGBA(image.Rect(0, 0, w, h))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(w-1-x, y, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 3: // 旋转 180°
-		result = image.NewRGBA(image.Rect(0, 0, w, h))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(w-1-x, h-1-y, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 4: // 垂直翻转
-		result = image.NewRGBA(image.Rect(0, 0, w, h))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(x, h-1-y, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 5: // 转置（水平翻转 + 顺时针 270°）
-		result = image.NewRGBA(image.Rect(0, 0, h, w))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(y, x, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 6: // 顺时针旋转 90°
-		result = image.NewRGBA(image.Rect(0, 0, h, w))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(h-1-y, x, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 7: // 转位（水平翻转 + 顺时针 90°）
-		result = image.NewRGBA(image.Rect(0, 0, h, w))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(h-1-y, w-1-x, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	case 8: // 顺时针旋转 270°
-		result = image.NewRGBA(image.Rect(0, 0, h, w))
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				result.Set(y, w-1-x, img.At(bounds.Min.X+x, bounds.Min.Y+y))
-			}
-		}
-	default:
-		return buffer, nil
-	}
-
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, result, &jpeg.Options{Quality: 95}); err != nil {
-		return nil, fmt.Errorf("JPEG 编码失败: %w", err)
-	}
-	return buf.Bytes(), nil
-}
+// ---------- PNG 操作 ----------
 
 // HasAlphaChannel 检查图像是否有 alpha 通道（透明度）。
 // TS 对照: image-ops.ts L357-372

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/autoreply/reply"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/types"
-	"github.com/anthropic/open-acosmi/pkg/utils"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/utils"
 )
 
 // Signal 入站事件处理 — 继承自 src/signal/monitor/event-handler.ts (582L)

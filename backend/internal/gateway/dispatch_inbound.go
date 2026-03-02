@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // PipelineDispatcher 管线分发接口。
@@ -39,6 +39,12 @@ type DispatchInboundParams struct {
 
 	// 管线分发器（DI 注入）
 	Dispatcher PipelineDispatcher
+
+	// 任务频道回调（可选，由 chat.send 注入用于广播执行步骤）
+	OnToolResult func(payload autoreply.ReplyPayload)
+	// OnToolEvent 结构化工具事件回调（可选，由 chat.send 注入用于广播工具详情）。
+	// 实际类型: func(runner.ToolEvent)，通过 any 传递避免循环导入。
+	OnToolEvent any
 }
 
 // DispatchInboundResult 分发结果。
@@ -72,8 +78,10 @@ func DispatchInboundMessage(ctx context.Context, params DispatchInboundParams) *
 
 	// 构建 GetReplyOptions
 	getReplyOpts := &autoreply.GetReplyOptions{
-		RunID:       params.RunID,
-		IsHeartbeat: false,
+		RunID:        params.RunID,
+		IsHeartbeat:  false,
+		OnToolResult: params.OnToolResult,
+		OnToolEvent:  params.OnToolEvent,
 	}
 
 	slog.Info("dispatch_inbound: starting pipeline",
@@ -105,15 +113,59 @@ func DispatchInboundMessage(ctx context.Context, params DispatchInboundParams) *
 
 // CombineReplyPayloads 合并回复载荷文本。
 // TS 对照: chat.ts .then 块中的 combinedReply 逻辑
+// 同时剥离 [[reply_to_current]] / [[reply_to:<id>]] / [[reply:<id>]] 等 reply 标签，
+// 避免标签原样暴露给用户。
 func CombineReplyPayloads(replies []autoreply.ReplyPayload) string {
 	parts := make([]string, 0, len(replies))
 	for _, r := range replies {
 		text := strings.TrimSpace(r.Text)
+		text = stripReplyTags(text)
 		if text != "" {
 			parts = append(parts, text)
 		}
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+// stripReplyTags 剥离 [[reply_to_current]] / [[reply_to:<id>]] / [[reply:<val>]] 标签。
+// 这是轻量级实现，避免 gateway 包 import reply 包导致循环依赖。
+func stripReplyTags(text string) string {
+	result := text
+	searchFrom := 0
+	for {
+		idx := strings.Index(result[searchFrom:], "[[")
+		if idx < 0 {
+			break
+		}
+		openIdx := searchFrom + idx
+		closeIdx := strings.Index(result[openIdx+2:], "]]")
+		if closeIdx < 0 {
+			break
+		}
+		closeIdx += openIdx + 2
+		inner := strings.TrimSpace(strings.ToLower(result[openIdx+2 : closeIdx]))
+		if inner == "reply_to_current" ||
+			strings.HasPrefix(inner, "reply_to:") ||
+			strings.HasPrefix(inner, "reply:") {
+			result = result[:openIdx] + result[closeIdx+2:]
+			// 不递增 searchFrom，因为剥离后后续内容前移
+		} else {
+			// 非 reply 标签，跳过继续扫描
+			searchFrom = closeIdx + 2
+		}
+	}
+	return strings.TrimSpace(result)
+}
+
+// ExtractMediaFromReplies 从回复载荷中提取第一个 base64 媒体数据。
+// 用于出站管线：将 agent 工具产出的图片传递到 DispatchReply.MediaData。
+func ExtractMediaFromReplies(replies []autoreply.ReplyPayload) (base64Data, mimeType string) {
+	for _, r := range replies {
+		if r.MediaBase64 != "" {
+			return r.MediaBase64, r.MediaMimeType
+		}
+	}
+	return "", ""
 }
 
 // truncateForLog 截断字符串用于日志。

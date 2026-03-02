@@ -644,7 +644,7 @@ var fieldHelp = map[string]string{
 
 // fieldPlaceholders 对应 TS FIELD_PLACEHOLDERS (8 条)
 var fieldPlaceholders = map[string]string{
-	"gateway.remote.url":               "ws://host:18789",
+	"gateway.remote.url":               "ws://host:19001",
 	"gateway.remote.tlsFingerprint":    "sha256:ab12cd34…",
 	"gateway.remote.sshTarget":         "user@host",
 	"gateway.controlUi.basePath":       "/openacosmi",

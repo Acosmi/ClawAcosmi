@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 func TestValidateHexColor(t *testing.T) {
@@ -239,7 +239,7 @@ func TestDeepConstraints_InvalidPort(t *testing.T) {
 }
 
 func TestDeepConstraints_ValidConfig(t *testing.T) {
-	goodPort := 18789
+	goodPort := 19001
 	cfg := &types.OpenAcosmiConfig{
 		Logging: &types.LoggingConfig{Level: "info"},
 		Gateway: &types.GatewayConfig{Port: &goodPort, Mode: "local", Bind: "auto"},
@@ -250,6 +250,88 @@ func TestDeepConstraints_ValidConfig(t *testing.T) {
 	for _, e := range errs {
 		if e.Tag == "enum" || e.Tag == "range" {
 			t.Errorf("unexpected deep constraint error: %v", e)
+		}
+	}
+}
+
+// ----- Media Provider Enum Tests -----
+
+func TestDeepConstraints_InvalidSTTProvider(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		STT: &types.STTConfig{Provider: "invalid_stt"},
+	}
+	errs := ValidateOpenAcosmiConfig(cfg)
+	found := false
+	for _, e := range errs {
+		if e.Field == "stt.provider" && e.Tag == "enum" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected enum error for invalid stt.provider")
+	}
+}
+
+func TestDeepConstraints_ValidSTTProviders(t *testing.T) {
+	for _, p := range []string{"openai", "groq", "azure", "qwen", "ollama", "local-whisper"} {
+		cfg := &types.OpenAcosmiConfig{
+			STT: &types.STTConfig{Provider: p},
+		}
+		errs := ValidateOpenAcosmiConfig(cfg)
+		for _, e := range errs {
+			if e.Field == "stt.provider" {
+				t.Errorf("unexpected error for valid stt.provider=%q: %v", p, e)
+			}
+		}
+	}
+}
+
+func TestDeepConstraints_InvalidDocConvProvider(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		DocConv: &types.DocConvConfig{Provider: "invalid_docconv"},
+	}
+	errs := ValidateOpenAcosmiConfig(cfg)
+	found := false
+	for _, e := range errs {
+		if e.Field == "docConv.provider" && e.Tag == "enum" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected enum error for invalid docConv.provider")
+	}
+}
+
+func TestDeepConstraints_InvalidImageProvider(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		ImageUnderstanding: &types.ImageUnderstandingConfig{Provider: "invalid_image"},
+	}
+	errs := ValidateOpenAcosmiConfig(cfg)
+	found := false
+	for _, e := range errs {
+		if e.Field == "imageUnderstanding.provider" && e.Tag == "enum" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected enum error for invalid imageUnderstanding.provider")
+	}
+}
+
+func TestDeepConstraints_EmptyMediaProviders(t *testing.T) {
+	// 空 provider 表示禁用，不应报错
+	cfg := &types.OpenAcosmiConfig{
+		STT:                &types.STTConfig{Provider: ""},
+		DocConv:            &types.DocConvConfig{Provider: ""},
+		ImageUnderstanding: &types.ImageUnderstandingConfig{Provider: ""},
+	}
+	errs := ValidateOpenAcosmiConfig(cfg)
+	for _, e := range errs {
+		if e.Field == "stt.provider" || e.Field == "docConv.provider" || e.Field == "imageUnderstanding.provider" {
+			t.Errorf("unexpected error for empty provider: %v", e)
 		}
 	}
 }

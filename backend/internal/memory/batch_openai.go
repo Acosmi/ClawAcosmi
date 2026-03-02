@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/retry"
+	"github.com/openacosmi/claw-acismi/pkg/retry"
 )
 
 // ── Types ──

@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/channels"
 )
 
 // Discord 消息目标解析 — 继承自 src/discord/targets.ts (163L)

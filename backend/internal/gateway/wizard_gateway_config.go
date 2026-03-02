@@ -12,14 +12,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 常量 ----------
 
 // DefaultGatewayPort 默认 gateway 端口。
-const DefaultGatewayPort = 18789
+const DefaultGatewayPort = 19001
 
 // DefaultDangerousNodeDenyCommands 高风险节点命令默认拒绝列表。
 // 这些命令涉及隐私写入/录制，需要用户通过 /phone arm 显式启用。
@@ -218,7 +218,7 @@ func ConfigureGatewayForOnboarding(opts ConfigureGatewayOptions) (*ConfigureGate
 	tailscaleResetOnExit := qs.TailscaleResetOnExit
 	if tailscaleMode != types.TailscaleOff && flow != "quickstart" {
 		_ = prompter.Note(
-			"Docs:\nhttps://docs.openacosmi.ai/gateway/tailscale\nhttps://docs.openacosmi.ai/web",
+			"Docs:\ndocs/skills/gateway/tailscale/SKILL.md\ndocs/skills/web/control-ui/SKILL.md",
 			"Tailscale",
 		)
 		reset, err := prompter.Confirm(i18n.Tp("onboard.gw.ts_reset_confirm"), false)

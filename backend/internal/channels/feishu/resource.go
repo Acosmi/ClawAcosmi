@@ -17,7 +17,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// httpClient 模块级 HTTP 客户端（带 30s 超时，防 slowloris）。
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // ResourceType 资源类型常量
 const (
@@ -52,7 +56,7 @@ func (c *FeishuClient) DownloadResource(ctx context.Context, messageID, fileKey,
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("feishu: download resource: %w", err)
 	}
@@ -138,7 +142,7 @@ func (c *FeishuClient) UploadImage(ctx context.Context, imageData []byte, imageT
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("feishu: upload image: %w", err)
 	}
@@ -220,7 +224,7 @@ func (c *FeishuClient) UploadFile(ctx context.Context, fileData []byte, fileName
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("feishu: upload file: %w", err)
 	}
@@ -286,9 +290,17 @@ func (c *FeishuClient) apiBaseURL() string {
 	return "https://open.feishu.cn"
 }
 
-// getTenantAccessToken 获取 tenant_access_token。
-// 使用应用凭证获取租户级别令牌。
+// getTenantAccessToken 获取 tenant_access_token（带缓存）。
+// 使用应用凭证获取租户级别令牌。飞书 token 有效期 2 小时，提前 5 分钟刷新。
 func (c *FeishuClient) getTenantAccessToken(ctx context.Context) (string, error) {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+
+	// 缓存命中（提前 5 分钟刷新）
+	if c.cachedToken != "" && time.Now().Before(c.tokenExpiry) {
+		return c.cachedToken, nil
+	}
+
 	baseURL := "https://open.feishu.cn"
 	if IsLarkDomain(c.Domain) {
 		baseURL = "https://open.larksuite.com"
@@ -304,7 +316,7 @@ func (c *FeishuClient) getTenantAccessToken(ctx context.Context) (string, error)
 	}
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -326,5 +338,8 @@ func (c *FeishuClient) getTenantAccessToken(ctx context.Context) (string, error)
 	if tr.Code != 0 {
 		return "", fmt.Errorf("feishu: get token failed: code=%d msg=%s", tr.Code, tr.Msg)
 	}
-	return tr.TenantAccessToken, nil
+
+	c.cachedToken = tr.TenantAccessToken
+	c.tokenExpiry = time.Now().Add(115 * time.Minute) // 2h - 5min buffer
+	return c.cachedToken, nil
 }

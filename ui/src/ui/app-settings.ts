@@ -19,12 +19,13 @@ import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
 import { loadSecurity } from "./controllers/security.ts";
 import { loadLogs } from "./controllers/logs.ts";
-import { loadMemoryList, loadMemoryStatus } from "./controllers/memory.ts";
+import { loadMemoryList, loadMemoryLLMConfig, loadMemoryStats, loadMemoryStatus } from "./controllers/memory.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import { loadSubAgents } from "./controllers/subagents.ts";
+import { loadPlugins, loadTools, loadBrowserToolConfig } from "./controllers/plugins.ts";
 import {
   inferBasePathFromPathname,
   normalizeBasePath,
@@ -78,10 +79,25 @@ export function setLastActiveSessionKey(host: SettingsHost, next: string) {
   if (!trimmed) {
     return;
   }
-  if (host.settings.lastActiveSessionKey === trimmed) {
+
+  // Update lastSessionByChannel map for cross-channel navigation
+  const newLastSessionByChannel = { ...(host.settings.lastSessionByChannel || {}) };
+  const prefixMatch = trimmed.match(/^([a-z]+):/);
+  const prefix = (prefixMatch && prefixMatch[1] !== "global" && prefixMatch[1] !== "unknown")
+    ? prefixMatch[1]
+    : "user";
+
+  newLastSessionByChannel[prefix] = trimmed;
+
+  if (host.settings.lastActiveSessionKey === trimmed &&
+    host.settings.lastSessionByChannel?.[prefix] === trimmed) {
     return;
   }
-  applySettings(host, { ...host.settings, lastActiveSessionKey: trimmed });
+  applySettings(host, {
+    ...host.settings,
+    lastActiveSessionKey: trimmed,
+    lastSessionByChannel: newLastSessionByChannel
+  });
 }
 
 export function applySettingsFromUrl(host: SettingsHost) {
@@ -203,6 +219,19 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "subagents") {
     await loadSubAgents(host as any);
   }
+  if (host.tab === "media") {
+    const { loadMediaDashboard } = await import("./controllers/media-dashboard.ts");
+    await loadMediaDashboard(host as any);
+  }
+  if (host.tab === "plugins") {
+    await loadPlugins(host as any);
+    if ((host as any).pluginsPanel === "tools") {
+      await Promise.all([
+        loadTools(host as any),
+        loadBrowserToolConfig(host as any),
+      ]);
+    }
+  }
   if (host.tab === "agents") {
     await loadAgents(host as unknown as OpenAcosmiApp);
     await loadConfig(host as unknown as OpenAcosmiApp);
@@ -238,6 +267,8 @@ export async function refreshActiveTab(host: SettingsHost) {
     } else {
       await loadMemoryStatus(app);
       await loadMemoryList(app);
+      await loadMemoryStats(app);
+      await loadMemoryLLMConfig(app);
     }
   }
   if (host.tab === "chat") {

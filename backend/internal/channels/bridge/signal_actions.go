@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/anthropic/open-acosmi/internal/channels/signal"
+	"github.com/openacosmi/claw-acismi/internal/channels/signal"
 )
 
 // Signal action 路由 — 继承自 src/channels/plugins/actions/signal.ts (147L)

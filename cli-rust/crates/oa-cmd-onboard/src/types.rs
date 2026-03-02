@@ -335,7 +335,7 @@ mod tests {
     fn onboard_options_serialize_roundtrip() {
         let opts = OnboardOptions {
             mode: Some("local".to_string()),
-            gateway_port: Some(18789),
+            gateway_port: Some(19001),
             non_interactive: Some(true),
             accept_risk: Some(true),
             ..Default::default()
@@ -343,7 +343,7 @@ mod tests {
         let json = serde_json::to_string(&opts).expect("serialize");
         let deserialized: OnboardOptions = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(deserialized.mode.as_deref(), Some("local"));
-        assert_eq!(deserialized.gateway_port, Some(18789));
+        assert_eq!(deserialized.gateway_port, Some(19001));
     }
 
     #[test]

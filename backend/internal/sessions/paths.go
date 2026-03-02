@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/internal/routing"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/routing"
 )
 
 // ---------- 会话目录 ----------

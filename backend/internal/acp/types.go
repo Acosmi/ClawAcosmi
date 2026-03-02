@@ -3,7 +3,7 @@ package acp
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // ---------- ACP 协议版本 ----------

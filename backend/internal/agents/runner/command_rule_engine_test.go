@@ -6,7 +6,7 @@ package runner
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ============================================================================

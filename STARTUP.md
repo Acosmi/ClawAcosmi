@@ -121,7 +121,7 @@ make ui          # 另一终端启动前端
 
 ```bash
 cd backend
-make gateway-dev
+make gateway-devmake gateway-dev
 ```
 
 Gateway 以 dev 模式启动在 `localhost:19001`。
@@ -168,7 +168,7 @@ cd Argus/go-sensory && go build -o /tmp/argus-sensory ./cmd/server
 
 # 3. 设置环境变量后启动 Gateway
 export ARGUS_BINARY_PATH=/tmp/argus-sensory
-cd backend && make gateway-dev
+cd backend && 
 ```
 
 Gateway 启动时会自动为裸二进制签名（需 Keychain 中有 "Argus Dev" 证书）。

@@ -38,6 +38,7 @@ type MsgContext struct {
 	IsColdStart       bool
 
 	// 会话/路由元信息
+	SessionID               string
 	SessionKey              string
 	AccountID               string
 	OriginatingChannel      string

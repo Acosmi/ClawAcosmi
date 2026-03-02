@@ -14,7 +14,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
 )
 
 // NormalizeToolParameters 规范化工具参数 JSON Schema。

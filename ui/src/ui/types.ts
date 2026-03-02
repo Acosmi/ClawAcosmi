@@ -56,6 +56,48 @@ export type ChannelAccountSnapshot = {
   application?: unknown;
 };
 
+export type PluginConfigField = {
+  key: string;
+  label: string;
+  type: string;
+  sensitive: boolean;
+  placeholder?: string;
+};
+
+export type PluginInfo = {
+  id: string;
+  name: string;
+  description: string;
+  category: "channel" | "search";
+  icon: string;
+  enabled: boolean;
+  configured: boolean;
+  running: boolean;
+  configFields?: PluginConfigField[];
+  configValues?: Record<string, string>;
+};
+
+export type PluginsListResult = { plugins: PluginInfo[] };
+
+export type ToolItem = {
+  name: string;
+  label: string;
+  description: string;
+  category: string;
+  icon: string;
+  builtin: boolean;
+};
+
+export type ToolsListResult = { tools: ToolItem[] };
+
+export type BrowserToolConfig = {
+  enabled: boolean;
+  cdpUrl: string;
+  evaluateEnabled: boolean;
+  headless: boolean;
+  configured: boolean;
+};
+
 export type WhatsAppSelf = {
   e164?: string | null;
   jid?: string | null;
@@ -442,6 +484,9 @@ export type SessionsUsageEntry = {
     accountId?: string;
     threadId?: string | number;
   };
+  subject?: string;
+  room?: string;
+  space?: string;
   modelOverride?: string;
   providerOverride?: string;
   modelProvider?: string;

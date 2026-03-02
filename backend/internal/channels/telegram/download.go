@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/media"
+	"github.com/openacosmi/claw-acismi/internal/media"
 )
 
 // Telegram 文件下载 — 继承自 src/telegram/download.ts (58L)

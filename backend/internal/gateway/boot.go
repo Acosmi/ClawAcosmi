@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/runner"
-	"github.com/anthropic/open-acosmi/internal/argus"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/memory/uhms"
-	"github.com/anthropic/open-acosmi/internal/sandbox"
-	"github.com/anthropic/open-acosmi/pkg/mcpremote"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/argus"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/openacosmi/claw-acismi/internal/sandbox"
+	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
 )
 
 // ---------- 服务引导 ----------
@@ -58,9 +59,25 @@ type GatewayState struct {
 
 	// UHMS 记忆系统（可选 — 仅配置启用时初始化）
 	uhmsManager *uhms.DefaultManager
+	uhmsBootMgr *uhms.BootManager // Boot 文件管理器（技能分级状态等）
 
 	// Coder 确认管理器（可选 — 仅 coder bridge 可用时初始化）
 	coderConfirmMgr *runner.CoderConfirmationManager
+
+	// 方案确认管理器（Phase 1: 三级指挥体系 — task_write+ 意图需用户确认方案）
+	planConfirmMgr *runner.PlanConfirmationManager
+
+	// 结果签收管理器（Phase 3: 三级指挥体系 — 质量审核通过后用户签收）
+	resultApprovalMgr *runner.ResultApprovalManager
+
+	// Phase 5: 合约 VFS 持久化（可选 — 仅 UHMS VFS 可用时初始化）
+	contractStore       *VFSContractPersistence
+	contractCleanupDone chan struct{} // 关闭时取消 TTL 清理 goroutine
+
+	// Phase 4: 异步消息通道注册表（help request ID → AgentChannel）
+	// 用于 subagent.help.resolve RPC 将用户回复路由到正确的子智能体。
+	agentChannelsMu sync.RWMutex
+	agentChannels   map[string]*agentChannelRef // help request msgID → channel ref
 }
 
 // BootPhase 网关启动阶段。
@@ -172,10 +189,70 @@ func NewGatewayState() *GatewayState {
 	// ── 命令审批门控（Ask 规则 + Coder 确认） ──────────────────
 	// 无条件初始化：bash Ask 规则需要真正阻塞审批（fail-closed 安全策略），
 	// 不依赖 Coder Bridge 是否存在。前端通过 coder.confirm.* 事件处理。
-	s.coderConfirmMgr = runner.NewCoderConfirmationManager(func(event string, payload interface{}) {
-		bc.Broadcast(event, payload, nil)
-	}, 60*time.Second)
+	s.coderConfirmMgr = runner.NewCoderConfirmationManager(
+		func(event string, payload interface{}) {
+			bc.Broadcast(event, payload, nil)
+		},
+		func(req runner.CoderConfirmationRequest, sessionKey string) {
+			// 远程通知：将操作确认卡片推送到非 Web 渠道（飞书等）
+			if s.remoteApprovalNotifier == nil {
+				return
+			}
+			// 从 sessionKey 提取 chatID（格式: "feishu:<chatID>"）
+			var chatID string
+			if strings.HasPrefix(sessionKey, "feishu:") {
+				chatID = strings.TrimPrefix(sessionKey, "feishu:")
+			}
+			preview := ""
+			if req.Preview != nil {
+				if req.Preview.Command != "" {
+					preview = req.Preview.Command
+				} else if req.Preview.FilePath != "" {
+					preview = req.Preview.FilePath
+				}
+			}
+			// D5-F2: 从 RemoteApprovalNotifier 获取 LastKnownUserID，
+			// 与 SendApprovalRequest（提权审批）对齐，确保私聊卡片可送达。
+			var userID string
+			cfg := s.remoteApprovalNotifier.GetConfig()
+			if cfg.Feishu != nil {
+				userID = cfg.Feishu.LastKnownUserID
+			}
+			s.remoteApprovalNotifier.NotifyCoderConfirm(CoderConfirmCardRequest{
+				ConfirmID:        req.ID,
+				ToolName:         req.ToolName,
+				Preview:          preview,
+				SessionKey:       sessionKey,
+				OriginatorChatID: chatID,
+				OriginatorUserID: userID,
+				TTLMinutes:       5,
+			})
+		},
+		5*time.Minute,
+	)
 	slog.Info("gateway: command approval gate initialized")
+
+	// ── 方案确认门控（Phase 1: 三级指挥体系） ──────────────────
+	// 无条件初始化：task_write/task_delete/task_multimodal 意图需用户确认方案。
+	// 前端通过 plan.confirm.* 事件处理。
+	s.planConfirmMgr = runner.NewPlanConfirmationManager(
+		func(event string, payload interface{}) {
+			bc.Broadcast(event, payload, nil)
+		},
+		5*time.Minute,
+	)
+	slog.Info("gateway: plan confirmation gate initialized")
+
+	// ── 结果签收门控（Phase 3: 三级指挥体系） ──────────────────
+	// 质量审核通过后，结果呈现给用户做最终签收。
+	// 前端通过 result.approve.* 事件处理。
+	s.resultApprovalMgr = runner.NewResultApprovalManager(
+		func(event string, payload interface{}) {
+			bc.Broadcast(event, payload, nil)
+		},
+		3*time.Minute,
+	)
+	slog.Info("gateway: result approval gate initialized")
 
 	// Phase 4.1: 从磁盘恢复未过期的 pending 审批请求
 	s.escalationMgr.RestoreFromDisk()
@@ -197,7 +274,7 @@ func NewGatewayState() *GatewayState {
 			)
 		}
 	} else {
-		slog.Info("gateway: UHMS disabled (enable via config memory.uhms.enabled)")
+		slog.Debug("gateway: UHMS not enabled in boot defaults (may be initialized from config)")
 	}
 
 	return s
@@ -308,6 +385,12 @@ func (s *GatewayState) UHMSManager() *uhms.DefaultManager { return s.uhmsManager
 // SetUHMSManager 设置 UHMS 记忆管理器（由 server.go 启动时注入）。
 func (s *GatewayState) SetUHMSManager(m *uhms.DefaultManager) { s.uhmsManager = m }
 
+// UHMSBootMgr 返回 UHMS Boot 文件管理器（可能为 nil）。
+func (s *GatewayState) UHMSBootMgr() *uhms.BootManager { return s.uhmsBootMgr }
+
+// SetUHMSBootMgr 设置 UHMS Boot 文件管理器（由 server.go 启动时注入）。
+func (s *GatewayState) SetUHMSBootMgr(bm *uhms.BootManager) { s.uhmsBootMgr = bm }
+
 // UHMSVFS 返回 UHMS VFS 实例（可能为 nil）。
 // 用于技能分级状态检查等场景。
 func (s *GatewayState) UHMSVFS() *uhms.LocalVFS {
@@ -316,6 +399,9 @@ func (s *GatewayState) UHMSVFS() *uhms.LocalVFS {
 	}
 	return s.uhmsManager.VFS()
 }
+
+// ContractStore 返回合约 VFS 持久化实例（可能为 nil）。
+func (s *GatewayState) ContractStore() *VFSContractPersistence { return s.contractStore }
 
 // StopUHMS 优雅关闭 UHMS 记忆系统。
 func (s *GatewayState) StopUHMS() {
@@ -327,6 +413,16 @@ func (s *GatewayState) StopUHMS() {
 // CoderConfirmMgr 返回 Coder 确认管理器（可能为 nil）。
 func (s *GatewayState) CoderConfirmMgr() *runner.CoderConfirmationManager {
 	return s.coderConfirmMgr
+}
+
+// PlanConfirmMgr 返回方案确认管理器（可能为 nil）。
+func (s *GatewayState) PlanConfirmMgr() *runner.PlanConfirmationManager {
+	return s.planConfirmMgr
+}
+
+// ResultApprovalMgr 返回结果签收管理器（可能为 nil）。
+func (s *GatewayState) ResultApprovalMgr() *runner.ResultApprovalManager {
+	return s.resultApprovalMgr
 }
 
 // resolveArgusBinaryPath 解析 Argus 二进制路径。

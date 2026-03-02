@@ -3,8 +3,8 @@ package slack
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 编解码测试 ----------

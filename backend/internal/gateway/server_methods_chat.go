@@ -17,14 +17,17 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/infra"
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/agents/session"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ChatHandlers 返回 chat.* 方法处理器映射。
@@ -315,13 +318,9 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			resolvedSessionId = runId // 最后兜底
 		}
 
-		// ---- 持久化用户消息到 transcript ----
-		AppendUserTranscriptMessage(AppendTranscriptParams{
-			Message:         text,
-			SessionID:       resolvedSessionId,
-			StorePath:       storePath,
-			CreateIfMissing: true,
-		})
+		// 用户消息 transcript 由 attempt_runner.persistToTranscript 写入（正常路径 + defer 失败路径）。
+		// 但如果管线在 RunAttempt 之前就失败（指令解析错误等），defer 不会执行。
+		// 下方 result.Error 分支用 ensureUserTranscriptOnError 做兜底，确保用户消息不丢失。
 
 		// 处理附件：音频→STT 转录，文档→DocConv 转换
 		enhancedText := processAttachmentsForChat(pipelineCtx, text, attachments, ctx.Context.ConfigLoader)
@@ -333,6 +332,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			BodyForCommands:    enhancedText,
 			RawBody:            text,
 			CommandBody:        enhancedText,
+			SessionID:          resolvedSessionId,
 			SessionKey:         sessionKey,
 			Provider:           "webchat",
 			Surface:            "webchat",
@@ -342,15 +342,90 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			MessageSid:         runId,
 		}
 
+		// 任务频道：懒创建 task:<runID> session，仅在有工具调用时才创建
+		taskSessionKey := fmt.Sprintf("task:%s", runId)
+		taskSessionCreated := false                  // 单 goroutine 内闭包访问，无需 sync
+		smgr := session.NewSessionManager(storePath) // 任务频道 transcript 持久化
+		// 注意: onToolResult 是历史死代码（autoreply pipeline 从未调用），
+		// 已被下方 onToolEvent 替代。保留以维持 DispatchInboundParams 接口兼容。
+		var onToolResult func(payload autoreply.ReplyPayload)
+
+		// 任务频道结构化工具事件回调
+		var onToolEvent any
+		if broadcaster != nil {
+			onToolEvent = func(event runner.ToolEvent) {
+				// 首次工具调用 → 懒创建任务 session
+				if !taskSessionCreated {
+					taskSessionCreated = true
+					store := ctx.Context.SessionStore
+					if store != nil {
+						taskLabel := truncateStr(text, 60)
+						store.Save(&SessionEntry{
+							SessionKey: taskSessionKey,
+							SessionId:  runId,
+							Label:      taskLabel,
+							Channel:    "task",
+							CreatedAt:  time.Now().UnixMilli(),
+							UpdatedAt:  time.Now().UnixMilli(),
+						})
+					}
+					broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+						"sessionKey": taskSessionKey,
+						"channel":    "task",
+						"text":       fmt.Sprintf("[任务] 开始执行: %s", truncateStr(text, 60)),
+						"from":       "system",
+						"ts":         time.Now().UnixMilli(),
+					}, nil)
+					// 持久化到任务频道 transcript
+					_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
+						Role: "assistant",
+						Content: []session.ContentBlock{
+							{Type: "text", Text: fmt.Sprintf("[任务] 开始执行: %s", truncateStr(text, 60))},
+						},
+					})
+				}
+				// 广播结构化工具事件
+				var toolText string
+				switch event.Phase {
+				case "start":
+					toolText = fmt.Sprintf("[工具] %s: %s", event.ToolName, event.Args)
+				case "end":
+					if event.IsError {
+						toolText = fmt.Sprintf("[错误] %s (%dms)", event.Result, event.Duration)
+					} else {
+						toolText = fmt.Sprintf("[结果] %s (%dms)", event.Result, event.Duration)
+					}
+				}
+				if toolText != "" {
+					broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+						"sessionKey": taskSessionKey,
+						"channel":    "task",
+						"text":       truncateForLog(toolText, 300),
+						"from":       "agent",
+						"ts":         time.Now().UnixMilli(),
+					}, nil)
+					// 持久化到任务频道 transcript
+					_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
+						Role: "assistant",
+						Content: []session.ContentBlock{
+							{Type: "text", Text: truncateForLog(toolText, 300)},
+						},
+					})
+				}
+			}
+		}
+
 		// 调用管线
 		result := DispatchInboundMessage(pipelineCtx, DispatchInboundParams{
-			MsgCtx:     msgCtx,
-			SessionKey: sessionKey,
-			AgentID:    agentId,
-			StorePath:  storePath,
-			RunID:      runId,
-			Ctx:        pipelineCtx,
-			Dispatcher: dispatcher,
+			MsgCtx:       msgCtx,
+			SessionKey:   sessionKey,
+			AgentID:      agentId,
+			StorePath:    storePath,
+			RunID:        runId,
+			Ctx:          pipelineCtx,
+			Dispatcher:   dispatcher,
+			OnToolResult: onToolResult,
+			OnToolEvent:  onToolEvent,
 		})
 
 		if result.Error != nil {
@@ -359,6 +434,27 @@ func handleChatSend(ctx *MethodHandlerContext) {
 				"runId", runId,
 				"sessionKey", sessionKey,
 			)
+			// 兜底: 如果管线在 RunAttempt 之前就失败，defer 不会执行，用户消息未持久化。
+			// 此处确保用户消息至少写入 transcript，刷新后不会完全消失。
+			ensureUserTranscriptOnError(resolvedSessionId, storePath, enhancedText)
+			// 任务频道错误广播
+			if taskSessionCreated && broadcaster != nil {
+				errBrief := truncateForLog(result.Error.Error(), 100)
+				broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+					"sessionKey": taskSessionKey,
+					"channel":    "task",
+					"text":       fmt.Sprintf("[任务] 执行失败: %s", errBrief),
+					"from":       "system",
+					"ts":         time.Now().UnixMilli(),
+				}, nil)
+				// 持久化到任务频道 transcript
+				_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
+					Role: "assistant",
+					Content: []session.ContentBlock{
+						{Type: "text", Text: fmt.Sprintf("[任务] 执行失败: %s", errBrief)},
+					},
+				})
+			}
 			// 广播错误
 			if broadcaster != nil {
 				broadcaster.Broadcast("chat", map[string]interface{}{
@@ -373,41 +469,76 @@ func handleChatSend(ctx *MethodHandlerContext) {
 
 		// 合并回复
 		combinedReply := CombineReplyPayloads(result.Replies)
+		mediaB64, mediaMime := ExtractMediaFromReplies(result.Replies)
 
-		// 写入 transcript 并广播 final
+		// AI 回复 transcript 由 attempt_runner.persistToTranscript 写入，此处仅构造广播消息
 		var message map[string]interface{}
 		if combinedReply != "" {
-			// 获取 session 信息
-			var sessionId string
-			store := ctx.Context.SessionStore
-			if store != nil {
-				if entry := store.LoadSessionEntry(sessionKey); entry != nil {
-					sessionId = entry.SessionId
-				}
+			now := time.Now().UnixMilli()
+			message = map[string]interface{}{
+				"role": "assistant",
+				"content": []interface{}{
+					map[string]interface{}{"type": "text", "text": combinedReply},
+				},
+				"timestamp":  now,
+				"stopReason": "stop",
+				"usage":      map[string]interface{}{"input": 0, "output": 0, "totalTokens": 0},
 			}
-			if sessionId == "" {
-				sessionId = runId
+		} else if mediaB64 != "" {
+			// 纯媒体（无文本）：构建仅含图片的消息
+			message = map[string]interface{}{
+				"role":       "assistant",
+				"content":    []interface{}{},
+				"timestamp":  time.Now().UnixMilli(),
+				"stopReason": "stop",
+				"usage":      map[string]interface{}{"input": 0, "output": 0, "totalTokens": 0},
 			}
+		}
 
-			appended := AppendAssistantTranscriptMessage(AppendTranscriptParams{
-				Message:         combinedReply,
-				SessionID:       sessionId,
-				StorePath:       storePath,
-				CreateIfMissing: true,
-			})
-			if appended.OK {
-				message = appended.Message
-			} else {
-				slog.Warn("chat.send: transcript append failed", "error", appended.Error)
-				now := time.Now().UnixMilli()
-				message = map[string]interface{}{
-					"role": "assistant",
-					"content": []interface{}{
-						map[string]interface{}{"type": "text", "text": combinedReply},
+		// 将媒体数据注入 message.content（前端 extractImages 自动识别）
+		if message != nil && mediaB64 != "" {
+			if content, ok := message["content"].([]interface{}); ok {
+				mime := mediaMime
+				if mime == "" {
+					mime = "image/png"
+				}
+				content = append(content, map[string]interface{}{
+					"type": "image",
+					"source": map[string]interface{}{
+						"type":       "base64",
+						"data":       mediaB64,
+						"media_type": mime,
 					},
-					"timestamp":  now,
-					"stopReason": "stop",
-					"usage":      map[string]interface{}{"input": 0, "output": 0, "totalTokens": 0},
+				})
+				message["content"] = content
+			}
+		}
+
+		// 任务频道完成广播（仅在 session 被创建时才广播）
+		if taskSessionCreated && broadcaster != nil {
+			replyBrief := combinedReply
+			if len(replyBrief) > 200 {
+				replyBrief = replyBrief[:200] + "..."
+			}
+			broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+				"sessionKey": taskSessionKey,
+				"channel":    "task",
+				"text":       fmt.Sprintf("[任务] 执行完成"),
+				"from":       "system",
+				"ts":         time.Now().UnixMilli(),
+			}, nil)
+			// 持久化到任务频道 transcript
+			_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
+				Role: "assistant",
+				Content: []session.ContentBlock{
+					{Type: "text", Text: "[任务] 执行完成"},
+				},
+			})
+			// 更新 session 时间戳
+			if store := ctx.Context.SessionStore; store != nil {
+				if entry := store.LoadSessionEntry(taskSessionKey); entry != nil {
+					entry.UpdatedAt = time.Now().UnixMilli()
+					store.Save(entry)
 				}
 			}
 		}
@@ -523,11 +654,48 @@ func handleChatInject(ctx *MethodHandlerContext) {
 
 // ---------- 辅助函数 ----------
 
+// ensureUserTranscriptOnError 在管线失败时兜底持久化用户消息。
+// 调用场景: 管线在 RunAttempt 之前就出错（如指令解析失败），
+// RunAttempt 内的 defer persistToTranscript 不会执行，用户消息未被持久化。
+// 此函数检查 transcript 是否已包含该消息（避免与 RunAttempt 的 defer 双写），
+// 若 transcript 尾部已有同文本 user 消息则跳过。
+func ensureUserTranscriptOnError(sessionId, storePath, text string) {
+	if sessionId == "" || storePath == "" || strings.TrimSpace(text) == "" {
+		return
+	}
+	mgr := session.NewSessionManager("")
+	sessionFile := filepath.Join(filepath.Dir(storePath), sessionId+".jsonl")
+
+	// 检查 transcript 尾部是否已有相同 user 消息（RunAttempt defer 可能已写入）
+	existing, _ := mgr.LoadSessionMessages(sessionId, sessionFile)
+	if len(existing) > 0 {
+		last := existing[len(existing)-1]
+		if role, _ := last["role"].(string); role == "user" {
+			// 已有 user 消息在末尾，RunAttempt 的 defer 已经处理，跳过
+			return
+		}
+	}
+
+	if _, err := mgr.EnsureSessionFile(sessionId, sessionFile); err != nil {
+		slog.Debug("ensureUserTranscriptOnError: ensure file failed", "error", err)
+		return
+	}
+	entry := session.TranscriptEntry{
+		Role:      "user",
+		Content:   []session.ContentBlock{{Type: "text", Text: text}},
+		Timestamp: time.Now().UnixMilli(),
+	}
+	if err := mgr.AppendMessage(sessionId, sessionFile, entry); err != nil {
+		slog.Warn("ensureUserTranscriptOnError: append failed", "error", err)
+	}
+}
+
 func truncateStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(runes[:maxLen]) + "..."
 }
 
 // processAttachmentsForChat 处理 chat.send 附件：音频→STT，文档→DocConv。
@@ -569,7 +737,7 @@ func processAttachmentsForChat(ctx context.Context, text string, attachments []m
 		switch attType {
 		case "audio":
 			if cfg.STT == nil || cfg.STT.Provider == "" {
-				parts = append(parts, "[语音附件: STT 未配置]")
+				parts = append(parts, "[语音附件: 语音转文字(STT)未配置，请前往 设置→Speech to Text 配置语音识别服务]")
 				continue
 			}
 			data, decErr := base64.StdEncoding.DecodeString(contentB64)

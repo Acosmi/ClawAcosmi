@@ -165,7 +165,7 @@ fn execute_sandboxed(workspace: &Path, params: &BashParams) -> Result<ToolCallRe
         command: "sh".to_owned(),
         args: vec!["-c".to_owned(), params.command.clone()],
         workspace: workspace.to_path_buf(),
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         network_policy: Some(NetworkPolicy::None),
         resource_limits: ResourceLimits {
             timeout_secs: Some(params.timeout),

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // Discord 文本分块 — 继承自 src/discord/chunk.ts (278L)

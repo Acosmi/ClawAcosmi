@@ -68,11 +68,11 @@ func TestZeroconfRegistrarRegisterIntegration(t *testing.T) {
 		Name:     "OpenAcosmi Test",
 		Type:     "_openacosmi-gw._tcp",
 		Domain:   "local",
-		Port:     18789,
+		Port:     19001,
 		Hostname: "test-host",
 		TXT: map[string]string{
 			"role":        "gateway",
-			"gatewayPort": "18789",
+			"gatewayPort": "19001",
 			"displayName": "Test Gateway",
 		},
 	})

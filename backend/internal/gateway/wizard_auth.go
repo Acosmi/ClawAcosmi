@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
 )
 
 // ---------- 认证选择 ----------

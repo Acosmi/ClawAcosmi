@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/autoreply/reply"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/routing"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // TelegramMediaRef 入站媒体引用

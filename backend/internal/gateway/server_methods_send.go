@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/channels"
 )
 
 // ChannelOutboundSender DI 接口 — 频道消息发送。
@@ -238,6 +238,37 @@ func handleSend(ctx *MethodHandlerContext) {
 			"runId":     idempotencyKey,
 			"messageId": msgId,
 			"channel":   channelID,
+		}
+		ctx.Respond(true, payload, nil)
+		return
+	}
+
+	// ChannelMgr fallback: OutboundPipe 和 ChannelSender 均未 wire 时，
+	// 通过 ChannelMgr 路由 mediaUrl 和纯文本消息。
+	if ctx.Context.ChannelMgr != nil && channelID != "chat" {
+		mediaURL := ""
+		if len(mediaUrls) > 0 {
+			mediaURL = mediaUrls[0]
+		}
+		result, err := ctx.Context.ChannelMgr.SendMessage(channels.ChannelID(channelID), channels.OutboundSendParams{
+			Ctx:       context.Background(),
+			To:        to,
+			Text:      message,
+			AccountID: accountId,
+			MediaURL:  mediaURL,
+		})
+		if err != nil {
+			slog.Warn("send: ChannelMgr fallback failed", "error", err)
+			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			return
+		}
+		payload := map[string]interface{}{
+			"runId":     idempotencyKey,
+			"messageId": msgId,
+			"channel":   channelID,
+		}
+		if result != nil && result.ChatID != "" {
+			payload["chatId"] = result.ChatID
 		}
 		ctx.Respond(true, payload, nil)
 		return

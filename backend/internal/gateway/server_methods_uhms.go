@@ -14,18 +14,20 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/memory/uhms"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms/vectoradapter"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // UHMSHandlers 返回 memory.uhms.* 静态方法映射。
 func UHMSHandlers() map[string]GatewayMethodHandler {
 	return map[string]GatewayMethodHandler{
-		"memory.uhms.status":  handleUHMSStatus,
-		"memory.uhms.search":  handleUHMSSearch,
-		"memory.uhms.add":     handleUHMSAdd,
-		"memory.uhms.llm.get": handleUHMSLLMGet,
-		"memory.uhms.llm.set": handleUHMSLLMSet,
+		"memory.uhms.status":     handleUHMSStatus,
+		"memory.uhms.search":     handleUHMSSearch,
+		"memory.uhms.add":        handleUHMSAdd,
+		"memory.uhms.llm.get":    handleUHMSLLMGet,
+		"memory.uhms.llm.set":    handleUHMSLLMSet,
+		"memory.vector.optimize": handleVectorOptimize,
 	}
 }
 
@@ -388,5 +390,40 @@ func handleUHMSLLMSet(ctx *MethodHandlerContext) {
 		"saved":    true,
 		"provider": finalProvider,
 		"model":    finalModel,
+	}, nil)
+}
+
+// ---------- memory.vector.optimize ----------
+
+func handleVectorOptimize(ctx *MethodHandlerContext) {
+	mgr := ctx.Context.UHMSManager
+	if mgr == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeServiceUnavailable, "UHMS not enabled"))
+		return
+	}
+
+	vi := mgr.VectorIndex()
+	if vi == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeServiceUnavailable, "vector index not available"))
+		return
+	}
+
+	svi, ok := vi.(*vectoradapter.SegmentVectorIndex)
+	if !ok {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeServiceUnavailable, "vector index does not support optimization"))
+		return
+	}
+
+	optimized, optimizedNames, err := svi.OptimizeMemoryCollections(context.Background())
+	if err != nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "optimize failed: "+err.Error()))
+		return
+	}
+
+	slog.Info("gateway: vector optimization complete", "optimized", optimized)
+	ctx.Respond(true, map[string]interface{}{
+		"optimized":            optimized,
+		"optimizedCollections": optimizedNames,
+		"totalCollections":     vectoradapter.MemoryCollections(),
 	}, nil)
 }

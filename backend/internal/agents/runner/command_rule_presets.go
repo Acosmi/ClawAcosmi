@@ -6,7 +6,7 @@ package runner
 // 内置危险命令拦截规则，防止智能体执行高风险操作。
 // 这些规则 IsPreset=true，用户不可删除。
 
-import "github.com/anthropic/open-acosmi/internal/infra"
+import "github.com/openacosmi/claw-acismi/internal/infra"
 
 // PresetCommandRules 内置安全规则集（不可变）。
 // 按 deny → ask → allow 分组，每组内按优先级排序。
@@ -93,7 +93,77 @@ var PresetCommandRules = []infra.CommandRule{
 		Priority:    0,
 	},
 
+	// ---------- deny: 家目录删除 ----------
+	{
+		ID:          "preset-deny-rm-home",
+		Pattern:     "rm -rf ~*",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: delete home directory",
+		IsPreset:    true,
+		Priority:    0,
+	},
+	{
+		ID:          "preset-deny-rm-home-var",
+		Pattern:     "rm -rf $HOME*",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: delete home directory via $HOME",
+		IsPreset:    true,
+		Priority:    0,
+	},
+
+	// ---------- deny: 系统管理命令 ----------
+	{
+		ID:          "preset-deny-iptables-flush",
+		Pattern:     "iptables -F*",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: flush firewall rules",
+		IsPreset:    true,
+		Priority:    0,
+	},
+	{
+		ID:          "preset-deny-crontab-remove",
+		Pattern:     "crontab -r*",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: remove all cron jobs",
+		IsPreset:    true,
+		Priority:    0,
+	},
+
+	// ---------- deny: 危险搜索模式（防止 Token 浪费 + 安全风险）----------
+	{
+		ID:          "preset-deny-find-home",
+		Pattern:     "find ~ *",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: unconstrained home directory search (use known paths from history)",
+		IsPreset:    true,
+		Priority:    0,
+	},
+	{
+		ID:          "preset-deny-find-root",
+		Pattern:     "find / *",
+		Action:      infra.RuleActionDeny,
+		Description: "Block: unconstrained root filesystem search",
+		IsPreset:    true,
+		Priority:    0,
+	},
+
 	// ---------- ask: 需要确认的命令 ----------
+	{
+		ID:          "preset-ask-rm",
+		Pattern:     "rm *",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: file deletion",
+		IsPreset:    true,
+		Priority:    5,
+	},
+	{
+		ID:          "preset-ask-rmdir",
+		Pattern:     "rmdir *",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: directory deletion",
+		IsPreset:    true,
+		Priority:    5,
+	},
 	{
 		ID:          "preset-ask-curl-pipe",
 		Pattern:     "*curl*|*sh*",
@@ -115,6 +185,56 @@ var PresetCommandRules = []infra.CommandRule{
 		Pattern:     "sudo *",
 		Action:      infra.RuleActionAsk,
 		Description: "Confirm: privilege escalation via sudo",
+		IsPreset:    true,
+		Priority:    10,
+	},
+	{
+		ID:          "preset-ask-killall",
+		Pattern:     "killall *",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: kill all processes by name",
+		IsPreset:    true,
+		Priority:    10,
+	},
+	{
+		ID:          "preset-ask-pkill",
+		Pattern:     "pkill *",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: kill processes by pattern",
+		IsPreset:    true,
+		Priority:    10,
+	},
+	{
+		ID:          "preset-ask-truncate",
+		Pattern:     "truncate *",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: truncate file to specified size",
+		IsPreset:    true,
+		Priority:    10,
+	},
+
+	// ---------- ask: 服务管理命令（D1-F1: 防止目标偏移） ----------
+	{
+		ID:          "preset-ask-gateway-start",
+		Pattern:     "*openacosmi*gateway*start*",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: start gateway service",
+		IsPreset:    true,
+		Priority:    10,
+	},
+	{
+		ID:          "preset-ask-gateway-stop",
+		Pattern:     "*openacosmi*gateway*stop*",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: stop gateway service",
+		IsPreset:    true,
+		Priority:    10,
+	},
+	{
+		ID:          "preset-ask-gateway-restart",
+		Pattern:     "*openacosmi*gateway*restart*",
+		Action:      infra.RuleActionAsk,
+		Description: "Confirm: restart gateway service",
 		IsPreset:    true,
 		Priority:    10,
 	},

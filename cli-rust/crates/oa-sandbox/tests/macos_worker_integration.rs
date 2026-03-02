@@ -35,7 +35,7 @@ fn spawn_sandboxed_worker(workspace: std::path::PathBuf, security: SecurityLevel
 #[test]
 fn sandboxed_worker_echo() {
     let workspace = std::env::temp_dir();
-    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Allowlist);
 
     let resp = handle.execute("/bin/echo", &["hello", "sandboxed"]).unwrap();
     assert_eq!(resp.exit_code, 0);
@@ -48,7 +48,7 @@ fn sandboxed_worker_echo() {
 #[test]
 fn sandboxed_worker_ping() {
     let workspace = std::env::temp_dir();
-    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Allowlist);
     handle.ping().unwrap();
     handle.shutdown().unwrap();
 }
@@ -56,7 +56,7 @@ fn sandboxed_worker_ping() {
 #[test]
 fn sandboxed_worker_multiple_commands() {
     let workspace = std::env::temp_dir();
-    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Allowlist);
 
     for i in 0..5 {
         let resp = handle.execute("/bin/echo", &[&format!("cmd-{i}")]).unwrap();
@@ -75,7 +75,7 @@ fn sandboxed_worker_can_read_workspace() {
     let test_file = tmpdir.path().join("worker-test.txt");
     std::fs::write(&test_file, "worker-content").unwrap();
 
-    let mut handle = spawn_sandboxed_worker(tmpdir.path().to_path_buf(), SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(tmpdir.path().to_path_buf(), SecurityLevel::L1Allowlist);
 
     let resp = handle.execute("/bin/cat", &[test_file.to_str().unwrap()]).unwrap();
     assert_eq!(resp.exit_code, 0);
@@ -89,7 +89,7 @@ fn sandboxed_worker_can_write_workspace() {
     let tmpdir = tempfile::tempdir().unwrap();
     let output_file = tmpdir.path().join("output.txt");
 
-    let mut handle = spawn_sandboxed_worker(tmpdir.path().to_path_buf(), SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(tmpdir.path().to_path_buf(), SecurityLevel::L1Allowlist);
 
     let cmd = format!("echo 'written-by-worker' > '{}'", output_file.display());
     let resp = handle.execute("/bin/sh", &["-c", &cmd]).unwrap();
@@ -191,7 +191,7 @@ fn sandboxed_worker_isolation_persists_across_commands() {
 #[test]
 fn sandboxed_worker_env_vars() {
     let workspace = std::env::temp_dir();
-    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Sandbox);
+    let mut handle = spawn_sandboxed_worker(workspace, SecurityLevel::L1Allowlist);
 
     let req = WorkerRequest {
         id: 1,

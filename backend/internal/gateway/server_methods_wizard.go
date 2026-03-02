@@ -7,9 +7,9 @@ package gateway
 // 方法: wizard.start, wizard.next, wizard.cancel, wizard.status
 
 import (
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/config"
 	"github.com/google/uuid"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // WizardHandlerDeps wizard handler 依赖。
@@ -58,12 +58,15 @@ func wizardStartHandler(deps WizardHandlerDeps) GatewayMethodHandler {
 			State:        deps.State,
 		}
 
-		// 根据参数选择简化版或高级版
+		// 根据参数选择向导模式
 		requestMode, _ := ctx.Params["mode"].(string)
 		var runner WizardRunnerFunc
-		if requestMode == "advanced" {
+		switch requestMode {
+		case "advanced":
 			runner = RunOnboardingWizardAdvanced(onboardingDeps)
-		} else {
+		case "open-coder":
+			runner = RunOpenCoderWizard(onboardingDeps)
+		default:
 			runner = RunOnboardingWizard(onboardingDeps)
 		}
 

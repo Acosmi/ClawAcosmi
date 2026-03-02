@@ -2,6 +2,10 @@ import type { EventLogEntry } from "./app-events.ts";
 import type { CompactionStatus } from "./app-tool-stream.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { CoderConfirmRequest } from "./controllers/coder-confirmation.ts";
+import type { EscalationState } from "./controllers/escalation.ts";
+import type { PlanConfirmRequest } from "./controllers/plan-confirmation.ts";
+import type { ResultReviewRequest } from "./controllers/result-review.ts";
+import type { SubagentHelpRequest } from "./controllers/subagent-help.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import type { SecurityLevelInfo } from "./controllers/security-types.ts";
@@ -25,6 +29,7 @@ import type {
   LogEntry,
   LogLevel,
   NostrProfile,
+  PluginInfo,
   PresenceEntry,
   SessionsUsageResult,
   CostUsageSummary,
@@ -96,6 +101,11 @@ export type AppViewState = {
   execApprovalBusy: boolean;
   execApprovalError: string | null;
   coderConfirmQueue: CoderConfirmRequest[];
+  planConfirmQueue: PlanConfirmRequest[];
+  resultReviewQueue: ResultReviewRequest[];
+  subagentHelpQueue: SubagentHelpRequest[];
+  escalationState: EscalationState;
+  escalationSelectedTtl: number;
   pendingGatewayUrl: string | null;
   securityLevel: string;
   securityLoading: boolean;
@@ -144,6 +154,7 @@ export type AppViewState = {
     timestamp: number;
     read: boolean;
     type: "error" | "info" | "success";
+    sessionKey?: string;
   }>;
   notificationsOpen: boolean;
 
@@ -227,6 +238,19 @@ export type AppViewState = {
   skillsBusyKey: string | null;
   distributeLoading: boolean;
   distributeResult: string | null;
+
+  // Custom added: Remote Channel Switcher state
+  channelUnreadCounts: Record<string, number>;
+  isChannelDropdownOpen: boolean;
+  isSessionDropdownOpen: boolean;
+  crossChannelNotificationActive: boolean;
+  crossChannelNotificationText: string;
+  crossChannelNotificationSessionKey: string | null;
+
+  // Custom added: Helper for notifications
+  addNotification: (message: string, type?: "error" | "info" | "success", sessionKey?: string) => void;
+  clearCrossChannelNotification?: () => void;
+
   // Sub-Agents (方案 C+D)
   subagentsLoading: boolean;
   subagentsList: import("./controllers/subagents.js").SubAgentEntry[];
@@ -254,7 +278,7 @@ export type AppViewState = {
   logsLimit: number;
   logsMaxBytes: number;
   logsAtBottom: boolean;
-  memoryPanel: "sessions" | "uhms";
+  memoryPanel: "sessions" | "uhms" | "media";
   memoryLoading: boolean;
   memoryList: import("./controllers/memory.js").MemoryItem[] | null;
   memoryTotal: number;
@@ -296,6 +320,9 @@ export type AppViewState = {
   handleNostrProfileToggleAdvanced: () => void;
   handleExecApprovalDecision: (decision: "allow-once" | "allow-always" | "deny") => Promise<void>;
   handleCoderConfirmDecision: (id: string, decision: "allow" | "deny") => Promise<void>;
+  handlePlanConfirmDecision: (id: string, action: "approve" | "reject" | "edit", editedPlan?: string) => Promise<void>;
+  handleResultReviewDecision: (id: string, action: "approve" | "reject", feedback?: string) => Promise<void>;
+  handleSubagentHelpRespond: (id: string, response: string) => Promise<void>;
   handleGatewayUrlConfirm: () => void;
   handleGatewayUrlCancel: () => void;
   handleConfigLoad: () => Promise<void>;
@@ -343,7 +370,33 @@ export type AppViewState = {
   handleStartWizard: () => Promise<void>;
   handleCancelWizard: () => Promise<void>;
   requestUpdate: () => void;
-  // Phase C/D: STT/DocConv wizard state
+  // Phase C/D/E: STT/DocConv/Image wizard state
   sttWizard?: Record<string, unknown>;
   docConvWizard?: Record<string, unknown>;
+  imageWizard?: Record<string, unknown>;
+
+  // Media Dashboard
+  mediaTrendingTopics: import("./controllers/media-dashboard.js").TrendingTopic[];
+  mediaTrendingSources: string[];
+  mediaTrendingLoading: boolean;
+  mediaTrendingSelectedSource: string;
+  mediaDrafts: import("./controllers/media-dashboard.js").DraftEntry[];
+  mediaDraftsLoading: boolean;
+  mediaDraftsSelectedPlatform: string;
+
+  // Plugins & Tools
+  pluginsPanel: "plugins" | "tools";
+  pluginsLoading: boolean;
+  pluginsList: PluginInfo[];
+  pluginsError: string | null;
+  pluginsEditValues: Record<string, Record<string, string>>;
+  pluginsSaving: string | null;
+  toolsLoading: boolean;
+  toolsList: import("./types.js").ToolItem[];
+  toolsError: string | null;
+  browserToolConfig: import("./types.js").BrowserToolConfig | null;
+  browserToolLoading: boolean;
+  browserToolSaving: boolean;
+  browserToolError: string | null;
+  browserToolEdits: Record<string, string | boolean>;
 };

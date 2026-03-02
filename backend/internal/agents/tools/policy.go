@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
 )
 
 // ---------- Pattern Matching ----------

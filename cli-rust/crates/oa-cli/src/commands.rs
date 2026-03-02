@@ -5,7 +5,6 @@
 /// function to route to the correct handler.
 ///
 /// Source: `backend/cmd/openacosmi/main.go` - `registerAllCommands()`
-
 use std::collections::HashMap;
 
 use anyhow::Result;
@@ -112,6 +111,72 @@ pub enum Commands {
 
     /// Generate shell completion scripts.
     Completion(CompletionArgs),
+
+    /// ACP (Agent Client Protocol) bridge commands.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Acp(AcpCommand),
+
+    /// Manage exec approvals (allowlists).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Approvals(ApprovalsCommand),
+
+    /// Device pairing and token management.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Devices(DevicesCommand),
+
+    /// Directory lookups (contacts, groups, self).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Directory(DirectoryCommand),
+
+    /// DNS helpers for wide-area discovery.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Dns(DnsCommand),
+
+    /// Headless node host management.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Node(NodeCommand),
+
+    /// DM pairing request management.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Pairing(PairingCommand),
+
+    /// System events, heartbeat, and presence.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    System(SystemCommand),
+
+    /// Terminal UI connected to the Gateway.
+    Tui(TuiArgs),
+
+    /// Self-update and channel management.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Update(UpdateCommand),
+
+    /// Voice call plugin commands.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Voicecall(VoicecallCommand),
+
+    /// Webhook and Gmail Pub/Sub integration.
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Webhooks(WebhooksCommand),
+
+    /// Skill management (list, info, check).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Skills(SkillsCommand),
+
+    /// Plugin management (list, info, install, enable, disable, doctor).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Plugins(PluginsCommand),
+
+    /// Security audit and management.
+    Security(SecurityArgs),
+
+    /// Hook management (list, info, check, enable, disable, install, update).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Hooks(HooksCommand),
+
+    /// Browser automation (status, start, stop, tabs, open, screenshot, profiles).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Browser(BrowserCommand),
 }
 
 // ---------------------------------------------------------------------------
@@ -658,8 +723,8 @@ pub struct SandboxExplainArgs {
 
 #[derive(Debug, Args)]
 pub struct SandboxRunArgs {
-    /// Security level: deny, sandbox, or full.
-    #[arg(long, default_value = "sandbox")]
+    /// Security level: deny (L0), allowlist (L1), or sandboxed (L2). Legacy aliases: sandbox, full.
+    #[arg(long, default_value = "allowlist")]
     pub security: String,
     /// Workspace directory (mounted into the sandbox).
     #[arg(long, default_value = ".")]
@@ -691,7 +756,7 @@ pub struct SandboxRunArgs {
     /// Maximum number of processes (0 = no limit).
     #[arg(long, default_value = "0")]
     pub pids: u32,
-    /// Show execution plan without running (also triggered automatically for L2/full).
+    /// Show execution plan without running (also triggered automatically for L2/sandboxed).
     #[arg(long)]
     pub dry_run: bool,
     /// Command and arguments to execute.
@@ -708,8 +773,8 @@ pub struct SandboxWorkerStartArgs {
     /// Default timeout in seconds for commands.
     #[arg(long, default_value = "120")]
     pub timeout: u64,
-    /// Security level: deny (L0), sandbox (L1), full (L2).
-    #[arg(long, default_value = "sandbox")]
+    /// Security level: deny (L0), allowlist (L1), sandboxed (L2). Legacy aliases: sandbox, full.
+    #[arg(long, default_value = "allowlist")]
     pub security_level: String,
     /// Idle timeout in seconds. Worker exits if no request arrives within this duration.
     /// 0 = no idle timeout (wait forever).
@@ -1418,6 +1483,1401 @@ pub struct ConfigUnsetArgs {
     pub path: String,
 }
 
+// -- ACP subcommands --------------------------------------------------------
+
+/// ACP subcommand group.
+#[derive(Debug, Args)]
+pub struct AcpCommand {
+    #[command(subcommand)]
+    pub action: AcpAction,
+}
+
+/// Individual ACP actions.
+#[derive(Debug, Subcommand)]
+pub enum AcpAction {
+    /// Show ACP bridge status.
+    Status,
+    /// Invoke an ACP method.
+    Invoke(AcpInvokeArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct AcpInvokeArgs {
+    /// ACP method name.
+    pub method: String,
+}
+
+// -- Approvals subcommands --------------------------------------------------
+
+/// Approvals subcommand group.
+#[derive(Debug, Args)]
+pub struct ApprovalsCommand {
+    #[command(subcommand)]
+    pub action: ApprovalsAction,
+}
+
+/// Individual approvals actions.
+#[derive(Debug, Subcommand)]
+pub enum ApprovalsAction {
+    /// Get current exec approvals.
+    Get(ApprovalsGetArgs),
+    /// Set approvals from a file.
+    Set(ApprovalsSetArgs),
+    /// Add a pattern to the allowlist.
+    AllowlistAdd(AllowlistAddArgs),
+    /// Remove a pattern from the allowlist.
+    AllowlistRemove(AllowlistRemoveArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ApprovalsGetArgs {
+    /// Target the gateway.
+    #[arg(long)]
+    pub gateway: bool,
+    /// Target a specific node.
+    #[arg(long)]
+    pub node: Option<String>,
+    /// Output as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ApprovalsSetArgs {
+    /// Path to the approvals file (JSON or YAML).
+    pub file: String,
+    /// Target the gateway.
+    #[arg(long)]
+    pub gateway: bool,
+    /// Target a specific node.
+    #[arg(long)]
+    pub node: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AllowlistAddArgs {
+    /// Glob pattern to add.
+    pub pattern: String,
+    /// Restrict to a specific agent.
+    #[arg(long)]
+    pub agent: Option<String>,
+    /// Target a specific node.
+    #[arg(long)]
+    pub node: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct AllowlistRemoveArgs {
+    /// Glob pattern to remove.
+    pub pattern: String,
+}
+
+// -- Devices subcommands ----------------------------------------------------
+
+/// Devices subcommand group.
+#[derive(Debug, Args)]
+pub struct DevicesCommand {
+    #[command(subcommand)]
+    pub action: DevicesAction,
+}
+
+/// Individual device actions.
+#[derive(Debug, Subcommand)]
+pub enum DevicesAction {
+    /// List paired devices.
+    List,
+    /// Approve a pairing request.
+    Approve(DevicesApproveArgs),
+    /// Reject a pairing request.
+    Reject(DevicesRejectArgs),
+    /// Rotate a device token.
+    Rotate(DevicesRotateArgs),
+    /// Revoke a device token.
+    Revoke(DevicesRevokeArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DevicesApproveArgs {
+    /// Pairing request ID.
+    pub request_id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DevicesRejectArgs {
+    /// Pairing request ID.
+    pub request_id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DevicesRotateArgs {
+    /// Device identifier.
+    pub device: String,
+    /// Token role.
+    pub role: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DevicesRevokeArgs {
+    /// Device identifier.
+    pub device: String,
+    /// Token role.
+    pub role: String,
+}
+
+// -- Directory subcommands --------------------------------------------------
+
+/// Directory subcommand group.
+#[derive(Debug, Args)]
+pub struct DirectoryCommand {
+    #[command(subcommand)]
+    pub action: DirectoryAction,
+}
+
+/// Individual directory actions.
+#[derive(Debug, Subcommand)]
+pub enum DirectoryAction {
+    /// Look up self identity on a channel.
+    #[command(name = "self")]
+    Self_(DirectorySelfArgs),
+    /// List peers on a channel.
+    Peers(DirectoryPeersArgs),
+    /// List groups on a channel.
+    Groups(DirectoryGroupsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DirectorySelfArgs {
+    /// Channel kind (whatsapp, telegram, etc.).
+    pub channel: String,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectoryPeersArgs {
+    /// Channel kind.
+    pub channel: String,
+    /// Search query.
+    #[arg(long)]
+    pub query: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct DirectoryGroupsArgs {
+    /// Channel kind.
+    pub channel: String,
+    /// Search query.
+    #[arg(long)]
+    pub query: Option<String>,
+}
+
+// -- DNS subcommands --------------------------------------------------------
+
+/// DNS subcommand group.
+#[derive(Debug, Args)]
+pub struct DnsCommand {
+    #[command(subcommand)]
+    pub action: DnsAction,
+}
+
+/// Individual DNS actions.
+#[derive(Debug, Subcommand)]
+pub enum DnsAction {
+    /// Set up DNS for wide-area discovery.
+    Setup(DnsSetupArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DnsSetupArgs {
+    /// Apply the configuration (otherwise dry-run).
+    #[arg(long)]
+    pub apply: bool,
+}
+
+// -- Node subcommands -------------------------------------------------------
+
+/// Node subcommand group.
+#[derive(Debug, Args)]
+pub struct NodeCommand {
+    #[command(subcommand)]
+    pub action: NodeAction,
+}
+
+/// Individual node actions.
+#[derive(Debug, Subcommand)]
+pub enum NodeAction {
+    /// Run a headless node host.
+    Run(NodeRunArgs),
+    /// Install node as a system service.
+    Install(NodeInstallArgs),
+    /// Show node service status.
+    Status,
+    /// Stop the node service.
+    Stop,
+    /// Restart the node service.
+    Restart,
+    /// Uninstall the node service.
+    Uninstall,
+}
+
+#[derive(Debug, Args)]
+pub struct NodeRunArgs {
+    /// Host to bind to.
+    #[arg(long)]
+    pub host: Option<String>,
+    /// Port to listen on.
+    #[arg(long)]
+    pub port: Option<u16>,
+}
+
+#[derive(Debug, Args)]
+pub struct NodeInstallArgs {
+    /// Host to bind to.
+    #[arg(long)]
+    pub host: Option<String>,
+    /// Port to listen on.
+    #[arg(long)]
+    pub port: Option<u16>,
+}
+
+// -- Pairing subcommands ----------------------------------------------------
+
+/// Pairing subcommand group.
+#[derive(Debug, Args)]
+pub struct PairingCommand {
+    #[command(subcommand)]
+    pub action: PairingAction,
+}
+
+/// Individual pairing actions.
+#[derive(Debug, Subcommand)]
+pub enum PairingAction {
+    /// List pending pairing requests.
+    List(PairingListArgs),
+    /// Approve a pairing request.
+    Approve(PairingApproveArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PairingListArgs {
+    /// Channel to list requests for.
+    pub channel: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PairingApproveArgs {
+    /// Channel kind.
+    pub channel: String,
+    /// Pairing code.
+    pub code: String,
+    /// Send notification after approval.
+    #[arg(long)]
+    pub notify: bool,
+}
+
+// -- System subcommands -----------------------------------------------------
+
+/// System subcommand group.
+#[derive(Debug, Args)]
+pub struct SystemCommand {
+    #[command(subcommand)]
+    pub action: SystemAction,
+}
+
+/// Individual system actions.
+#[derive(Debug, Subcommand)]
+pub enum SystemAction {
+    /// Emit a system event.
+    Event(SystemEventArgs),
+    /// Show last heartbeat.
+    HeartbeatLast,
+    /// Enable heartbeat.
+    HeartbeatEnable,
+    /// Disable heartbeat.
+    HeartbeatDisable,
+    /// Show presence information.
+    Presence,
+}
+
+#[derive(Debug, Args)]
+pub struct SystemEventArgs {
+    /// Event text.
+    pub text: String,
+    /// Delivery mode (next-heartbeat, immediate).
+    #[arg(long)]
+    pub mode: Option<String>,
+}
+
+// -- TUI command ------------------------------------------------------------
+
+/// Arguments for the `tui` command.
+#[derive(Debug, Args)]
+pub struct TuiArgs {
+    /// Gateway URL.
+    #[arg(long)]
+    pub url: Option<String>,
+    /// Auth token.
+    #[arg(long)]
+    pub token: Option<String>,
+    /// Session ID.
+    #[arg(long)]
+    pub session: Option<String>,
+}
+
+// -- Update subcommands -----------------------------------------------------
+
+/// Update subcommand group.
+#[derive(Debug, Args)]
+pub struct UpdateCommand {
+    #[command(subcommand)]
+    pub action: UpdateAction,
+}
+
+/// Individual update actions.
+#[derive(Debug, Subcommand)]
+pub enum UpdateAction {
+    /// Run the updater.
+    Run(UpdateRunArgs),
+    /// Show update status.
+    Status,
+    /// Interactive update wizard.
+    Wizard,
+}
+
+#[derive(Debug, Args)]
+pub struct UpdateRunArgs {
+    /// Update channel (stable, beta, nightly).
+    #[arg(long)]
+    pub channel: Option<String>,
+    /// Do not restart services after update.
+    #[arg(long)]
+    pub no_restart: bool,
+}
+
+// -- Voicecall subcommands --------------------------------------------------
+
+/// Voicecall subcommand group.
+#[derive(Debug, Args)]
+pub struct VoicecallCommand {
+    #[command(subcommand)]
+    pub action: VoicecallAction,
+}
+
+/// Individual voicecall actions.
+#[derive(Debug, Subcommand)]
+pub enum VoicecallAction {
+    /// Show call status.
+    Status(VoicecallStatusArgs),
+    /// Initiate a voice call.
+    Call(VoicecallCallArgs),
+    /// Continue an active call with a message.
+    Continue(VoicecallContinueArgs),
+    /// End an active call.
+    End(VoicecallEndArgs),
+    /// Expose the voice server.
+    Expose(VoicecallExposeArgs),
+    /// Unexpose the voice server.
+    Unexpose,
+}
+
+#[derive(Debug, Args)]
+pub struct VoicecallStatusArgs {
+    /// Call ID.
+    pub call_id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct VoicecallCallArgs {
+    /// Recipient identifier.
+    pub to: String,
+    /// Initial message.
+    pub message: String,
+}
+
+#[derive(Debug, Args)]
+pub struct VoicecallContinueArgs {
+    /// Call ID.
+    pub call_id: String,
+    /// Follow-up message.
+    pub message: String,
+}
+
+#[derive(Debug, Args)]
+pub struct VoicecallEndArgs {
+    /// Call ID.
+    pub call_id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct VoicecallExposeArgs {
+    /// Expose mode (tailscale, cloudflare, ngrok).
+    #[arg(long, default_value = "tailscale")]
+    pub mode: String,
+}
+
+// -- Webhooks subcommands ---------------------------------------------------
+
+/// Webhooks subcommand group.
+#[derive(Debug, Args)]
+pub struct WebhooksCommand {
+    #[command(subcommand)]
+    pub action: WebhooksAction,
+}
+
+/// Individual webhooks actions.
+#[derive(Debug, Subcommand)]
+pub enum WebhooksAction {
+    /// List configured webhooks.
+    List,
+    /// Test a webhook endpoint.
+    Test(WebhooksTestArgs),
+    /// Set up Gmail Pub/Sub integration.
+    GmailSetup(GmailSetupArgs),
+    /// Run the Gmail Pub/Sub listener.
+    GmailRun,
+}
+
+#[derive(Debug, Args)]
+pub struct WebhooksTestArgs {
+    /// Webhook URL to test.
+    #[arg(long)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct GmailSetupArgs {
+    /// Gmail account.
+    pub account: String,
+}
+
+// -- Skills subcommands -----------------------------------------------------
+
+/// Skills subcommand group.
+#[derive(Debug, Args)]
+pub struct SkillsCommand {
+    #[command(subcommand)]
+    pub action: SkillsAction,
+}
+
+/// Individual skills actions.
+#[derive(Debug, Subcommand)]
+pub enum SkillsAction {
+    /// List available skills.
+    List(SkillsListArgs),
+    /// Show skill details.
+    Info(SkillsInfoArgs),
+    /// Verify skill system health.
+    Check(SkillsCheckArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SkillsListArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Show only eligible skills.
+    #[arg(long)]
+    pub eligible: bool,
+    /// Show verbose details.
+    #[arg(long, short)]
+    pub verbose: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SkillsInfoArgs {
+    /// Skill name.
+    pub name: String,
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SkillsCheckArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+// -- Plugins subcommands ----------------------------------------------------
+
+/// Plugins subcommand group.
+#[derive(Debug, Args)]
+pub struct PluginsCommand {
+    #[command(subcommand)]
+    pub action: PluginsAction,
+}
+
+/// Individual plugins actions.
+#[derive(Debug, Subcommand)]
+pub enum PluginsAction {
+    /// List loaded plugins.
+    List(PluginsListArgs),
+    /// Show plugin details.
+    Info(PluginsInfoArgs),
+    /// Install a plugin.
+    Install(PluginsInstallArgs),
+    /// Enable a plugin.
+    Enable(PluginsEnableArgs),
+    /// Disable a plugin.
+    Disable(PluginsDisableArgs),
+    /// Report plugin load errors.
+    Doctor(PluginsDoctorArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsListArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsInfoArgs {
+    /// Plugin ID.
+    pub id: String,
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsInstallArgs {
+    /// Plugin path, tarball, or npm spec.
+    pub spec: String,
+    /// Link local path instead of copying (dev mode).
+    #[arg(long, short)]
+    pub link: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsEnableArgs {
+    /// Plugin ID.
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsDisableArgs {
+    /// Plugin ID.
+    pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginsDoctorArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+// -- Security subcommands ---------------------------------------------------
+
+/// Arguments for the `security` command (currently: audit).
+#[derive(Debug, Args)]
+pub struct SecurityArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Include deep filesystem permission checks.
+    #[arg(long)]
+    pub deep: bool,
+    /// Auto-fix safe defaults (chmod state/config).
+    #[arg(long)]
+    pub fix: bool,
+}
+
+// -- Hooks subcommands ------------------------------------------------------
+
+/// Hooks subcommand group.
+#[derive(Debug, Args)]
+pub struct HooksCommand {
+    #[command(subcommand)]
+    pub action: HooksAction,
+}
+
+/// Individual hooks actions.
+#[derive(Debug, Subcommand)]
+pub enum HooksAction {
+    /// List configured hooks.
+    List(HooksListArgs),
+    /// Show hook details.
+    Info(HooksInfoArgs),
+    /// Verify hook system health.
+    Check(HooksCheckArgs),
+    /// Enable a hook.
+    Enable(HooksEnableArgs),
+    /// Disable a hook.
+    Disable(HooksDisableArgs),
+    /// Install a hook pack.
+    Install(HooksInstallArgs),
+    /// Update hook packs.
+    Update(HooksUpdateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct HooksListArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+    /// Show only eligible hooks.
+    #[arg(long)]
+    pub eligible: bool,
+    /// Show verbose details.
+    #[arg(long, short)]
+    pub verbose: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksInfoArgs {
+    /// Hook name.
+    pub name: String,
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksCheckArgs {
+    /// Output result as JSON.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksEnableArgs {
+    /// Hook name.
+    pub name: String,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksDisableArgs {
+    /// Hook name.
+    pub name: String,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksInstallArgs {
+    /// Path or npm spec.
+    pub spec: String,
+    /// Link local path instead of copying (dev mode).
+    #[arg(long, short)]
+    pub link: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct HooksUpdateArgs {
+    /// Specific hook-pack ID (optional if --all).
+    pub id: Option<String>,
+    /// Update all hook packs.
+    #[arg(long)]
+    pub all: bool,
+    /// Dry run (preview without executing).
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+// -- Browser subcommands ----------------------------------------------------
+
+/// Browser subcommand group.
+#[derive(Debug, Args)]
+pub struct BrowserCommand {
+    #[command(subcommand)]
+    pub action: BrowserAction,
+}
+
+/// Individual browser actions.
+#[derive(Debug, Subcommand)]
+pub enum BrowserAction {
+    // -- Manage --
+    /// Query browser control status.
+    Status(BrowserStatusArgs),
+    /// Start a managed browser instance.
+    Start(BrowserStartArgs),
+    /// Stop a managed browser instance.
+    Stop(BrowserStopArgs),
+    /// List open tabs.
+    Tabs(BrowserTabsArgs),
+    /// Open a URL in the browser.
+    Open(BrowserOpenArgs),
+    /// Focus a tab by target ID.
+    Focus(BrowserFocusArgs),
+    /// Close a tab (or active tab).
+    Close(BrowserCloseArgs),
+    /// Take a screenshot.
+    Screenshot(BrowserScreenshotArgs),
+    /// List browser profiles.
+    Profiles(BrowserProfilesArgs),
+    /// Create a new browser profile.
+    CreateProfile(BrowserCreateProfileArgs),
+    /// Delete a browser profile.
+    DeleteProfile(BrowserDeleteProfileArgs),
+    /// Reset browser profile data.
+    ResetProfile(BrowserResetProfileArgs),
+    // -- Inspect --
+    /// Take an accessibility snapshot.
+    Snapshot(BrowserSnapshotArgs),
+    /// Show browser console output.
+    Console(BrowserConsoleArgs),
+    /// Show page errors.
+    Errors(BrowserErrorsArgs),
+    /// Show network requests.
+    Requests(BrowserRequestsArgs),
+    /// Read a network response body.
+    #[command(name = "responsebody")]
+    ResponseBody(BrowserResponseBodyArgs),
+    /// Generate a PDF of the page.
+    Pdf(BrowserPdfArgs),
+    // -- Actions --
+    /// Navigate to a URL.
+    Navigate(BrowserNavigateArgs),
+    /// Resize the viewport.
+    Resize(BrowserResizeArgs),
+    /// Click an element by ref.
+    Click(BrowserClickArgs),
+    /// Type text into an element by ref.
+    #[command(name = "type")]
+    TypeText(BrowserTypeArgs),
+    /// Press a keyboard key.
+    Press(BrowserPressArgs),
+    /// Hover over an element by ref.
+    Hover(BrowserHoverArgs),
+    /// Scroll an element into view.
+    #[command(name = "scrollintoview")]
+    ScrollIntoView(BrowserScrollIntoViewArgs),
+    /// Drag from one element to another.
+    Drag(BrowserDragArgs),
+    /// Select option(s) in a select element.
+    Select(BrowserSelectArgs),
+    /// Download a file by clicking a ref.
+    Download(BrowserDownloadArgs),
+    /// Wait for a download to complete.
+    #[command(name = "waitfordownload")]
+    WaitForDownload(BrowserWaitForDownloadArgs),
+    /// Upload file(s) via file chooser.
+    Upload(BrowserUploadArgs),
+    /// Fill form fields (batch).
+    Fill(BrowserFillArgs),
+    /// Handle a browser dialog.
+    Dialog(BrowserDialogArgs),
+    /// Wait for a condition.
+    Wait(BrowserWaitArgs),
+    /// Evaluate JavaScript in page context.
+    Evaluate(BrowserEvaluateArgs),
+    /// Highlight an element by ref.
+    Highlight(BrowserHighlightArgs),
+    /// Trace recording.
+    Trace(BrowserTraceCommand),
+    // -- State --
+    /// Manage cookies.
+    Cookies(BrowserCookiesCommand),
+    /// Manage localStorage / sessionStorage.
+    Storage(BrowserStorageCommand),
+    /// Set browser environment overrides.
+    Set(BrowserSetCommand),
+}
+
+// -- Manage args --
+
+#[derive(Debug, Args)]
+pub struct BrowserStatusArgs {
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserStartArgs {
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+    #[arg(long)]
+    pub headless: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserStopArgs {
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserTabsArgs {
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserOpenArgs {
+    pub url: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserFocusArgs {
+    pub target_id: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserCloseArgs {
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserScreenshotArgs {
+    pub file: Option<String>,
+    #[arg(long)]
+    pub full_page: bool,
+    #[arg(long, name = "ref")]
+    pub ref_id: Option<String>,
+    #[arg(long)]
+    pub element: Option<String>,
+    #[arg(long, name = "type")]
+    pub format: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserProfilesArgs {
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserCreateProfileArgs {
+    pub name: String,
+    #[arg(long)]
+    pub color: Option<String>,
+    #[arg(long)]
+    pub cdp_url: Option<String>,
+    #[arg(long)]
+    pub driver: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserDeleteProfileArgs {
+    #[arg(long)]
+    pub name: String,
+}
+
+// -- Inspect args --
+
+#[derive(Debug, Args)]
+pub struct BrowserSnapshotArgs {
+    #[arg(long, default_value = "ai")]
+    pub format: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub limit: Option<u32>,
+    #[arg(long)]
+    pub interactive: bool,
+    #[arg(long)]
+    pub compact: bool,
+    #[arg(long)]
+    pub depth: Option<u32>,
+    #[arg(long)]
+    pub selector: Option<String>,
+    #[arg(long)]
+    pub frame: Option<String>,
+    #[arg(long)]
+    pub efficient: bool,
+    #[arg(long)]
+    pub labels: bool,
+    #[arg(long)]
+    pub out: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserConsoleArgs {
+    #[arg(long)]
+    pub level: Option<String>,
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserErrorsArgs {
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserRequestsArgs {
+    #[arg(long)]
+    pub filter: Option<String>,
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserResponseBodyArgs {
+    pub pattern: String,
+    #[arg(long, default_value = "10000")]
+    pub max_chars: u32,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserPdfArgs {
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+// -- Action args --
+
+#[derive(Debug, Args)]
+pub struct BrowserNavigateArgs {
+    pub url: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserResizeArgs {
+    pub width: u32,
+    pub height: u32,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserClickArgs {
+    pub ref_id: String,
+    #[arg(long)]
+    pub double: bool,
+    #[arg(long, default_value = "left")]
+    pub button: String,
+    #[arg(long)]
+    pub modifiers: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserTypeArgs {
+    pub ref_id: String,
+    pub text: String,
+    #[arg(long)]
+    pub submit: bool,
+    #[arg(long)]
+    pub slowly: bool,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserPressArgs {
+    pub key: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserHoverArgs {
+    pub ref_id: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserScrollIntoViewArgs {
+    pub ref_id: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserDragArgs {
+    pub start_ref: String,
+    pub end_ref: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSelectArgs {
+    pub ref_id: String,
+    pub values: Vec<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserDownloadArgs {
+    pub ref_id: String,
+    pub save_path: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserWaitForDownloadArgs {
+    pub save_path: String,
+    #[arg(long)]
+    pub timeout_ms: Option<u32>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserUploadArgs {
+    pub paths: Vec<String>,
+    #[arg(long, name = "ref")]
+    pub ref_id: Option<String>,
+    #[arg(long)]
+    pub input_ref: Option<String>,
+    #[arg(long)]
+    pub element: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub timeout_ms: Option<u32>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserFillArgs {
+    #[arg(long)]
+    pub fields: Option<String>,
+    #[arg(long)]
+    pub fields_file: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserDialogArgs {
+    #[arg(long)]
+    pub accept: bool,
+    #[arg(long)]
+    pub dismiss: bool,
+    #[arg(long)]
+    pub prompt: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub timeout_ms: Option<u32>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserWaitArgs {
+    pub selector: Option<String>,
+    #[arg(long)]
+    pub url: Option<String>,
+    #[arg(long)]
+    pub load: Option<String>,
+    #[arg(long, name = "fn")]
+    pub js_fn: Option<String>,
+    #[arg(long)]
+    pub text: Option<String>,
+    #[arg(long)]
+    pub text_gone: Option<String>,
+    #[arg(long)]
+    pub time: Option<u32>,
+    #[arg(long)]
+    pub timeout_ms: Option<u32>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserEvaluateArgs {
+    #[arg(long, name = "fn")]
+    pub js_fn: String,
+    #[arg(long, name = "ref")]
+    pub ref_id: Option<String>,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserHighlightArgs {
+    pub ref_id: String,
+    #[arg(long)]
+    pub target_id: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+// -- Trace subcommand --
+
+#[derive(Debug, Args)]
+pub struct BrowserTraceCommand {
+    #[command(subcommand)]
+    pub action: BrowserTraceAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BrowserTraceAction {
+    /// Start recording a trace.
+    Start(BrowserTraceStartArgs),
+    /// Stop recording and save the trace.
+    Stop(BrowserTraceStopArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserTraceStartArgs {
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserTraceStopArgs {
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+// -- Cookies subcommand --
+
+#[derive(Debug, Args)]
+pub struct BrowserCookiesCommand {
+    #[command(subcommand)]
+    pub action: Option<BrowserCookiesAction>,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BrowserCookiesAction {
+    /// Set a cookie.
+    Set(BrowserCookiesSetArgs),
+    /// Clear all cookies.
+    Clear(BrowserCookiesClearArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserCookiesSetArgs {
+    pub name: String,
+    pub value: String,
+    #[arg(long)]
+    pub url: Option<String>,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserCookiesClearArgs {
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+// -- Storage subcommand --
+
+#[derive(Debug, Args)]
+pub struct BrowserStorageCommand {
+    #[command(subcommand)]
+    pub action: BrowserStorageAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BrowserStorageAction {
+    /// Get storage contents.
+    Get(BrowserStorageGetArgs),
+    /// Set a storage key.
+    Set(BrowserStorageSetArgs),
+    /// Clear storage.
+    Clear(BrowserStorageClearArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserStorageGetArgs {
+    /// local or session.
+    pub kind: String,
+    #[arg(long)]
+    pub json: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserStorageSetArgs {
+    /// local or session.
+    pub kind: String,
+    pub key: String,
+    pub value: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserStorageClearArgs {
+    /// local or session.
+    pub kind: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+// -- Set subcommand --
+
+#[derive(Debug, Args)]
+pub struct BrowserSetCommand {
+    #[command(subcommand)]
+    pub action: BrowserSetAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BrowserSetAction {
+    /// Set offline mode.
+    Offline(BrowserSetOfflineArgs),
+    /// Set custom HTTP headers.
+    Headers(BrowserSetHeadersArgs),
+    /// Set HTTP basic auth credentials.
+    Credentials(BrowserSetCredentialsArgs),
+    /// Set geolocation override.
+    Geo(BrowserSetGeoArgs),
+    /// Set media color scheme preference.
+    Media(BrowserSetMediaArgs),
+    /// Set timezone override.
+    Timezone(BrowserSetTimezoneArgs),
+    /// Set locale override.
+    Locale(BrowserSetLocaleArgs),
+    /// Set device preset.
+    Device(BrowserSetDeviceArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetOfflineArgs {
+    /// on or off.
+    pub state: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetHeadersArgs {
+    #[arg(long)]
+    pub json: Option<String>,
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetCredentialsArgs {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetGeoArgs {
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+    #[arg(long)]
+    pub origin: Option<String>,
+    #[arg(long)]
+    pub clear: bool,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetMediaArgs {
+    /// dark, light, no-preference, none.
+    pub scheme: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetTimezoneArgs {
+    pub timezone: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetLocaleArgs {
+    pub locale: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserSetDeviceArgs {
+    pub device: String,
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BrowserResetProfileArgs {
+    /// Browser profile name.
+    #[arg(long)]
+    pub browser_profile: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -1566,9 +3026,7 @@ pub async fn dispatch(cmd: Commands, json: bool, verbose: bool) -> Result<()> {
             };
             oa_cmd_supporting::dashboard::dashboard_command(opts).await
         }
-        Commands::Docs(args) => {
-            oa_cmd_supporting::docs::docs_search_command(&args.query).await
-        }
+        Commands::Docs(args) => oa_cmd_supporting::docs::docs_search_command(&args.query).await,
         Commands::Reset(args) => {
             let scope = args
                 .scope
@@ -1619,15 +3077,42 @@ pub async fn dispatch(cmd: Commands, json: bool, verbose: bool) -> Result<()> {
         Commands::Cron(cmd) => dispatch_cron(cmd, json).await,
         Commands::Config(cmd) => dispatch_config(cmd, json).await,
 
+        // -- Tier 6: Batch-3 legacy commands (newly adapted) ------------------
+        Commands::Acp(cmd) => dispatch_acp(cmd, json).await,
+        Commands::Approvals(cmd) => dispatch_approvals(cmd, json).await,
+        Commands::Devices(cmd) => dispatch_devices(cmd, json).await,
+        Commands::Directory(cmd) => dispatch_directory(cmd, json).await,
+        Commands::Dns(cmd) => dispatch_dns(cmd).await,
+        Commands::Node(cmd) => dispatch_node(cmd, json).await,
+        Commands::Pairing(cmd) => dispatch_pairing(cmd, json).await,
+        Commands::System(cmd) => dispatch_system(cmd, json).await,
+        Commands::Tui(args) => oa_cmd_tui::launch::tui_launch_command(
+            args.url.as_deref(),
+            args.token.as_deref(),
+            args.session.as_deref(),
+        ),
+        Commands::Update(cmd) => dispatch_update(cmd, json).await,
+        Commands::Voicecall(cmd) => dispatch_voicecall(cmd, json).await,
+        Commands::Webhooks(cmd) => dispatch_webhooks(cmd, json).await,
+
+        // -- Tier 7: Skills, Plugins, Security, Hooks, Browser -----------------
+        Commands::Skills(cmd) => dispatch_skills(cmd, json).await,
+        Commands::Plugins(cmd) => dispatch_plugins(cmd, json).await,
+        Commands::Security(args) => {
+            let sa = oa_cmd_security::SecurityAuditArgs {
+                json: json || args.json,
+                deep: args.deep,
+                fix: args.fix,
+            };
+            oa_cmd_security::security_audit_command(&sa).await
+        }
+        Commands::Hooks(cmd) => dispatch_hooks(cmd, json).await,
+        Commands::Browser(cmd) => dispatch_browser(cmd, json).await,
+
         // -- Shell completions -----------------------------------------------
         Commands::Completion(args) => {
             let mut cmd = <crate::Cli as clap::CommandFactory>::command();
-            clap_complete::generate(
-                args.shell,
-                &mut cmd,
-                "openacosmi",
-                &mut std::io::stdout(),
-            );
+            clap_complete::generate(args.shell, &mut cmd, "openacosmi", &mut std::io::stdout());
             Ok(())
         }
     }
@@ -1768,19 +3253,14 @@ async fn dispatch_models(cmd: ModelsCommand, json: bool) -> Result<()> {
 async fn dispatch_models_aliases(cmd: ModelsAliasesCommand, json: bool) -> Result<()> {
     match cmd.action {
         ModelsAliasesAction::List(args) => {
-            let msg = oa_cmd_models::aliases::models_aliases_list_command(
-                json || args.json,
-                args.plain,
-            )?;
+            let msg =
+                oa_cmd_models::aliases::models_aliases_list_command(json || args.json, args.plain)?;
             println!("{msg}");
             Ok(())
         }
         ModelsAliasesAction::Add(args) => {
-            let msg = oa_cmd_models::aliases::models_aliases_add_command(
-                &args.alias,
-                &args.model,
-            )
-            .await?;
+            let msg = oa_cmd_models::aliases::models_aliases_add_command(&args.alias, &args.model)
+                .await?;
             println!("{msg}");
             Ok(())
         }
@@ -1864,11 +3344,8 @@ async fn dispatch_agents(cmd: AgentsCommand, json: bool) -> Result<()> {
     match cmd.action {
         AgentsAction::List(args) => {
             let cfg = oa_config::io::load_config().unwrap_or_default();
-            let output = oa_cmd_agents::list::agents_list_command(
-                &cfg,
-                json || args.json,
-                args.bindings,
-            )?;
+            let output =
+                oa_cmd_agents::list::agents_list_command(&cfg, json || args.json, args.bindings)?;
             println!("{output}");
             Ok(())
         }
@@ -1938,16 +3415,24 @@ async fn dispatch_sandbox(cmd: SandboxCommand, json: bool) -> Result<()> {
         SandboxAction::Run(args) => {
             let security = match args.security.as_str() {
                 "deny" => oa_sandbox::config::SecurityLevel::L0Deny,
-                "sandbox" => oa_sandbox::config::SecurityLevel::L1Sandbox,
-                "full" => oa_sandbox::config::SecurityLevel::L2Full,
-                other => anyhow::bail!("invalid security level '{other}': expected deny, sandbox, or full"),
+                "allowlist" | "sandbox" => oa_sandbox::config::SecurityLevel::L1Allowlist,
+                "sandboxed" | "full" => oa_sandbox::config::SecurityLevel::L2Sandboxed,
+                other => anyhow::bail!(
+                    "invalid security level '{other}': expected deny, allowlist, or sandboxed (legacy: sandbox, full)"
+                ),
             };
-            let network = args.net.as_deref().map(|n| match n {
-                "none" => Ok(oa_sandbox::config::NetworkPolicy::None),
-                "restricted" => Ok(oa_sandbox::config::NetworkPolicy::Restricted),
-                "host" => Ok(oa_sandbox::config::NetworkPolicy::Host),
-                other => Err(anyhow::anyhow!("invalid network policy '{other}': expected none, restricted, or host")),
-            }).transpose()?;
+            let network = args
+                .net
+                .as_deref()
+                .map(|n| match n {
+                    "none" => Ok(oa_sandbox::config::NetworkPolicy::None),
+                    "restricted" => Ok(oa_sandbox::config::NetworkPolicy::Restricted),
+                    "host" => Ok(oa_sandbox::config::NetworkPolicy::Host),
+                    other => Err(anyhow::anyhow!(
+                        "invalid network policy '{other}': expected none, restricted, or host"
+                    )),
+                })
+                .transpose()?;
             let format = match args.format.as_str() {
                 "json" => oa_sandbox::config::OutputFormat::Json,
                 "text" => oa_sandbox::config::OutputFormat::Text,
@@ -1957,7 +3442,9 @@ async fn dispatch_sandbox(cmd: SandboxCommand, json: bool) -> Result<()> {
                 "auto" => oa_sandbox::config::BackendPreference::Auto,
                 "native" => oa_sandbox::config::BackendPreference::Native,
                 "docker" => oa_sandbox::config::BackendPreference::Docker,
-                other => anyhow::bail!("invalid backend '{other}': expected auto, native, or docker"),
+                other => {
+                    anyhow::bail!("invalid backend '{other}': expected auto, native, or docker")
+                }
             };
             let workspace = std::path::Path::new(&args.workspace)
                 .canonicalize()
@@ -2022,11 +3509,8 @@ async fn dispatch_coder(cmd: CoderCommand) -> Result<()> {
 async fn dispatch_gateway(cmd: GatewayCommand, json: bool) -> Result<()> {
     match cmd.action {
         GatewayAction::Run(args) => {
-            oa_cmd_gateway::run::gateway_run_command(
-                args.port,
-                args.control_ui_dir.as_deref(),
-            )
-            .await
+            oa_cmd_gateway::run::gateway_run_command(args.port, args.control_ui_dir.as_deref())
+                .await
         }
         GatewayAction::Start(args) => {
             oa_cmd_gateway::start::gateway_start_command(args.port, args.force).await
@@ -2082,9 +3566,7 @@ async fn dispatch_logs(cmd: LogsCommand, json: bool) -> Result<()> {
         LogsAction::Follow(args) => {
             oa_cmd_logs::follow::logs_follow_command(args.lines, args.channel.as_deref()).await
         }
-        LogsAction::List(args) => {
-            oa_cmd_logs::list::logs_list_command(json || args.json).await
-        }
+        LogsAction::List(args) => oa_cmd_logs::list::logs_list_command(json || args.json).await,
         LogsAction::Show(args) => {
             oa_cmd_logs::show::logs_show_command(
                 args.file.as_deref(),
@@ -2094,9 +3576,7 @@ async fn dispatch_logs(cmd: LogsCommand, json: bool) -> Result<()> {
             .await
         }
         LogsAction::Clear(args) => oa_cmd_logs::clear::logs_clear_command(args.yes).await,
-        LogsAction::Export(args) => {
-            oa_cmd_logs::export::logs_export_command(&args.output).await
-        }
+        LogsAction::Export(args) => oa_cmd_logs::export::logs_export_command(&args.output).await,
     }
 }
 
@@ -2111,12 +3591,8 @@ async fn dispatch_memory(cmd: MemoryCommand, json: bool) -> Result<()> {
             oa_cmd_memory::check::memory_check_command(json || args.json).await
         }
         MemoryAction::Search(args) => {
-            oa_cmd_memory::search::memory_search_command(
-                &args.query,
-                args.limit,
-                json || args.json,
-            )
-            .await
+            oa_cmd_memory::search::memory_search_command(&args.query, args.limit, json || args.json)
+                .await
         }
     }
 }
@@ -2127,9 +3603,7 @@ async fn dispatch_cron(cmd: CronCommand, json: bool) -> Result<()> {
         CronAction::Status(args) => {
             oa_cmd_cron::status::cron_status_command(json || args.json).await
         }
-        CronAction::List(args) => {
-            oa_cmd_cron::list::cron_list_command(json || args.json).await
-        }
+        CronAction::List(args) => oa_cmd_cron::list::cron_list_command(json || args.json).await,
         CronAction::Add(args) => {
             oa_cmd_cron::add::cron_add_command(
                 &args.name,
@@ -2168,8 +3642,603 @@ async fn dispatch_config(cmd: ConfigCommand, json: bool) -> Result<()> {
         ConfigAction::Set(args) => {
             oa_cmd_config::set::config_set_command(&args.path, &args.value).await
         }
-        ConfigAction::Unset(args) => {
-            oa_cmd_config::unset::config_unset_command(&args.path).await
+        ConfigAction::Unset(args) => oa_cmd_config::unset::config_unset_command(&args.path).await,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Batch-3 legacy command dispatchers
+// ---------------------------------------------------------------------------
+
+/// Dispatch ACP subcommands.
+async fn dispatch_acp(cmd: AcpCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        AcpAction::Status => oa_cmd_acp::status::acp_status_command(json),
+        AcpAction::Invoke(args) => oa_cmd_acp::invoke::acp_invoke_command(&args.method, json),
+    }
+}
+
+/// Dispatch approvals subcommands.
+async fn dispatch_approvals(cmd: ApprovalsCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        ApprovalsAction::Get(args) => {
+            oa_cmd_approvals::get::approvals_get_command(
+                args.gateway,
+                args.node.as_deref(),
+                json || args.json,
+            )
+            .await
+        }
+        ApprovalsAction::Set(args) => {
+            oa_cmd_approvals::set::approvals_set_command(
+                &args.file,
+                args.gateway,
+                args.node.as_deref(),
+            )
+            .await
+        }
+        ApprovalsAction::AllowlistAdd(args) => oa_cmd_approvals::allowlist::allowlist_add_command(
+            &args.pattern,
+            args.agent.as_deref(),
+            args.node.as_deref(),
+        ),
+        ApprovalsAction::AllowlistRemove(args) => {
+            oa_cmd_approvals::allowlist::allowlist_remove_command(&args.pattern)
+        }
+    }
+}
+
+/// Dispatch devices subcommands.
+async fn dispatch_devices(cmd: DevicesCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        DevicesAction::List => oa_cmd_devices::list::devices_list_command(json).await,
+        DevicesAction::Approve(args) => {
+            oa_cmd_devices::approve::devices_approve_command(&args.request_id).await
+        }
+        DevicesAction::Reject(args) => {
+            oa_cmd_devices::reject::devices_reject_command(&args.request_id).await
+        }
+        DevicesAction::Rotate(args) => {
+            oa_cmd_devices::rotate::devices_rotate_command(&args.device, &args.role).await
+        }
+        DevicesAction::Revoke(args) => {
+            oa_cmd_devices::revoke::devices_revoke_command(&args.device, &args.role).await
+        }
+    }
+}
+
+/// Dispatch directory subcommands.
+async fn dispatch_directory(cmd: DirectoryCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        DirectoryAction::Self_(args) => {
+            oa_cmd_directory::self_cmd::directory_self_command(&args.channel, json)
+        }
+        DirectoryAction::Peers(args) => {
+            oa_cmd_directory::peers::peers_list_command(&args.channel, args.query.as_deref(), json)
+        }
+        DirectoryAction::Groups(args) => oa_cmd_directory::groups::groups_list_command(
+            &args.channel,
+            args.query.as_deref(),
+            json,
+        ),
+    }
+}
+
+/// Dispatch DNS subcommands.
+async fn dispatch_dns(cmd: DnsCommand) -> Result<()> {
+    match cmd.action {
+        DnsAction::Setup(args) => oa_cmd_dns::setup::dns_setup_command(args.apply).await,
+    }
+}
+
+/// Dispatch node subcommands.
+async fn dispatch_node(cmd: NodeCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        NodeAction::Run(args) => {
+            oa_cmd_node::run::node_run_command(args.host.as_deref(), args.port)
+        }
+        NodeAction::Install(args) => {
+            oa_cmd_node::install::node_install_command(args.host.as_deref(), args.port)
+        }
+        NodeAction::Status => oa_cmd_node::status::node_status_command(json).await,
+        NodeAction::Stop => oa_cmd_node::control::node_stop_command(),
+        NodeAction::Restart => oa_cmd_node::control::node_restart_command(),
+        NodeAction::Uninstall => oa_cmd_node::control::node_uninstall_command(),
+    }
+}
+
+/// Dispatch pairing subcommands.
+async fn dispatch_pairing(cmd: PairingCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        PairingAction::List(args) => {
+            oa_cmd_pairing::list::pairing_list_command(&args.channel, json).await
+        }
+        PairingAction::Approve(args) => {
+            oa_cmd_pairing::approve::pairing_approve_command(&args.channel, &args.code, args.notify)
+                .await
+        }
+    }
+}
+
+/// Dispatch system subcommands.
+async fn dispatch_system(cmd: SystemCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        SystemAction::Event(args) => {
+            oa_cmd_system::event::system_event_command(&args.text, args.mode.as_deref(), json)
+        }
+        SystemAction::HeartbeatLast => oa_cmd_system::heartbeat::heartbeat_last_command(json),
+        SystemAction::HeartbeatEnable => oa_cmd_system::heartbeat::heartbeat_enable_command(),
+        SystemAction::HeartbeatDisable => oa_cmd_system::heartbeat::heartbeat_disable_command(),
+        SystemAction::Presence => oa_cmd_system::presence::system_presence_command(json),
+    }
+}
+
+/// Dispatch update subcommands.
+async fn dispatch_update(cmd: UpdateCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        UpdateAction::Run(args) => {
+            oa_cmd_update::run::update_run_command(args.channel.as_deref(), args.no_restart, json)
+                .await
+        }
+        UpdateAction::Status => oa_cmd_update::status_cmd::update_status_command(json).await,
+        UpdateAction::Wizard => oa_cmd_update::wizard::update_wizard_command(),
+    }
+}
+
+/// Dispatch voicecall subcommands.
+async fn dispatch_voicecall(cmd: VoicecallCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        VoicecallAction::Status(args) => {
+            oa_cmd_voicecall::status_cmd::voicecall_status_command(&args.call_id, json)
+        }
+        VoicecallAction::Call(args) => {
+            oa_cmd_voicecall::call::voicecall_call_command(&args.to, &args.message)
+        }
+        VoicecallAction::Continue(args) => {
+            oa_cmd_voicecall::call::voicecall_continue_command(&args.call_id, &args.message)
+        }
+        VoicecallAction::End(args) => oa_cmd_voicecall::call::voicecall_end_command(&args.call_id),
+        VoicecallAction::Expose(args) => {
+            oa_cmd_voicecall::expose::voicecall_expose_command(&args.mode)
+        }
+        VoicecallAction::Unexpose => oa_cmd_voicecall::expose::voicecall_unexpose_command(),
+    }
+}
+
+/// Dispatch webhooks subcommands.
+async fn dispatch_webhooks(cmd: WebhooksCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        WebhooksAction::List => oa_cmd_webhooks::list::webhooks_list_command(json),
+        WebhooksAction::Test(args) => {
+            oa_cmd_webhooks::test_cmd::webhooks_test_command(args.url.as_deref())
+        }
+        WebhooksAction::GmailSetup(args) => {
+            oa_cmd_webhooks::gmail::gmail_setup_command(&args.account)
+        }
+        WebhooksAction::GmailRun => oa_cmd_webhooks::gmail::gmail_run_command(),
+    }
+}
+
+/// Dispatch skills subcommands.
+async fn dispatch_skills(cmd: SkillsCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        SkillsAction::List(args) => {
+            let sa = oa_cmd_skills::SkillsListArgs {
+                json: json || args.json,
+                eligible: args.eligible,
+                verbose: args.verbose,
+            };
+            oa_cmd_skills::skills_list_command(&sa).await
+        }
+        SkillsAction::Info(args) => {
+            let sa = oa_cmd_skills::SkillsInfoArgs {
+                name: args.name,
+                json: json || args.json,
+            };
+            oa_cmd_skills::skills_info_command(&sa).await
+        }
+        SkillsAction::Check(args) => {
+            let sa = oa_cmd_skills::SkillsCheckArgs {
+                json: json || args.json,
+            };
+            oa_cmd_skills::skills_check_command(&sa).await
+        }
+    }
+}
+
+/// Dispatch plugins subcommands.
+async fn dispatch_plugins(cmd: PluginsCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        PluginsAction::List(args) => {
+            let pa = oa_cmd_plugins::PluginsListArgs {
+                json: json || args.json,
+            };
+            oa_cmd_plugins::plugins_list_command(&pa).await
+        }
+        PluginsAction::Info(args) => {
+            let pa = oa_cmd_plugins::PluginsInfoArgs {
+                id: args.id,
+                json: json || args.json,
+            };
+            oa_cmd_plugins::plugins_info_command(&pa).await
+        }
+        PluginsAction::Install(args) => {
+            let pa = oa_cmd_plugins::PluginsInstallArgs {
+                spec: args.spec,
+                link: args.link,
+            };
+            oa_cmd_plugins::plugins_install_command(&pa).await
+        }
+        PluginsAction::Enable(args) => {
+            let pa = oa_cmd_plugins::PluginsEnableArgs { id: args.id };
+            oa_cmd_plugins::plugins_enable_command(&pa).await
+        }
+        PluginsAction::Disable(args) => {
+            let pa = oa_cmd_plugins::PluginsDisableArgs { id: args.id };
+            oa_cmd_plugins::plugins_disable_command(&pa).await
+        }
+        PluginsAction::Doctor(args) => {
+            let pa = oa_cmd_plugins::PluginsDoctorArgs {
+                json: json || args.json,
+            };
+            oa_cmd_plugins::plugins_doctor_command(&pa).await
+        }
+    }
+}
+
+/// Dispatch hooks subcommands.
+async fn dispatch_hooks(cmd: HooksCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        HooksAction::List(args) => {
+            let ha = oa_cmd_hooks::HooksListArgs {
+                json: json || args.json,
+                eligible: args.eligible,
+                verbose: args.verbose,
+            };
+            oa_cmd_hooks::hooks_list_command(&ha).await
+        }
+        HooksAction::Info(args) => {
+            let ha = oa_cmd_hooks::HooksInfoArgs {
+                name: args.name,
+                json: json || args.json,
+            };
+            oa_cmd_hooks::hooks_info_command(&ha).await
+        }
+        HooksAction::Check(args) => {
+            let ha = oa_cmd_hooks::HooksCheckArgs {
+                json: json || args.json,
+            };
+            oa_cmd_hooks::hooks_check_command(&ha).await
+        }
+        HooksAction::Enable(args) => {
+            let ha = oa_cmd_hooks::HooksEnableArgs { name: args.name };
+            oa_cmd_hooks::hooks_enable_command(&ha).await
+        }
+        HooksAction::Disable(args) => {
+            let ha = oa_cmd_hooks::HooksDisableArgs { name: args.name };
+            oa_cmd_hooks::hooks_disable_command(&ha).await
+        }
+        HooksAction::Install(args) => {
+            let ha = oa_cmd_hooks::HooksInstallArgs {
+                spec: args.spec,
+                link: args.link,
+            };
+            oa_cmd_hooks::hooks_install_command(&ha).await
+        }
+        HooksAction::Update(args) => {
+            let ha = oa_cmd_hooks::HooksUpdateArgs {
+                id: args.id,
+                all: args.all,
+                dry_run: args.dry_run,
+            };
+            oa_cmd_hooks::hooks_update_command(&ha).await
+        }
+    }
+}
+
+/// Dispatch browser subcommands.
+async fn dispatch_browser(cmd: BrowserCommand, json: bool) -> Result<()> {
+    match cmd.action {
+        // -- Manage --
+        BrowserAction::Status(args) => {
+            oa_cmd_browser::browser_status_command(&oa_cmd_browser::BrowserStatusArgs {
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Start(args) => {
+            oa_cmd_browser::browser_start_command(&oa_cmd_browser::BrowserStartArgs {
+                browser_profile: args.browser_profile, headless: args.headless,
+            }).await
+        }
+        BrowserAction::Stop(args) => {
+            oa_cmd_browser::browser_stop_command(&oa_cmd_browser::BrowserStopArgs {
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Tabs(args) => {
+            oa_cmd_browser::browser_tabs_command(&oa_cmd_browser::BrowserTabsArgs {
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Open(args) => {
+            oa_cmd_browser::browser_open_command(&oa_cmd_browser::BrowserOpenArgs {
+                url: args.url, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Focus(args) => {
+            oa_cmd_browser::browser_focus_command(&oa_cmd_browser::BrowserFocusArgs {
+                target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Close(args) => {
+            oa_cmd_browser::browser_close_command(&oa_cmd_browser::BrowserCloseArgs {
+                target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Screenshot(args) => {
+            oa_cmd_browser::browser_screenshot_command(&oa_cmd_browser::BrowserScreenshotArgs {
+                file: args.file, full_page: args.full_page, r#ref: args.ref_id,
+                element: args.element, format: args.format, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Profiles(args) => {
+            oa_cmd_browser::browser_profiles_command(&oa_cmd_browser::BrowserProfilesArgs {
+                json: json || args.json,
+            }).await
+        }
+        BrowserAction::CreateProfile(args) => {
+            oa_cmd_browser::browser_create_profile_command(&oa_cmd_browser::BrowserCreateProfileArgs {
+                name: args.name, color: args.color, cdp_url: args.cdp_url, driver: args.driver,
+            }).await
+        }
+        BrowserAction::DeleteProfile(args) => {
+            oa_cmd_browser::browser_delete_profile_command(&oa_cmd_browser::BrowserDeleteProfileArgs {
+                name: args.name,
+            }).await
+        }
+        BrowserAction::ResetProfile(args) => {
+            oa_cmd_browser::browser_reset_profile_command(&oa_cmd_browser::BrowserResetProfileArgs {
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        // -- Inspect --
+        BrowserAction::Snapshot(args) => {
+            oa_cmd_browser::browser_snapshot_command(&oa_cmd_browser::BrowserSnapshotArgs {
+                format: args.format, target_id: args.target_id, limit: args.limit,
+                interactive: args.interactive, compact: args.compact, depth: args.depth,
+                selector: args.selector, frame: args.frame, efficient: args.efficient,
+                labels: args.labels, out: args.out, json: json || args.json,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Console(args) => {
+            oa_cmd_browser::browser_console_command(&oa_cmd_browser::BrowserConsoleArgs {
+                level: args.level, clear: args.clear, target_id: args.target_id,
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Errors(args) => {
+            oa_cmd_browser::browser_errors_command(&oa_cmd_browser::BrowserErrorsArgs {
+                clear: args.clear, target_id: args.target_id,
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Requests(args) => {
+            oa_cmd_browser::browser_requests_command(&oa_cmd_browser::BrowserRequestsArgs {
+                filter: args.filter, clear: args.clear, target_id: args.target_id,
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::ResponseBody(args) => {
+            oa_cmd_browser::browser_responsebody_command(&oa_cmd_browser::BrowserResponseBodyArgs {
+                pattern: args.pattern, max_chars: args.max_chars, target_id: args.target_id,
+                json: json || args.json, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Pdf(args) => {
+            oa_cmd_browser::browser_pdf_command(&oa_cmd_browser::BrowserPdfArgs {
+                target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        // -- Actions --
+        BrowserAction::Navigate(args) => {
+            oa_cmd_browser::browser_navigate_command(&oa_cmd_browser::BrowserNavigateArgs {
+                url: args.url, target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Resize(args) => {
+            oa_cmd_browser::browser_resize_command(&oa_cmd_browser::BrowserResizeArgs {
+                width: args.width, height: args.height, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Click(args) => {
+            oa_cmd_browser::browser_click_command(&oa_cmd_browser::BrowserClickArgs {
+                r#ref: args.ref_id, double: args.double, button: args.button,
+                modifiers: args.modifiers, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::TypeText(args) => {
+            oa_cmd_browser::browser_type_command(&oa_cmd_browser::BrowserTypeArgs {
+                r#ref: args.ref_id, text: args.text, submit: args.submit, slowly: args.slowly,
+                target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Press(args) => {
+            oa_cmd_browser::browser_press_command(&oa_cmd_browser::BrowserPressArgs {
+                key: args.key, target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Hover(args) => {
+            oa_cmd_browser::browser_hover_command(&oa_cmd_browser::BrowserHoverArgs {
+                r#ref: args.ref_id, target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::ScrollIntoView(args) => {
+            oa_cmd_browser::browser_scrollintoview_command(&oa_cmd_browser::BrowserScrollIntoViewArgs {
+                r#ref: args.ref_id, target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Drag(args) => {
+            oa_cmd_browser::browser_drag_command(&oa_cmd_browser::BrowserDragArgs {
+                start_ref: args.start_ref, end_ref: args.end_ref, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Select(args) => {
+            oa_cmd_browser::browser_select_command(&oa_cmd_browser::BrowserSelectArgs {
+                r#ref: args.ref_id, values: args.values, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Download(args) => {
+            oa_cmd_browser::browser_download_command(&oa_cmd_browser::BrowserDownloadArgs {
+                r#ref: args.ref_id, save_path: args.save_path, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::WaitForDownload(args) => {
+            oa_cmd_browser::browser_waitfordownload_command(&oa_cmd_browser::BrowserWaitForDownloadArgs {
+                save_path: args.save_path, timeout_ms: args.timeout_ms,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Upload(args) => {
+            oa_cmd_browser::browser_upload_command(&oa_cmd_browser::BrowserUploadArgs {
+                paths: args.paths, r#ref: args.ref_id, input_ref: args.input_ref,
+                element: args.element, target_id: args.target_id, timeout_ms: args.timeout_ms,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Fill(args) => {
+            oa_cmd_browser::browser_fill_command(&oa_cmd_browser::BrowserFillArgs {
+                fields: args.fields, fields_file: args.fields_file, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Dialog(args) => {
+            oa_cmd_browser::browser_dialog_command(&oa_cmd_browser::BrowserDialogArgs {
+                accept: args.accept, dismiss: args.dismiss, prompt: args.prompt,
+                target_id: args.target_id, timeout_ms: args.timeout_ms,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Wait(args) => {
+            oa_cmd_browser::browser_wait_command(&oa_cmd_browser::BrowserWaitArgs {
+                selector: args.selector, url: args.url, load: args.load, js_fn: args.js_fn,
+                text: args.text, text_gone: args.text_gone, time: args.time,
+                timeout_ms: args.timeout_ms, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Evaluate(args) => {
+            oa_cmd_browser::browser_evaluate_command(&oa_cmd_browser::BrowserEvaluateArgs {
+                js_fn: args.js_fn, r#ref: args.ref_id, target_id: args.target_id,
+                browser_profile: args.browser_profile,
+            }).await
+        }
+        BrowserAction::Highlight(args) => {
+            oa_cmd_browser::browser_highlight_command(&oa_cmd_browser::BrowserHighlightArgs {
+                r#ref: args.ref_id, target_id: args.target_id, browser_profile: args.browser_profile,
+            }).await
+        }
+        // -- Trace --
+        BrowserAction::Trace(cmd) => match cmd.action {
+            BrowserTraceAction::Start(args) => {
+                oa_cmd_browser::browser_trace_start_command(&oa_cmd_browser::BrowserTraceStartArgs {
+                    browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserTraceAction::Stop(args) => {
+                oa_cmd_browser::browser_trace_stop_command(&oa_cmd_browser::BrowserTraceStopArgs {
+                    browser_profile: args.browser_profile,
+                }).await
+            }
+        }
+        // -- Cookies --
+        BrowserAction::Cookies(cmd) => match cmd.action {
+            None => {
+                oa_cmd_browser::browser_cookies_command(&oa_cmd_browser::BrowserCookiesArgs {
+                    json: json || cmd.json, browser_profile: cmd.browser_profile,
+                }).await
+            }
+            Some(BrowserCookiesAction::Set(args)) => {
+                oa_cmd_browser::browser_cookies_set_command(&oa_cmd_browser::BrowserCookiesSetArgs {
+                    name: args.name, value: args.value, url: args.url,
+                    browser_profile: args.browser_profile.or(cmd.browser_profile),
+                }).await
+            }
+            Some(BrowserCookiesAction::Clear(args)) => {
+                oa_cmd_browser::browser_cookies_clear_command(&oa_cmd_browser::BrowserCookiesClearArgs {
+                    browser_profile: args.browser_profile.or(cmd.browser_profile),
+                }).await
+            }
+        }
+        // -- Storage --
+        BrowserAction::Storage(cmd) => match cmd.action {
+            BrowserStorageAction::Get(args) => {
+                oa_cmd_browser::browser_storage_get_command(&oa_cmd_browser::BrowserStorageGetArgs {
+                    kind: args.kind, json: json || args.json, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserStorageAction::Set(args) => {
+                oa_cmd_browser::browser_storage_set_command(&oa_cmd_browser::BrowserStorageSetArgs {
+                    kind: args.kind, key: args.key, value: args.value,
+                    browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserStorageAction::Clear(args) => {
+                oa_cmd_browser::browser_storage_clear_command(&oa_cmd_browser::BrowserStorageClearArgs {
+                    kind: args.kind, browser_profile: args.browser_profile,
+                }).await
+            }
+        }
+        // -- Set --
+        BrowserAction::Set(cmd) => match cmd.action {
+            BrowserSetAction::Offline(args) => {
+                oa_cmd_browser::browser_set_offline_command(&oa_cmd_browser::BrowserSetOfflineArgs {
+                    state: args.state, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Headers(args) => {
+                oa_cmd_browser::browser_set_headers_command(&oa_cmd_browser::BrowserSetHeadersArgs {
+                    json: args.json, clear: args.clear, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Credentials(args) => {
+                oa_cmd_browser::browser_set_credentials_command(&oa_cmd_browser::BrowserSetCredentialsArgs {
+                    username: args.username, password: args.password, clear: args.clear,
+                    browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Geo(args) => {
+                oa_cmd_browser::browser_set_geo_command(&oa_cmd_browser::BrowserSetGeoArgs {
+                    latitude: args.latitude, longitude: args.longitude, origin: args.origin,
+                    clear: args.clear, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Media(args) => {
+                oa_cmd_browser::browser_set_media_command(&oa_cmd_browser::BrowserSetMediaArgs {
+                    scheme: args.scheme, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Timezone(args) => {
+                oa_cmd_browser::browser_set_timezone_command(&oa_cmd_browser::BrowserSetTimezoneArgs {
+                    timezone: args.timezone, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Locale(args) => {
+                oa_cmd_browser::browser_set_locale_command(&oa_cmd_browser::BrowserSetLocaleArgs {
+                    locale: args.locale, browser_profile: args.browser_profile,
+                }).await
+            }
+            BrowserSetAction::Device(args) => {
+                oa_cmd_browser::browser_set_device_command(&oa_cmd_browser::BrowserSetDeviceArgs {
+                    device: args.device, browser_profile: args.browser_profile,
+                }).await
+            }
         }
     }
 }

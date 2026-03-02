@@ -5,8 +5,8 @@ package gateway
 // 使 server_methods_*.go 处理器可通过 GatewayMethodContext 获取依赖。
 
 import (
-	"github.com/anthropic/open-acosmi/internal/cron"
-	"github.com/anthropic/open-acosmi/internal/tts"
+	"github.com/openacosmi/claw-acismi/internal/cron"
+	"github.com/openacosmi/claw-acismi/internal/tts"
 )
 
 // ---------- Cron ----------

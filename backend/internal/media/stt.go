@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // STTProvider 语音转文本 Provider 接口
@@ -46,6 +46,15 @@ func NewSTTProvider(cfg *types.STTConfig) (STTProvider, error) {
 		return NewOpenAISTT(cfg), nil
 	case "azure":
 		return NewOpenAISTT(cfg), nil // Azure 也走 OpenAI 兼容 API
+	case "qwen":
+		// 通义千问 DashScope 原生 API（不走 OpenAI 兼容端点，因其不支持 /audio/transcriptions）
+		return NewDashScopeSTT(cfg), nil
+	case "ollama":
+		// 本地 Ollama OpenAI 兼容 API
+		if cfg.BaseURL == "" {
+			cfg.BaseURL = "http://localhost:11434/v1"
+		}
+		return NewOpenAISTT(cfg), nil
 	case "local-whisper":
 		return NewLocalWhisperSTT(cfg), nil
 	default:
@@ -62,6 +71,10 @@ func DefaultSTTModels(provider string) []string {
 		return []string{"whisper-large-v3", "whisper-large-v3-turbo", "distil-whisper-large-v3-en"}
 	case "azure":
 		return []string{"whisper-1"}
+	case "qwen":
+		return []string{"sensevoice-v1", "paraformer-realtime-v2", "paraformer-v2"}
+	case "ollama":
+		return []string{"whisper"}
 	case "local-whisper":
 		return []string{"ggml-base", "ggml-small", "ggml-medium", "ggml-large-v3"}
 	default:

@@ -18,15 +18,15 @@ pub enum SecurityLevel {
     #[serde(rename = "deny")]
     L0Deny,
 
-    /// L1 — Sandboxed execution. Restricted network (public TCP only),
+    /// L1 — Allowlist-restricted sandbox. Restricted network (public TCP + DNS only),
     /// workspace read/write, curated tool access.
-    #[serde(rename = "sandbox")]
-    L1Sandbox,
+    #[serde(rename = "allowlist", alias = "sandbox")]
+    L1Allowlist,
 
-    /// L2 — Full access with human-in-the-loop approval.
-    /// Dry-run preview shown before actual execution.
-    #[serde(rename = "full")]
-    L2Full,
+    /// L2 — Sandboxed with full permissions inside sandbox + temporary mount authorization.
+    /// Full network access. Requires human-in-the-loop escalation approval with TTL.
+    #[serde(rename = "sandboxed", alias = "full")]
+    L2Sandboxed,
 }
 
 impl SecurityLevel {
@@ -35,8 +35,8 @@ impl SecurityLevel {
     pub const fn default_network_policy(self) -> NetworkPolicy {
         match self {
             Self::L0Deny => NetworkPolicy::None,
-            Self::L1Sandbox => NetworkPolicy::Restricted,
-            Self::L2Full => NetworkPolicy::Host,
+            Self::L1Allowlist => NetworkPolicy::Restricted,
+            Self::L2Sandboxed => NetworkPolicy::Host,
         }
     }
 }
@@ -300,7 +300,7 @@ mod tests {
 
     fn valid_config() -> SandboxConfig {
         SandboxConfig {
-            security_level: SecurityLevel::L1Sandbox,
+            security_level: SecurityLevel::L1Allowlist,
             command: "echo".into(),
             args: vec!["hello".into()],
             workspace: std::env::temp_dir(),
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn network_policy_strengthening_allowed() {
         let mut c = valid_config();
-        c.security_level = SecurityLevel::L2Full;
+        c.security_level = SecurityLevel::L2Sandboxed;
         c.network_policy = Some(NetworkPolicy::None);
         assert!(c.validate().is_ok());
     }
@@ -394,5 +394,53 @@ mod tests {
             mode: MountMode::ReadOnly,
         });
         assert!(c.validate().is_err());
+    }
+
+    // ── Serde alias backward-compatibility tests ──────────────────────
+
+    #[test]
+    fn serde_legacy_sandbox_alias() {
+        // Old value "sandbox" must still deserialize to L1Allowlist
+        let json = r#""sandbox""#;
+        let level: SecurityLevel = serde_json::from_str(json).unwrap();
+        assert_eq!(level, SecurityLevel::L1Allowlist);
+    }
+
+    #[test]
+    fn serde_legacy_full_alias() {
+        // Old value "full" must still deserialize to L2Sandboxed
+        let json = r#""full""#;
+        let level: SecurityLevel = serde_json::from_str(json).unwrap();
+        assert_eq!(level, SecurityLevel::L2Sandboxed);
+    }
+
+    #[test]
+    fn serde_canonical_roundtrip() {
+        // New canonical names serialize and deserialize correctly
+        let l1 = SecurityLevel::L1Allowlist;
+        let l2 = SecurityLevel::L2Sandboxed;
+
+        let l1_json = serde_json::to_string(&l1).unwrap();
+        let l2_json = serde_json::to_string(&l2).unwrap();
+
+        assert_eq!(l1_json, r#""allowlist""#);
+        assert_eq!(l2_json, r#""sandboxed""#);
+
+        let l1_back: SecurityLevel = serde_json::from_str(&l1_json).unwrap();
+        let l2_back: SecurityLevel = serde_json::from_str(&l2_json).unwrap();
+
+        assert_eq!(l1_back, SecurityLevel::L1Allowlist);
+        assert_eq!(l2_back, SecurityLevel::L2Sandboxed);
+    }
+
+    #[test]
+    fn serde_deny_unchanged() {
+        // L0Deny name unchanged, verify stability
+        let json = r#""deny""#;
+        let level: SecurityLevel = serde_json::from_str(json).unwrap();
+        assert_eq!(level, SecurityLevel::L0Deny);
+
+        let serialized = serde_json::to_string(&SecurityLevel::L0Deny).unwrap();
+        assert_eq!(serialized, r#""deny""#);
     }
 }

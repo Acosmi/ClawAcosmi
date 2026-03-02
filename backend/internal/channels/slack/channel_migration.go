@@ -3,7 +3,7 @@ package slack
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Slack 频道 ID 迁移 — 继承自 src/slack/channel-migration.ts (102L)

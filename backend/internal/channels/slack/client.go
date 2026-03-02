@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/channels/ratelimit"
+	"github.com/openacosmi/claw-acismi/internal/channels/ratelimit"
 )
 
 // Slack Web Client — 继承自 src/slack/client.ts (20L)

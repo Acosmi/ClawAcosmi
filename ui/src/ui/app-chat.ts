@@ -24,7 +24,8 @@ export type ChatHost = {
   refreshSessionsAfterChat: Set<string>;
 };
 
-export const CHAT_SESSIONS_ACTIVE_MINUTES = 120;
+// 会话下拉框不限制活跃时间，显示所有历史会话
+export const CHAT_SESSIONS_ACTIVE_MINUTES = 0;
 
 export function isChatBusy(host: ChatHost) {
   return host.chatSending || Boolean(host.chatRunId);

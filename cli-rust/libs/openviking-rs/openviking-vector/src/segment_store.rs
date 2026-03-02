@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use common::budget::ResourcePermit;
 use common::counter::hardware_accumulator::HwMeasurementAcc;
 use common::counter::hardware_counter::HardwareCounterCell;
 use parking_lot::RwLock;
@@ -16,12 +17,15 @@ use segment::data_types::named_vectors::NamedVectors;
 use segment::data_types::query_context::QueryContext;
 use segment::data_types::vectors::{QueryVector, DEFAULT_VECTOR_NAME};
 use segment::entry::entry_point::{NonAppendableSegmentEntry, SegmentEntry};
+use segment::index::hnsw_index::num_rayon_threads;
 use segment::segment::Segment;
 use segment::segment_constructor::build_segment;
+use segment::segment_constructor::segment_builder::SegmentBuilder;
 use segment::types::{
-    Distance, ExtendedPointId, Filter, Indexes, Payload, PayloadFieldSchema, PayloadSchemaType,
-    PayloadStorageType, ScoredPoint, SearchParams, SegmentConfig, VectorDataConfig,
-    VectorStorageType, WithPayload, WithVector,
+    Distance, ExtendedPointId, Filter, HnswConfig, HnswGlobalConfig, Indexes, Payload,
+    PayloadFieldSchema, PayloadSchemaType, PayloadStorageType, QuantizationConfig, ScoredPoint,
+    SearchParams, SegmentConfig, VectorDataConfig, VectorStorageDatatype, VectorStorageType,
+    WithPayload, WithVector,
 };
 use uuid::Uuid;
 
@@ -37,15 +41,30 @@ pub struct SearchHit {
     pub payload: HashMap<String, serde_json::Value>,
 }
 
+/// A scroll result (no score, just id + payload).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ScrollHit {
+    pub id: String,
+    pub payload: HashMap<String, serde_json::Value>,
+}
+
 /// Configuration for creating a collection.
 #[derive(Debug, Clone)]
 pub struct CollectionConfig {
     /// Dense vector dimension.
     pub dimension: usize,
-    /// Distance metric (Cosine, Dot, Euclid).
+    /// Distance metric (Cosine, Dot, Euclid, Manhattan).
     pub distance: Distance,
     /// Whether to also create a sparse vector storage.
     pub sparse_vectors: bool,
+    /// HNSW index configuration. `None` = Plain (brute-force) index.
+    pub hnsw: Option<HnswConfig>,
+    /// Quantization configuration. `None` = no quantization (full Float32).
+    pub quantization: Option<QuantizationConfig>,
+    /// Vector storage type. Default: `InRamChunkedMmap`.
+    pub storage_type: VectorStorageType,
+    /// Vector storage datatype. `None` = Float32.
+    pub datatype: Option<VectorStorageDatatype>,
 }
 
 impl Default for CollectionConfig {
@@ -54,6 +73,10 @@ impl Default for CollectionConfig {
             dimension: 1536,
             distance: Distance::Cosine,
             sparse_vectors: false,
+            hnsw: None,
+            quantization: None,
+            storage_type: VectorStorageType::InRamChunkedMmap,
+            datatype: None,
         }
     }
 }
@@ -120,17 +143,23 @@ impl SegmentVectorStore {
         std::fs::create_dir_all(&col_dir)?;
 
         // Build SegmentConfig with a single named dense vector ("dense").
+        //
+        // NOTE: build_segment() creates an *appendable* (mutable) segment.
+        // Appendable segments only support Plain index — HNSW graphs are built
+        // during segment *optimization* (converting to non-appendable format).
+        // We always use Indexes::Plain here and store the HNSW config in
+        // CollectionHandle for future optimization support.
         let mut vector_data = HashMap::new();
         vector_data.insert(
             DEFAULT_VECTOR_NAME.to_owned(),
             VectorDataConfig {
                 size: cfg.dimension,
                 distance: cfg.distance,
-                storage_type: VectorStorageType::InRamChunkedMmap,
+                storage_type: cfg.storage_type,
                 index: Indexes::Plain {},
-                quantization_config: None,
+                quantization_config: cfg.quantization.clone(),
                 multivector_config: None,
-                datatype: None,
+                datatype: cfg.datatype,
             },
         );
 
@@ -151,7 +180,15 @@ impl SegmentVectorStore {
             },
         );
 
-        log::info!("Created segment collection: {name} (dim={})", cfg.dimension);
+        let index_label = if cfg.hnsw.is_some() {
+            "Plain (HNSW config stored for optimization)"
+        } else {
+            "Plain"
+        };
+        log::info!(
+            "Created segment collection: {name} (dim={}, index={index_label})",
+            cfg.dimension
+        );
         Ok(true)
     }
 
@@ -207,12 +244,15 @@ impl SegmentVectorStore {
     /// Search for nearest neighbours in a collection.
     ///
     /// Returns up to `limit` results sorted by descending score.
+    /// `search_params` allows tuning HNSW `ef` and quantization behaviour.
+    /// Pass `None` for default parameters.
     pub fn search(
         &self,
         collection: &str,
         query_vector: &[f32],
         filter: Option<&Filter>,
         limit: usize,
+        search_params: Option<&SearchParams>,
     ) -> Result<Vec<SearchHit>, Box<dyn std::error::Error + Send + Sync>> {
         let map = self.collections.read();
         let handle = map
@@ -223,6 +263,9 @@ impl SegmentVectorStore {
         let query_context = QueryContext::new(usize::MAX, HwMeasurementAcc::disposable());
         let segment_query_context = query_context.get_segment_query_context();
 
+        let default_params = SearchParams::default();
+        let params = search_params.unwrap_or(&default_params);
+
         let results = handle.segment.search_batch(
             DEFAULT_VECTOR_NAME,
             &[&query],
@@ -230,7 +273,7 @@ impl SegmentVectorStore {
             &WithVector::from(false),
             filter,
             limit,
-            Some(&SearchParams::default()),
+            Some(params),
             &segment_query_context,
         )?;
 
@@ -303,6 +346,185 @@ impl SegmentVectorStore {
         let map = self.collections.read();
         map.get(collection)
             .map(|h| h.segment.available_point_count())
+    }
+
+    /// Scroll all points in a collection (no vector similarity, just enumerate).
+    ///
+    /// Returns up to `limit` points with their payloads.
+    pub fn scroll(
+        &self,
+        collection: &str,
+        limit: usize,
+    ) -> Result<Vec<ScrollHit>, Box<dyn std::error::Error + Send + Sync>> {
+        let map = self.collections.read();
+        let handle = map
+            .get(collection)
+            .ok_or_else(|| format!("collection not found: {collection}"))?;
+
+        let is_stopped = AtomicBool::new(false);
+        let hw = HardwareCounterCell::disposable();
+
+        let point_ids = handle.segment.read_filtered(
+            None,
+            Some(limit),
+            None,
+            &is_stopped,
+            &hw,
+        );
+
+        let mut results = Vec::with_capacity(point_ids.len());
+        for pid in point_ids {
+            let payload_raw = handle.segment.payload(pid, &hw)?;
+            let payload: HashMap<String, serde_json::Value> = payload_raw
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect();
+            let id = match pid {
+                ExtendedPointId::NumId(n) => n.to_string(),
+                ExtendedPointId::Uuid(u) => u.to_string(),
+            };
+            results.push(ScrollHit { id, payload });
+        }
+
+        Ok(results)
+    }
+
+    /// Scroll points matching a Qdrant filter (JSON-encoded).
+    ///
+    /// `filter_json` is a JSON string representing a Qdrant `Filter`.
+    /// Returns up to `limit` matching points with their payloads.
+    pub fn scroll_filtered(
+        &self,
+        collection: &str,
+        filter_json: &str,
+        limit: usize,
+    ) -> Result<Vec<ScrollHit>, Box<dyn std::error::Error + Send + Sync>> {
+        let map = self.collections.read();
+        let handle = map
+            .get(collection)
+            .ok_or_else(|| format!("collection not found: {collection}"))?;
+
+        let filter: Filter = serde_json::from_str(filter_json)
+            .map_err(|e| format!("invalid filter JSON: {e}"))?;
+
+        let is_stopped = AtomicBool::new(false);
+        let hw = HardwareCounterCell::disposable();
+
+        let point_ids = handle.segment.read_filtered(
+            None,
+            Some(limit),
+            Some(&filter),
+            &is_stopped,
+            &hw,
+        );
+
+        let mut results = Vec::with_capacity(point_ids.len());
+        for pid in point_ids {
+            let payload_raw = handle.segment.payload(pid, &hw)?;
+            let payload: HashMap<String, serde_json::Value> = payload_raw
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect();
+            let id = match pid {
+                ExtendedPointId::NumId(n) => n.to_string(),
+                ExtendedPointId::Uuid(u) => u.to_string(),
+            };
+            results.push(ScrollHit { id, payload });
+        }
+
+        Ok(results)
+    }
+
+    // --- Segment optimization ------------------------------------------------
+
+    /// Optimize a collection by converting its appendable (Plain) segment into
+    /// a non-appendable segment with an HNSW index.
+    ///
+    /// Returns `Ok(true)` if HNSW was built, `Ok(false)` if skipped (no HNSW
+    /// config, empty collection, or collection not found).
+    ///
+    /// The caller provides a `stopped` flag that can be used to cancel the
+    /// operation cooperatively.
+    pub fn optimize_collection(
+        &self,
+        name: &str,
+        stopped: &AtomicBool,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut map = self.collections.write();
+        let handle = match map.get_mut(name) {
+            Some(h) => h,
+            None => return Ok(false),
+        };
+
+        // Only optimize if the collection was created with HNSW config.
+        let hnsw_config = match &handle.config.hnsw {
+            Some(cfg) => cfg.clone(),
+            None => return Ok(false),
+        };
+
+        // Nothing to optimize if the segment is empty.
+        if handle.segment.available_point_count() == 0 {
+            return Ok(false);
+        }
+
+        let col_dir = self.data_dir.join(name);
+
+        // Build target SegmentConfig with HNSW index (non-appendable).
+        let mut vector_data = HashMap::new();
+        vector_data.insert(
+            DEFAULT_VECTOR_NAME.to_owned(),
+            VectorDataConfig {
+                size: handle.config.dimension,
+                distance: handle.config.distance,
+                storage_type: handle.config.storage_type,
+                index: Indexes::Hnsw(hnsw_config),
+                quantization_config: handle.config.quantization.clone(),
+                multivector_config: None,
+                datatype: handle.config.datatype,
+            },
+        );
+
+        let target_config = SegmentConfig {
+            vector_data,
+            sparse_vector_data: Default::default(),
+            payload_storage_type: PayloadStorageType::Mmap,
+        };
+
+        // Create a temporary directory for the builder inside the collection dir.
+        let temp_dir = tempfile::tempdir_in(&col_dir)
+            .map_err(|e| format!("create temp dir for optimization: {e}"))?;
+
+        // SegmentBuilder: copy data from existing segment → build HNSW graph.
+        let mut builder =
+            SegmentBuilder::new(temp_dir.path(), &target_config, &HnswGlobalConfig::default())?;
+
+        builder.update(&[&handle.segment], stopped)?;
+
+        let num_threads = num_rayon_threads(0) as u32;
+        let permit = ResourcePermit::dummy(num_threads);
+        let hw = HardwareCounterCell::disposable();
+        let progress_tracker = common::progress_tracker::ProgressTracker::new_for_test();
+
+        let new_segment = builder.build(
+            &col_dir,
+            Uuid::new_v4(),
+            permit,
+            stopped,
+            &mut rand::rng(),
+            &hw,
+            progress_tracker,
+        )?;
+
+        let point_count = new_segment.available_point_count();
+
+        // Replace the old segment (old Segment drops automatically, cleaning disk files).
+        handle.segment = new_segment;
+
+        log::info!(
+            "Optimized segment collection: {name} (points={point_count}, index=HNSW)"
+        );
+
+        Ok(true)
     }
 }
 

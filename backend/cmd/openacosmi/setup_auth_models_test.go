@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- setup_auth_models.go tests ----------

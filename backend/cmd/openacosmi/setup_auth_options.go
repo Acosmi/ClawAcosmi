@@ -6,8 +6,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
 )
 
 // ---------- 分组定义 ----------

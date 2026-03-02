@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Telegram Bot Handler 注册 — 继承自 src/telegram/bot-handlers.ts (929L)

@@ -48,7 +48,7 @@ func TestParseLsofFieldOutput(t *testing.T) {
 	// lsof -Fpcn 格式模拟
 	output := `p1234
 cnode
-n127.0.0.1:18789
+n127.0.0.1:19001
 p5678
 cpython
 n*:3000
@@ -64,8 +64,8 @@ n*:3000
 	if listeners[0].Command != "node" {
 		t.Errorf("listener[0].Command = %q, want %q", listeners[0].Command, "node")
 	}
-	if listeners[0].Address != "127.0.0.1:18789" {
-		t.Errorf("listener[0].Address = %q, want %q", listeners[0].Address, "127.0.0.1:18789")
+	if listeners[0].Address != "127.0.0.1:19001" {
+		t.Errorf("listener[0].Address = %q, want %q", listeners[0].Address, "127.0.0.1:19001")
 	}
 
 	if listeners[1].PID != 5678 {
@@ -79,10 +79,10 @@ n*:3000
 func TestParseNetstatListeners(t *testing.T) {
 	output := `Active Internet connections (only servers)
 Proto    Local Address    Foreign Address    State    PID
-TCP      0.0.0.0:18789   0.0.0.0:0          LISTEN   1234
+TCP      0.0.0.0:19001   0.0.0.0:0          LISTEN   1234
 TCP      0.0.0.0:3000    0.0.0.0:0          LISTEN   5678
 `
-	listeners := parseNetstatListeners(output, 18789)
+	listeners := parseNetstatListeners(output, 19001)
 	if len(listeners) != 1 {
 		t.Fatalf("expected 1 listener, got %d", len(listeners))
 	}
@@ -101,7 +101,7 @@ func TestClassifyPortListener(t *testing.T) {
 		{PortListener{Command: "python"}, PortKindUnknown},
 	}
 	for _, tt := range tests {
-		got := ClassifyPortListener(tt.listener, 18789)
+		got := ClassifyPortListener(tt.listener, 19001)
 		if got != tt.want {
 			t.Errorf("ClassifyPortListener(%+v) = %q, want %q", tt.listener, got, tt.want)
 		}
@@ -110,14 +110,14 @@ func TestClassifyPortListener(t *testing.T) {
 
 func TestBuildPortHints(t *testing.T) {
 	// 空监听者
-	hints := BuildPortHints(nil, 18789)
+	hints := BuildPortHints(nil, 19001)
 	if len(hints) != 0 {
 		t.Errorf("expected no hints for empty listeners, got %d", len(hints))
 	}
 
 	// gateway 监听者
 	listeners := []PortListener{{Command: "openacosmi"}}
-	hints = BuildPortHints(listeners, 18789)
+	hints = BuildPortHints(listeners, 19001)
 	if len(hints) == 0 {
 		t.Error("expected hints for gateway listener")
 	}
@@ -138,7 +138,7 @@ func TestFormatPortListener(t *testing.T) {
 		PID:         1234,
 		User:        "root",
 		CommandLine: "/usr/bin/node server.js",
-		Address:     "0.0.0.0:18789",
+		Address:     "0.0.0.0:19001",
 	}
 	s := FormatPortListener(l)
 	if !contains(s, "pid 1234") {
@@ -162,7 +162,7 @@ func TestFormatPortDiagnostics(t *testing.T) {
 
 	// Busy port
 	usage = PortUsage{
-		Port:      18789,
+		Port:      19001,
 		Status:    PortBusy,
 		Listeners: []PortListener{{PID: 1234, Command: "node"}},
 		Hints:     []string{"stop the process"},
@@ -177,9 +177,9 @@ func TestFormatPortDiagnostics(t *testing.T) {
 }
 
 func TestPortInUseError(t *testing.T) {
-	err := &PortInUseError{Port: 18789, Details: "used by node"}
+	err := &PortInUseError{Port: 19001, Details: "used by node"}
 	msg := err.Error()
-	if !contains(msg, "18789") || !contains(msg, "used by node") {
+	if !contains(msg, "19001") || !contains(msg, "used by node") {
 		t.Errorf("unexpected error message: %q", msg)
 	}
 }

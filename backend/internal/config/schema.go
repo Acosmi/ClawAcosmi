@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ConfigSchemaResponse schema 查询响应（供 API 使用）
@@ -161,16 +161,19 @@ var (
 
 // knownChannelIDs 已知频道 ID — 对应 TS CHAT_CHANNEL_ORDER
 var knownChannelIDs = map[string]bool{
-	"telegram":   true,
-	"whatsapp":   true,
-	"discord":    true,
-	"googlechat": true,
-	"slack":      true,
-	"signal":     true,
-	"imessage":   true,
-	"feishu":     true,
-	"dingtalk":   true,
-	"wecom":      true,
+	"telegram":    true,
+	"whatsapp":    true,
+	"discord":     true,
+	"googlechat":  true,
+	"slack":       true,
+	"signal":      true,
+	"imessage":    true,
+	"feishu":      true,
+	"dingtalk":    true,
+	"wecom":       true,
+	"wechat_mp":   true,
+	"xiaohongshu": true,
+	"website":     true,
 }
 
 // validateIdentityAvatars 验证 agent identity avatar 路径

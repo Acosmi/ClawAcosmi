@@ -208,7 +208,7 @@ const INTERNAL_MESSAGE_CHANNEL: &str = "internal";
 /// The sandbox docs URL.
 ///
 /// Source: `src/commands/sandbox-explain.ts` — `SANDBOX_DOCS_URL`
-const SANDBOX_DOCS_URL: &str = "https://docs.openacosmi.ai/sandbox";
+const SANDBOX_DOCS_URL: &str = "https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/tools/sandbox";
 
 /// Normalize the session key for explain, building a full agent session key
 /// if only a partial key is given.
@@ -550,7 +550,7 @@ pub async fn sandbox_explain_command(opts: &SandboxExplainOptions) -> Result<()>
     lines.push(format!(
         "{} {}",
         Theme::muted("Docs:"),
-        format_docs_link("/sandbox", Some("docs.openacosmi.ai/sandbox"))
+        format_docs_link("/skills/tools/sandbox", Some("Sandbox docs"))
     ));
 
     println!("{}\n", lines.join("\n"));

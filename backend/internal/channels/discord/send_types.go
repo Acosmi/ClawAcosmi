@@ -1,7 +1,7 @@
 package discord
 
 import (
-	"github.com/anthropic/open-acosmi/pkg/retry"
+	"github.com/openacosmi/claw-acismi/pkg/retry"
 )
 
 // Discord 发送类型 — 继承自 src/discord/send.types.ts (159L)

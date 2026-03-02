@@ -572,7 +572,11 @@ function renderSearchResults(props: MemoryProps) {
       <tbody>
         ${results.map((r) => html`
           <tr class="table__row--clickable" @click=${() => props.onSelectMemory(r.id, 0)}>
-            <td>${truncateContent(r.content)}</td>
+            <td>
+              <div style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; max-width: 400px;">
+                ${r.content}
+              </div>
+            </td>
             <td><span class="badge" style="background:${TYPE_COLORS[r.type] ?? "#adb5bd"}20; color:${TYPE_COLORS[r.type] ?? "#adb5bd"}; border:1px solid ${TYPE_COLORS[r.type] ?? "#adb5bd"}40">${translateType(r.type)}</span></td>
             <td><span class="badge badge--outline">${translateCategory(r.category)}</span></td>
             <td>${r.score.toFixed(2)}</td>
@@ -589,51 +593,56 @@ function renderMemoryTable(props: MemoryProps, totalPages: number) {
   if (!props.list || props.list.length === 0) return html`<p class="muted">${t("memory.noMemories")}</p>`;
 
   return html`
-    <table class="table">
-      <thead>
-        <tr>
-          <th>${t("memory.content")}</th>
-          <th>${t("memory.type")}</th>
-          <th>${t("memory.category")}</th>
-          <th>${t("memory.importance")}</th>
-          <th>${t("memory.decayFactor")}</th>
-          <th>${t("memory.createdAt")}</th>
-          <th>${t("memory.actions")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${props.list.map(
-    (mem) => html`
-            <tr
-              class="table__row--clickable ${props.detail?.id === mem.id
-        ? "table__row--active"
-        : ""}"
-              @click=${() => props.onSelectMemory(mem.id, 0)}
-            >
-              <td>${truncateContent(mem.content)}</td>
-              <td><span class="badge" style="background:${TYPE_COLORS[mem.type] ?? "#adb5bd"}20; color:${TYPE_COLORS[mem.type] ?? "#adb5bd"}; border:1px solid ${TYPE_COLORS[mem.type] ?? "#adb5bd"}40">${translateType(mem.type)}</span></td>
-              <td><span class="badge badge--outline">${translateCategory(mem.category)}</span></td>
-              <td>${importanceBar(mem.importanceScore)}</td>
-              <td>${decayDot(mem.decayFactor, mem.retentionPolicy)}</td>
-              <td>${formatTimestamp(mem.createdAt)}</td>
-              <td>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+      ${props.list.map((mem) => html`
+        <div class="card" style="margin-bottom: 0; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;"
+             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';"
+             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';"
+             @click=${() => props.onSelectMemory(mem.id, 0)}>
+          <div class="card__body" style="padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <span class="badge" style="background:${TYPE_COLORS[mem.type] ?? "#adb5bd"}20; color:${TYPE_COLORS[mem.type] ?? "#adb5bd"}; border:1px solid ${TYPE_COLORS[mem.type] ?? "#adb5bd"}40">${translateType(mem.type)}</span>
+                <span class="badge badge--outline">${translateCategory(mem.category)}</span>
+              </div>
+              <div style="display: flex; gap: 4px;">
                 <button
-                  class="btn btn--sm btn--danger"
+                  class="btn btn--xs btn--danger"
+                  style="padding: 2px 6px; font-size: 0.7rem;"
                   @click=${(e: Event) => {
-        e.stopPropagation();
-        if (confirm(t("memory.deleteConfirm"))) {
-          props.onDeleteMemory(mem.id);
-        }
-      }}
+      e.stopPropagation();
+      if (confirm(t("memory.deleteConfirm"))) {
+        props.onDeleteMemory(mem.id);
+      }
+    }}
                 >
                   ${t("memory.delete")}
                 </button>
-              </td>
-            </tr>
-          `,
-  )}
-      </tbody>
-    </table>
+              </div>
+            </div>
+            
+            <div style="color: #495057; font-size: 0.95rem; line-height: 1.5; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-all;">
+              ${mem.content || t("memory.noContent")}
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; border-top: 1px solid #f0f0f0; padding-top: 12px;">
+              <div>
+                <div style="color: #6c757d; margin-bottom: 4px; font-size: 0.75rem;">${t("memory.importance")}</div>
+                ${importanceBar(mem.importanceScore)}
+              </div>
+              <div>
+                <div style="color: #6c757d; margin-bottom: 4px; font-size: 0.75rem;">${t("memory.decayFactor")}</div>
+                ${decayDot(mem.decayFactor, mem.retentionPolicy)}
+              </div>
+            </div>
+            
+            <div style="margin-top: 12px; font-size: 0.75rem; color: #adb5bd; text-align: right;">
+              ${formatTimestamp(mem.createdAt)}
+            </div>
+          </div>
+        </div>
+      `)}
+    </div>
     <!-- Pagination -->
     ${totalPages > 1
       ? html`
@@ -669,56 +678,67 @@ function renderDetailCard(props: MemoryProps) {
   const tierLabels = [t("memory.tierL0"), t("memory.tierL1"), t("memory.tierL2")];
 
   return html`
-    <div class="card">
-      <div class="card__header">
-        <h3>${t("memory.detail")}</h3>
-        <div class="card__actions">
-          <button class="btn btn--sm" @click=${props.onCloseDetail}>&times;</button>
+    <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);" @click=${props.onCloseDetail}>
+      <div class="card" style="width: 90%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: fade-in-up 0.2s ease-out;" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="card__header" style="border-bottom: 1px solid #e9ecef; padding-bottom: 12px;">
+          <h3 style="margin: 0;">${t("memory.detail")}</h3>
+          <div class="card__actions">
+            <button class="btn btn--sm" style="background: transparent; border: none; font-size: 1.5rem; line-height: 1; padding: 0 8px; color: #6c757d;" @click=${props.onCloseDetail}>&times;</button>
+          </div>
         </div>
-      </div>
-      <div class="card__body">
-        <!-- Top: type / category / retention pills + created time -->
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:0.75rem">
-          <span class="badge" style="background:${TYPE_COLORS[d.type] ?? "#adb5bd"}20; color:${TYPE_COLORS[d.type] ?? "#adb5bd"}; border:1px solid ${TYPE_COLORS[d.type] ?? "#adb5bd"}40">${translateType(d.type)}</span>
-          <span class="badge badge--outline">${translateCategory(d.category)}</span>
-          <span class="badge badge--outline" style="font-size:0.72rem">${d.retentionPolicy}</span>
-          <span style="margin-left:auto; font-size:0.78rem; color:#6c757d">${formatTimestamp(d.createdAt)}</span>
-        </div>
+        <div class="card__body" style="overflow-y: auto; padding: 20px;">
+          <!-- Top: type / category / retention pills + created time -->
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:1rem">
+            <span class="badge" style="background:${TYPE_COLORS[d.type] ?? "#adb5bd"}20; color:${TYPE_COLORS[d.type] ?? "#adb5bd"}; border:1px solid ${TYPE_COLORS[d.type] ?? "#adb5bd"}40; font-size: 0.85rem; padding: 4px 10px;">${translateType(d.type)}</span>
+            <span class="badge badge--outline" style="font-size: 0.85rem; padding: 4px 10px;">${translateCategory(d.category)}</span>
+            <span class="badge badge--outline" style="font-size:0.75rem; padding: 4px 10px; border-color: #dee2e6;">${d.retentionPolicy}</span>
+            <span style="margin-left:auto; font-size:0.85rem; color:#6c757d">${formatTimestamp(d.createdAt)}</span>
+          </div>
 
-        <!-- Middle: importance + decay + access stats -->
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:1rem;">
-          <div>
-            <div style="font-size:0.78rem; color:#6c757d; margin-bottom:4px">${t("memory.importance")}</div>
-            ${importanceBar(d.importanceScore)}
+          <!-- Middle: importance + decay + access stats -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:16px; margin-bottom:20px; background: #f8f9fa; padding: 16px; border-radius: 8px;">
+            <div>
+              <div style="font-size:0.8rem; font-weight: 500; color:#495057; margin-bottom:8px">${t("memory.importance")}</div>
+              ${importanceBar(d.importanceScore)}
+            </div>
+            <div>
+              <div style="font-size:0.8rem; font-weight: 500; color:#495057; margin-bottom:8px">${t("memory.decayFactor")}</div>
+              ${decayDot(d.decayFactor, d.retentionPolicy)}
+            </div>
+            <div>
+              <div style="font-size:0.8rem; font-weight: 500; color:#495057; margin-bottom:8px">${t("memory.accessCount")}</div>
+              <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size:1.1rem; font-weight: 600;">${d.accessCount}</span>
+                ${d.lastAccessedAt ? html`<span style="font-size:0.75rem; color:#6c757d;">${formatRelativeTimestamp(d.lastAccessedAt * 1000)}</span>` : nothing}
+              </div>
+            </div>
           </div>
-          <div>
-            <div style="font-size:0.78rem; color:#6c757d; margin-bottom:4px">${t("memory.decayFactor")}</div>
-            ${decayDot(d.decayFactor, d.retentionPolicy)}
-          </div>
-          <div>
-            <div style="font-size:0.78rem; color:#6c757d; margin-bottom:4px">${t("memory.accessCount")}</div>
-            <span style="font-size:0.85rem">${d.accessCount}</span>
-            ${d.lastAccessedAt ? html`<span style="font-size:0.72rem; color:#6c757d; margin-left:6px">${formatRelativeTimestamp(d.lastAccessedAt * 1000)}</span>` : nothing}
-          </div>
-        </div>
 
-        <!-- Bottom: L0/L1/L2 Tabs -->
-        <div class="tabs" style="margin-top: 0.5rem">
-          ${[0, 1, 2].map(
+          <!-- Bottom: L0/L1/L2 Tabs -->
+          <div class="tabs" style="margin-top: 1rem; border-bottom: 1px solid #dee2e6;">
+            ${[0, 1, 2].map(
     (lvl) => html`
-              <button
-                class="tab ${props.detailLevel === lvl ? "tab--active" : ""}"
-                @click=${() => props.onDetailLevel(lvl)}
-              >
-                ${tierLabels[lvl]}
-              </button>
-            `,
+                <button
+                  class="tab ${props.detailLevel === lvl ? "tab--active" : ""}"
+                  style="font-size: 0.95rem; padding: 8px 16px;"
+                  @click=${() => props.onDetailLevel(lvl)}
+                >
+                  ${tierLabels[lvl]}
+                </button>
+              `,
   )}
-        </div>
-        <div class="code-block" style="margin-top: 0.5rem">
-          <pre>${d.vfsContent || t("memory.noContent")}</pre>
+          </div>
+          <div class="code-block" style="margin-top: 1rem; background: #fafafa; border: 1px solid #eaeaea; border-radius: 6px; padding: 16px; max-height: 400px; overflow-y: auto;">
+            <pre style="margin: 0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;">${d.vfsContent || t("memory.noContent")}</pre>
+          </div>
         </div>
       </div>
+      <style>
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      </style>
     </div>
   `;
 }

@@ -19,11 +19,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- Provider 定义 ----------
@@ -624,7 +624,11 @@ func RunOnboardingWizardAdvanced(deps WizardOnboardingDeps, startFromPhase ...in
 					return err
 				}
 				if fmt.Sprint(action) == "reset" {
+					// Reset 仅清除 models/agents/auth 配置，保留 channels 配置，
+					// 避免已配置的飞书/钉钉/企微等频道在重置 API Key 后意外丢失。
+					savedChannels := baseConfig.Channels
 					baseConfig = &types.OpenAcosmiConfig{}
+					baseConfig.Channels = savedChannels
 				}
 			}
 		}
@@ -651,7 +655,7 @@ func RunOnboardingWizardAdvanced(deps WizardOnboardingDeps, startFromPhase ...in
 				// Remote 模式：仅配置远程 URL + token
 				urlInput, err := prompter.Text(
 					"Remote gateway URL",
-					"ws://192.168.1.100:18789",
+					"ws://192.168.1.100:19001",
 					"",
 					false,
 				)
@@ -857,7 +861,7 @@ func requireRiskAcknowledgement(prompter WizardPrompter) error {
 			"- Pairing/allowlists + mention gating.\n"+
 			"- Sandbox + least-privilege tools.\n"+
 			"- Keep secrets out of the agent's reachable filesystem.\n\n"+
-			"Must read: https://docs.openacosmi.ai/gateway/security",
+			"Must read: docs/skills/general/security/SKILL.md",
 		"Security",
 	); err != nil {
 		return err

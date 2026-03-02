@@ -5,8 +5,8 @@ package feishu
 import (
 	"fmt"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 const (

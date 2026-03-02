@@ -1,0 +1,19 @@
+[package]
+name = "oa-cmd-system"
+description = "System events, heartbeat, and presence commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+oa-infra.workspace = true
+oa-config.workspace = true
+oa-types.workspace = true
+
+[lints]
+workspace = true

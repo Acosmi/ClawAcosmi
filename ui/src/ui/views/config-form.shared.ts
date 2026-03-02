@@ -1,4 +1,5 @@
 import type { ConfigUiHints } from "../types.ts";
+import { t, getLocale } from "../i18n.ts";
 
 export type JsonSchema = {
   type?: string | string[];
@@ -102,4 +103,22 @@ export function isSensitivePath(path: Array<string | number>): boolean {
     key.includes("apikey") ||
     key.endsWith("key")
   );
+}
+
+/**
+ * Localize a schema-driven label.
+ * The backend sends English labels in uiHints; this function looks up a
+ * translated variant keyed by `configField.<dotPath>` when the locale is
+ * not English.  Falls back to `fallbackLabel` when no translation exists.
+ */
+export function localizeSchemaLabel(
+  path: Array<string | number>,
+  fallbackLabel: string,
+): string {
+  if (getLocale() === "en") {
+    return fallbackLabel;
+  }
+  const key = pathKey(path);
+  const localized = t(`configField.${key}` as any);
+  return localized && localized !== `configField.${key}` ? localized : fallbackLabel;
 }

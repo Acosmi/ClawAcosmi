@@ -4,9 +4,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Telegram 草稿流分块 — 继承自 src/telegram/draft-chunking.ts (42L)

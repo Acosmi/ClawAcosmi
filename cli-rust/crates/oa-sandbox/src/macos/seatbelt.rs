@@ -81,7 +81,7 @@ pub fn generate_profile(config: &SandboxConfig) -> Result<SandboxProfile, Sandbo
         SecurityLevel::L0Deny => {
             sbpl.push_str("(allow file-read* (subpath workspace-dir))\n");
         }
-        SecurityLevel::L1Sandbox | SecurityLevel::L2Full => {
+        SecurityLevel::L1Allowlist | SecurityLevel::L2Sandboxed => {
             sbpl.push_str("(allow file-read* file-write* (subpath workspace-dir))\n");
         }
     }
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn profile_l1_sandbox_has_readwrite_workspace() {
-        let (config, _td) = test_config(SecurityLevel::L1Sandbox, None);
+        let (config, _td) = test_config(SecurityLevel::L1Allowlist, None);
         let profile = generate_profile(&config).unwrap();
         assert!(profile.sbpl.contains("file-write*"));
         // L1 default network is Restricted
@@ -344,14 +344,14 @@ mod tests {
 
     #[test]
     fn profile_host_network_allows_all() {
-        let (config, _td) = test_config(SecurityLevel::L2Full, Some(NetworkPolicy::Host));
+        let (config, _td) = test_config(SecurityLevel::L2Sandboxed, Some(NetworkPolicy::Host));
         let profile = generate_profile(&config).unwrap();
         assert!(profile.sbpl.contains("(allow network*)"));
     }
 
     #[test]
     fn profile_has_required_header() {
-        let (config, _td) = test_config(SecurityLevel::L1Sandbox, None);
+        let (config, _td) = test_config(SecurityLevel::L1Allowlist, None);
         let profile = generate_profile(&config).unwrap();
         assert!(
             profile
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn profile_params_contain_workspace() {
-        let (config, td) = test_config(SecurityLevel::L1Sandbox, None);
+        let (config, td) = test_config(SecurityLevel::L1Allowlist, None);
         let profile = generate_profile(&config).unwrap();
         // Workspace param should be the canonicalized path
         let canonical = td.path().canonicalize().unwrap();

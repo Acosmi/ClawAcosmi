@@ -11,7 +11,7 @@ import (
 	"net/textproto"
 	"strings"
 
-	pkgmedia "github.com/anthropic/open-acosmi/pkg/media"
+	pkgmedia "github.com/openacosmi/claw-acismi/pkg/media"
 )
 
 // Discord 媒体发送工具 — 继承自 src/discord/send.shared.ts sendDiscordMedia (L339-396)

@@ -3,7 +3,7 @@ package runner
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ============================================================================
@@ -57,6 +57,14 @@ type PendingToolCall struct {
 	Arguments string `json:"arguments"`
 }
 
+// ---------- 媒体块 ----------
+
+// MediaBlock 工具产出的媒体块（图片等）。
+type MediaBlock struct {
+	MimeType string `json:"mimeType"`
+	Base64   string `json:"base64"`
+}
+
 // ---------- 运行结果 ----------
 
 // EmbeddedPiRunResult 嵌入式 PI 运行结果。
@@ -69,11 +77,13 @@ type EmbeddedPiRunResult struct {
 
 // RunPayload 运行输出负载。
 type RunPayload struct {
-	Text      string   `json:"text,omitempty"`
-	MediaURL  string   `json:"mediaUrl,omitempty"`
-	MediaURLs []string `json:"mediaUrls,omitempty"`
-	ReplyToID string   `json:"replyToId,omitempty"`
-	IsError   bool     `json:"isError,omitempty"`
+	Text          string   `json:"text,omitempty"`
+	MediaURL      string   `json:"mediaUrl,omitempty"`
+	MediaURLs     []string `json:"mediaUrls,omitempty"`
+	MediaBase64   string   `json:"mediaBase64,omitempty"`
+	MediaMimeType string   `json:"mediaMimeType,omitempty"`
+	ReplyToID     string   `json:"replyToId,omitempty"`
+	IsError       bool     `json:"isError,omitempty"`
 }
 
 // MessagingToolSend 消息工具发送目标。
@@ -152,9 +162,43 @@ type RunEmbeddedPiAgentParams struct {
 	WaitForApproval func(ctx context.Context) bool `json:"-"`
 	// SecurityLevelFunc 动态获取当前有效安全级别（由 server.go 注入）
 	SecurityLevelFunc func() string `json:"-"`
+	// MountRequestsFunc 动态获取活跃 grant 的临时挂载请求（由 server.go 注入）。
+	// Phase 3.4: escalation grant → ToolExecParams.MountRequests → CLI --mount。
+	MountRequestsFunc func() []MountRequestForSandbox `json:"-"`
 	// DelegationContract 子 agent 委托合约（可选）——传递到 AttemptParams → ToolExecParams。
 	// nil = 主 agent 无合约限制。
 	DelegationContract *DelegationContract `json:"-"`
+	// PromptMode 提示词模式（"full"|"minimal"|"none"，空 = "full"）。
+	// 子智能体使用 "minimal" 跳过 Self-Update/Messaging/Voice 等无关段落。
+	PromptMode string `json:"promptMode,omitempty"`
+	// OnCoderEvent 子智能体对话频道事件回调（由 server.go SpawnSubagent 注入）。
+	// event: "task_received" | "turn_complete" | "tool_use" | "complete"
+	// data: 事件相关数据（text, toolName, status 等）
+	OnCoderEvent func(event string, data map[string]interface{}) `json:"-"`
+	// OnToolEvent 结构化工具事件回调（由 server.go 注入）。
+	// 工具执行前后调用，用于频道广播工具名称、参数摘要和结果摘要。
+	// nil = 不广播工具事件（默认，向后兼容）。
+	OnToolEvent func(event ToolEvent) `json:"-"`
+	// AgentChannel 异步消息通道（可选，nil = 不支持求助通道）。
+	// Phase 4: 三级指挥体系 — 子智能体执行中异步向主智能体求助。
+	AgentChannel *AgentChannel `json:"-"`
+	// AgentType 子智能体类型（可选，空字符串 = 主智能体）。
+	// 值: "coder" / "argus" / "media"
+	// 传递到 AttemptParams.AgentType，用于按类型注入子智能体专属工具。
+	AgentType string `json:"agentType,omitempty"`
+}
+
+// ---------- ToolEvent 工具事件 ----------
+
+// ToolEvent 结构化工具事件，用于频道广播。
+type ToolEvent struct {
+	Phase    string `json:"phase"`    // "start" | "end"
+	ToolName string `json:"toolName"` // bash, edit, read, glob, ...
+	ToolID   string `json:"toolId"`   // tool call ID
+	Args     string `json:"args"`     // 参数摘要（截断后，rune-safe）
+	Result   string `json:"result"`   // 结果摘要（仅 end 阶段，截断后）
+	IsError  bool   `json:"isError"`  // 是否失败
+	Duration int64  `json:"duration"` // 执行耗时 ms（仅 end 阶段）
 }
 
 // ---------- Subagent Announce ----------

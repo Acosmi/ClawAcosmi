@@ -24,14 +24,28 @@ const TTL_OPTIONS = [
     { value: 120, label: "2 hours" },
 ];
 
+// 分级 TTL 上限（与后端 permission_escalation.go 保持一致）
+const LEVEL_MAX_TTL: Record<string, number> = {
+    full: 60,        // L3: 60 分钟
+    sandboxed: 240,  // L2: 4 小时
+    allowlist: 480,  // L1: 8 小时
+};
+
+function getFilteredTtlOptions(requestedLevel: string) {
+    const maxTtl = LEVEL_MAX_TTL[requestedLevel] ?? 480;
+    return TTL_OPTIONS.filter(opt => opt.value <= maxTtl);
+}
+
 const LEVEL_LABELS: Record<string, string> = {
     allowlist: "L1 — Allowlist",
-    full: "L2 — Full Access",
+    sandboxed: "L2 — Sandboxed Full",
+    full: "L3 — Bare Machine Full",
 };
 
 const LEVEL_COLORS: Record<string, string> = {
     allowlist: "var(--color-warn, #f59e0b)",
-    full: "var(--color-danger, #ef4444)",
+    sandboxed: "var(--color-danger, #ef4444)",
+    full: "var(--color-critical, #dc2626)",
 };
 
 // ---------- Request popup ----------
@@ -74,7 +88,7 @@ function renderRequestPopup(props: EscalationPopupProps) {
           <div class="escalation-popup__ttl">
             <strong>${t("security.escalation.ttlLabel")}</strong>
             <div class="escalation-popup__ttl-options">
-              ${TTL_OPTIONS.map(opt => html`
+              ${getFilteredTtlOptions(req.requestedLevel).map(opt => html`
                 <button
                   class="escalation-ttl-btn ${props.selectedTtl === opt.value ? "escalation-ttl-btn--active" : ""}"
                   @click=${() => props.onTtlChange(opt.value)}

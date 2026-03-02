@@ -14,16 +14,18 @@ package gateway
 //   routing: NormalizeAgentID
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/agents/skills"
-	"github.com/anthropic/open-acosmi/internal/argus"
-	"github.com/anthropic/open-acosmi/internal/routing"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/agents/skills"
+	"github.com/openacosmi/claw-acismi/internal/argus"
+	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // SkillsHandlers 返回 skills.* 方法映射。
@@ -153,14 +155,16 @@ func handleSkillsStatus(ctx *MethodHandlerContext) {
 		// 检查 VFS 分级状态
 		distributed := false
 		distributedAt := ""
-		if vfs := ctx.Context.UHMSVFS(); vfs != nil {
-			cat := skills.ResolveSkillCategory(e)
-			if meta, err := vfs.ReadSystemMeta("skills", cat, e.Skill.Name); err == nil {
-				if d, ok := meta["distributed"].(bool); ok && d {
-					distributed = true
-				}
-				if t, ok := meta["distributed_at"].(string); ok {
-					distributedAt = t
+		if mgr := ctx.Context.UHMSManager; mgr != nil {
+			if vfs := mgr.VFS(); vfs != nil {
+				cat := skills.ResolveSkillCategory(e)
+				if meta, err := vfs.ReadSystemMeta("skills", cat, e.Skill.Name); err == nil {
+					if d, ok := meta["distributed"].(bool); ok && d {
+						distributed = true
+					}
+					if t, ok := meta["distributed_at"].(string); ok {
+						distributedAt = t
+					}
 				}
 			}
 		}
@@ -407,6 +411,59 @@ func handleSkillsUpdate(ctx *MethodHandlerContext) {
 		"skillKey": skillKey,
 		"config":   current,
 	}, nil)
+}
+
+// ---------- skills.distribute ----------
+// 将技能解析为 L0/L1/L2 写入 VFS，并在 Qdrant 中建立索引。
+
+func handleSkillsDistribute(ctx *MethodHandlerContext) {
+	mgr := ctx.Context.UHMSManager
+	if mgr == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeServiceUnavailable, "UHMS manager not available"))
+		return
+	}
+	vfs := mgr.VFS()
+	if vfs == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeServiceUnavailable, "UHMS VFS not initialized"))
+		return
+	}
+
+	loader := ctx.Context.ConfigLoader
+	if loader == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "config not available"))
+		return
+	}
+	cfg, err := loader.LoadConfig()
+	if err != nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "failed to load config: "+err.Error()))
+		return
+	}
+
+	agentID := scope.ResolveDefaultAgentId(cfg)
+	workspaceDir := scope.ResolveAgentWorkspaceDir(cfg, agentID)
+	bundledDir := skills.ResolveBundledSkillsDir("")
+	entries := skills.LoadSkillEntries(workspaceDir, "", bundledDir, cfg)
+
+	// 获取真实 vectorIndex（非 nil 时 Qdrant 索引生效）
+	vi := mgr.VectorIndex()
+
+	result, err := skills.DistributeSkills(context.Background(), vfs, vi, entries)
+	if err != nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "distribute failed: "+err.Error()))
+		return
+	}
+
+	// 标记技能已分级到 boot.json（供运行器 Boot 模式检测）
+	if bm := ctx.Context.UHMSBootMgr; bm != nil {
+		totalCount := result.Indexed + result.Skipped
+		if markErr := bm.MarkSkillsIndexed(totalCount); markErr != nil {
+			slog.Warn("skills.distribute: MarkSkillsIndexed failed (non-fatal)", "error", markErr)
+		} else {
+			slog.Info("skills.distribute: boot mode activated", "totalSkills", totalCount)
+		}
+	}
+
+	ctx.Respond(true, result, nil)
 }
 
 // ---------- 辅助函数 ----------

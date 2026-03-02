@@ -5,7 +5,7 @@ package imessage
 import (
 	"encoding/json"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // iMessage 监控类型定义 — 继承自 src/imessage/monitor/types.ts (41L)

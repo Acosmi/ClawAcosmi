@@ -7,26 +7,64 @@ package runner
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
-	"github.com/anthropic/open-acosmi/internal/sandbox"
+	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/sandbox"
 )
+
+// SandboxExecOptions 原生沙箱执行选项（options struct 模式，未来扩展不破坏接口）。
+type SandboxExecOptions struct {
+	Cmd           string
+	Args          []string
+	Env           map[string]string
+	TimeoutMs     int64
+	SecurityLevel string                   // "allowlist" (L1) | "sandboxed" (L2)
+	Workspace     string                   // 实际项目工作区目录（F-07 修复）
+	MountRequests []MountRequestForSandbox // L2 临时挂载请求（Phase 3.4）
+}
+
+// MountRequestForSandbox 沙箱挂载请求（runner 包本地类型，不依赖 gateway）。
+type MountRequestForSandbox struct {
+	HostPath  string // 宿主机绝对路径
+	MountMode string // "ro" 或 "rw"
+}
 
 // NativeSandboxForAgent — runner 包不依赖 sandbox 包的接口。
 // 使 executeBashSandboxed 可通过原生沙箱 Worker 执行命令（IPC），
-// 而非 Docker 容器。由 gateway/server.go 的 adapter 实现。
+// 而非 Docker 容器。由 gateway/server.go 的 NativeSandboxRouter adapter 实现。
+//
+// securityLevel 路由:
+//   - "allowlist" (L1): 持久 Worker IPC (<1ms)
+//   - "sandboxed" (L2): 一次性 CLI sandbox run (~50ms，仅提权期间)
 type NativeSandboxForAgent interface {
-	ExecuteSandboxed(ctx context.Context, cmd string, args []string, env map[string]string, timeoutMs int64) (stdout, stderr string, exitCode int, err error)
+	ExecuteSandboxed(ctx context.Context, opts SandboxExecOptions) (stdout, stderr string, exitCode int, err error)
+}
+
+// MediaSubsystemForAgent — runner 包不依赖 media 包的最小接口。
+// 由 media.MediaSubsystem 实现，提供媒体工具的定义查询和执行。
+type MediaSubsystemForAgent interface {
+	// ToolNames 返回所有已注册媒体工具名列表。
+	ToolNames() []string
+	// GetToolDef 按名字获取 LLM 工具定义。
+	GetToolDef(name string) (json.RawMessage, string, bool) // (inputSchema, description, ok)
+	// ExecuteTool 执行媒体工具调用。
+	ExecuteTool(ctx context.Context, name string, inputJSON json.RawMessage) (string, error)
+	// BuildSystemPrompt 构建媒体子智能体系统提示词。
+	// contractPrompt 为合约格式化文本（由 DelegationContract.FormatForSystemPrompt() 生成）。
+	BuildSystemPrompt(task, contractPrompt, sessionKey string) string
 }
 
 // ToolExecParams 工具执行参数。
@@ -37,13 +75,13 @@ type ToolExecParams struct {
 	// 权限守卫
 	AllowWrite   bool // 是否允许写文件
 	AllowExec    bool // 是否允许执行命令
-	AllowNetwork bool // 是否允许网络访问（预留）
+	AllowNetwork bool // 是否允许网络访问: L2(sandboxed)/L3(full)=true, L0(deny)/L1(allowlist)=false
 	SandboxMode  bool // L1 沙箱模式: bash 通过 Docker 容器执行
 	// P3: 命令规则引擎
 	Rules []infra.CommandRule // Allow/Ask/Deny 规则集
 	// 权限拒绝事件回调
 	OnPermissionDenied func(tool, detail string) // 通知网关广播 WebSocket 事件
-	SecurityLevel      string                    // 当前安全级别 ("deny"/"allowlist"/"full")
+	SecurityLevel      string                    // 当前安全级别 ("deny"/"allowlist"/"sandboxed"/"full")
 	// Argus 视觉子智能体（可选，nil = 不可用）
 	ArgusBridge ArgusBridgeForAgent
 	// Argus 审批模式: "none" / "medium_and_above" / "all"（默认 medium_and_above）
@@ -59,6 +97,9 @@ type ToolExecParams struct {
 	SkillsCache map[string]string
 	// UHMS 记忆系统 Bridge（可选，nil = 不可用）
 	UHMSBridge UHMSBridgeForAgent
+	// SessionKey 当前会话标识（用于判断渠道来源，如 "feishu:<chatID>"）。
+	// 非 Web 渠道无法响应 coder confirm 弹窗，自动 bypass 确认。
+	SessionKey string
 	// SpawnSubagent 子智能体生成回调（可选，nil = spawn_coder_agent 返回合约但不启动 session）
 	// 由 gateway/server.go 注入实现。
 	SpawnSubagent SpawnSubagentFunc
@@ -67,11 +108,57 @@ type ToolExecParams struct {
 	// ScopePaths 合约允许的路径列表（从 DelegationContract.Scope 提取）。
 	// 非空时，工具路径校验使用此列表替代 WorkspaceDir 单根。
 	ScopePaths []string
+	// WebSearchProvider 网页搜索 provider（可选，nil = web_search 工具不可用）
+	WebSearchProvider interface {
+		Search(ctx context.Context, query string, maxResults int) ([]WebSearchResult, error)
+	}
+	// BrowserEvaluateEnabled 是否允许 browser evaluate 动作（JS 执行）。
+	// 由 BrowserConfig.EvaluateEnabled 控制，默认 true。
+	BrowserEvaluateEnabled bool
+	// Phase 6: 合约持久化（可选，nil = 恢复上下文不可用）
+	ContractStore ContractPersistence
+	// BrowserController 浏览器控制器（可选，nil = browser 工具不可用）
+	BrowserController interface {
+		Navigate(ctx context.Context, url string) error
+		GetContent(ctx context.Context) (string, error)
+		Click(ctx context.Context, selector string) error
+		Type(ctx context.Context, selector, text string) error
+		Screenshot(ctx context.Context) ([]byte, string, error)
+		Evaluate(ctx context.Context, script string) (any, error)
+		WaitForSelector(ctx context.Context, selector string) error
+		GoBack(ctx context.Context) error
+		GoForward(ctx context.Context) error
+		GetURL(ctx context.Context) (string, error)
+		// Phase 1: ARIA 快照 + ref 元素交互
+		SnapshotAI(ctx context.Context) (map[string]any, error)
+		ClickRef(ctx context.Context, ref string) error
+		FillRef(ctx context.Context, ref, text string) error
+		// Phase 4: Mariner AI 循环
+		AIBrowse(ctx context.Context, goal string) (string, error)
+	}
+	// MediaSender 媒体文件发送器（可选，nil = send_media 工具不可用）
+	MediaSender interface {
+		SendMedia(ctx context.Context, channelID, to string, data []byte, mimeType, message string) error
+	}
+	// QualityReviewFn 质量审核回调（可选，nil = 跳过 LLM 语义审核，只做规则预检）
+	// Phase 2: 三级指挥体系 — 子智能体结果质量审核
+	QualityReviewFn QualityReviewFunc
+	// ResultApprovalMgr 结果签收管理器（可选，nil = 跳过最终交付门控）
+	// Phase 3: 三级指挥体系 — 质量审核通过后用户签收
+	ResultApprovalMgr *ResultApprovalManager
+	// AgentChannel 异步消息通道（可选，nil = 不支持求助工具）
+	// Phase 4: 三级指挥体系 — 子智能体执行中异步向主智能体求助
+	AgentChannel *AgentChannel
+	// MountRequests L2 提权期间的临时挂载请求（Phase 3.4，从 escalation grant 注入）。
+	MountRequests []MountRequestForSandbox
+	// MediaSubsystem 媒体子系统（可选，nil = 媒体工具不可用）。
+	// 提供 trending_topics / content_compose / media_publish / social_interact 工具。
+	MediaSubsystem MediaSubsystemForAgent
 }
 
 // ExecuteToolCall 执行工具调用并返回文本结果。
 // 当前支持: bash, read_file, write_file, list_dir, search, glob
-// 延迟: browser, message, mcp, notebook_edit 等高级工具
+// 延迟: message, notebook_edit 等高级工具
 func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
 	switch name {
 	case "bash":
@@ -85,6 +172,14 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 				params.OnPermissionDenied("bash", cmdStr)
 			}
 			return formatPermissionDenied("bash", cmdStr, params.SecurityLevel), nil
+		}
+		// Phase 8: 资源预算检查
+		if params.DelegationContract != nil && params.DelegationContract.Budget != nil {
+			budget := params.DelegationContract.Budget
+			if exhausted, reason := budget.IsExhausted(); exhausted {
+				return fmt.Sprintf("[bash] Resource budget exhausted: %s", reason), nil
+			}
+			budget.IncrementBashCalls()
 		}
 		// P3: 命令规则引擎检查
 		if len(params.Rules) > 0 {
@@ -106,35 +201,56 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 							"rule", ruleResult.Rule.Pattern,
 							"ruleId", ruleResult.Rule.ID,
 						)
-						// Fail-closed: 无审批门控时直接拒绝，不允许 LLM 忽略后继续执行
-						if params.CoderConfirmation == nil {
-							slog.Warn("ask rule triggered but no approval gate, fail-closed deny",
+						// Fix 1: 非 Web 渠道走 CoderConfirmation（如果可用），否则 fail-closed
+						if isNonWebChannel(params.SessionKey) {
+							if params.CoderConfirmation != nil {
+								approved, approvalErr := params.CoderConfirmation.RequestConfirmation(ctx, "bash", inputJSON, params.SessionKey)
+								if approvalErr != nil {
+									return fmt.Sprintf("[Command approval error on non-web channel] %v", approvalErr), nil
+								}
+								if !approved {
+									return fmt.Sprintf("[Command denied on non-web channel: %s]", ruleResult.Rule.Pattern), nil
+								}
+							} else {
+								slog.Warn("ask rule triggered but no approval gate on non-web channel, fail-closed deny",
+									"command", bi.Command,
+									"rule", ruleResult.Rule.Pattern,
+									"sessionKey", params.SessionKey,
+								)
+								return fmt.Sprintf("[Command blocked: no approval gate available for rule %s on non-web channel]", ruleResult.Rule.Pattern), nil
+							}
+							// approved: fall through → 继续执行
+						} else {
+							// Fail-closed: 无审批门控时直接拒绝，不允许 LLM 忽略后继续执行
+							if params.CoderConfirmation == nil {
+								slog.Warn("ask rule triggered but no approval gate, fail-closed deny",
+									"command", bi.Command,
+									"rule", ruleResult.Rule.Pattern,
+								)
+								return fmt.Sprintf("[Command blocked: no approval gate available for rule %s] %s", ruleResult.Rule.Pattern, ruleResult.Reason), nil
+							}
+							// 真正阻塞：广播审批请求到前端，等待用户 allow/deny 或超时
+							approved, approvalErr := params.CoderConfirmation.RequestConfirmation(ctx, "bash", inputJSON, params.SessionKey)
+							if approvalErr != nil {
+								slog.Error("command approval request failed",
+									"command", bi.Command,
+									"error", approvalErr,
+								)
+								return fmt.Sprintf("[Command blocked: approval error] %v", approvalErr), nil
+							}
+							if !approved {
+								slog.Info("command denied by user approval",
+									"command", bi.Command,
+									"rule", ruleResult.Rule.Pattern,
+								)
+								return fmt.Sprintf("[Command denied by user: %s] %s", ruleResult.Rule.Pattern, ruleResult.Reason), nil
+							}
+							slog.Info("command approved by user",
 								"command", bi.Command,
 								"rule", ruleResult.Rule.Pattern,
 							)
-							return fmt.Sprintf("[Command blocked: no approval gate available for rule %s] %s", ruleResult.Rule.Pattern, ruleResult.Reason), nil
 						}
-						// 真正阻塞：广播审批请求到前端，等待用户 allow/deny 或超时
-						approved, approvalErr := params.CoderConfirmation.RequestConfirmation(ctx, "bash", inputJSON)
-						if approvalErr != nil {
-							slog.Error("command approval request failed",
-								"command", bi.Command,
-								"error", approvalErr,
-							)
-							return fmt.Sprintf("[Command blocked: approval error] %v", approvalErr), nil
-						}
-						if !approved {
-							slog.Info("command denied by user approval",
-								"command", bi.Command,
-								"rule", ruleResult.Rule.Pattern,
-							)
-							return fmt.Sprintf("[Command denied by user: %s] %s", ruleResult.Rule.Pattern, ruleResult.Reason), nil
-						}
-						slog.Info("command approved by user",
-							"command", bi.Command,
-							"rule", ruleResult.Rule.Pattern,
-						)
-						// approved: fall through → 继续执行
+						// approved / auto-approved: fall through → 继续执行
 					}
 				}
 			}
@@ -168,9 +284,28 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 	case "glob":
 		return executeGlob(inputJSON, params)
 	case "lookup_skill":
-		return executeLookupSkill(inputJSON, params)
+		return executeLookupSkill(ctx, inputJSON, params)
+	case "search_skills":
+		return executeSearchSkills(ctx, inputJSON, params)
 	case "spawn_coder_agent":
 		return executeSpawnCoderAgent(ctx, inputJSON, params)
+	case "spawn_argus_agent":
+		return executeSpawnArgusAgent(ctx, inputJSON, params)
+	case "spawn_media_agent":
+		return executeSpawnMediaAgent(ctx, inputJSON, params)
+	case "request_help":
+		return ExecuteRequestHelp(inputJSON, params.AgentChannel)
+	case "web_search":
+		return executeWebSearch(ctx, inputJSON, params)
+	case "browser":
+		return executeBrowserTool(ctx, inputJSON, params)
+	case "send_media":
+		return executeSendMedia(ctx, inputJSON, params)
+	case "trending_topics", "content_compose", "media_publish", "social_interact":
+		if params.MediaSubsystem != nil {
+			return params.MediaSubsystem.ExecuteTool(ctx, name, inputJSON)
+		}
+		return fmt.Sprintf("[Tool %s requires media subsystem]", name), nil
 	case "notebook_edit":
 		return "[Tool notebook_edit is not yet implemented in Go runtime]", nil
 	case "mcp":
@@ -269,6 +404,38 @@ func executeBashSandboxed(ctx context.Context, inputJSON json.RawMessage, params
 		return "", fmt.Errorf("bash: empty command")
 	}
 
+	// 原生沙箱写操作防护 (Bug #1 修复):
+	// NativeSandbox Worker 通过 IPC 在宿主机执行，拥有完整文件系统权限。
+	// 在 L1 (allowlist) 安全级别下，write_file 被 AllowWrite 门控，
+	// 但 bash redirect (>, >>, tee, sed -i) 可绕过。此处是对等防线。
+	if params.NativeSandbox != nil && looksLikeBashWrite(input.Command) {
+		slog.Info("native sandbox write detection triggered",
+			"command", input.Command,
+			"security", params.SecurityLevel,
+		)
+		if params.CoderConfirmation != nil {
+			approved, err := params.CoderConfirmation.RequestConfirmation(ctx, "bash (write detected)", inputJSON, params.SessionKey)
+			if err != nil {
+				return fmt.Sprintf("[Write operation approval error: %v]", err), nil
+			}
+			if !approved {
+				return "[Command blocked: bash write operation requires approval in native sandbox mode]", nil
+			}
+			// approved: fall through to execution
+		} else if isNonWebChannel(params.SessionKey) {
+			// 非 Web 渠道无审批门控: fail-closed
+			slog.Warn("native sandbox write blocked (no approval gate on non-web channel)",
+				"command", input.Command,
+				"security", params.SecurityLevel,
+				"sessionKey", params.SessionKey,
+			)
+			return "[Command blocked: bash write operation in native sandbox requires approval (non-web channel)]", nil
+		} else {
+			// Web 渠道无审批门控: fail-closed
+			return "[Command blocked: bash write operation in native sandbox requires approval]", nil
+		}
+	}
+
 	// 优先使用原生沙箱 Worker（IPC 执行，延迟 <1ms）
 	if params.NativeSandbox != nil {
 		return executeBashNativeSandbox(ctx, input.Command, params)
@@ -342,9 +509,14 @@ func executeBashNativeSandbox(ctx context.Context, command string, params ToolEx
 		"security", params.SecurityLevel,
 	)
 
-	stdout, stderr, exitCode, err := params.NativeSandbox.ExecuteSandboxed(
-		ctx, "sh", []string{"-c", command}, nil, params.TimeoutMs,
-	)
+	stdout, stderr, exitCode, err := params.NativeSandbox.ExecuteSandboxed(ctx, SandboxExecOptions{
+		Cmd:           "sh",
+		Args:          []string{"-c", command},
+		TimeoutMs:     params.TimeoutMs,
+		SecurityLevel: params.SecurityLevel,
+		Workspace:     params.WorkspaceDir,
+		MountRequests: params.MountRequests,
+	})
 	if err != nil {
 		return fmt.Sprintf("[Native sandbox error: %s]", err), nil
 	}
@@ -373,6 +545,63 @@ func executeBashNativeSandbox(ctx context.Context, command string, params ToolEx
 	}
 
 	return text, nil
+}
+
+// ---------- bash write-pattern detection ----------
+
+// looksLikeBashWrite 检测 bash 命令是否包含文件写入操作。
+// 用于 NativeSandbox 路径的写操作审批 — 防止通过 shell redirect 绕过 AllowWrite 门控。
+//
+// 检测策略 (defense-in-depth, 非穷举):
+//   - Shell redirect: " > file" / " >> file" (排除 fd redirect 和 /dev/null)
+//   - 写入命令: tee, sed -i, install
+//
+// 注意: Shell 是图灵完备的，此函数无法捕获所有写入方式（如 python -c, eval 等）。
+// 这是一层防御，不是唯一防线。配合 command_rule_presets 的 ask/deny 规则形成纵深防御。
+func looksLikeBashWrite(command string) bool {
+	lower := strings.ToLower(strings.TrimSpace(command))
+
+	// 1. 写入命令检测
+	writeCommands := []string{"tee ", "sed -i ", "sed -i'", "sed -i\""}
+	for _, wc := range writeCommands {
+		if strings.HasPrefix(lower, wc) || strings.Contains(lower, " "+wc) ||
+			strings.Contains(lower, "|"+wc) || strings.Contains(lower, "| "+wc) {
+			return true
+		}
+	}
+	// install 命令（仅作为首个命令时触发，避免 "npm install" 误判）
+	if strings.HasPrefix(lower, "install ") {
+		return true
+	}
+
+	// 2. Shell redirect 检测: " > target" / " >> target"
+	// 排除: fd redirect (2>, 1>), /dev/null 输出抑制, stream merge (&1)
+	for _, op := range []string{" >> ", " > "} {
+		idx := strings.Index(command, op)
+		for idx >= 0 {
+			// 检查 redirect 前是否为 fd 编号 (0-9)
+			if idx > 0 && command[idx-1] >= '0' && command[idx-1] <= '9' {
+				// fd redirect (如 2> /dev/null), 跳过
+				idx = strings.Index(command[idx+len(op):], op)
+				if idx >= 0 {
+					idx += len(op) // 调整为原始字符串中的位置
+				}
+				continue
+			}
+			// 检查 redirect 目标是否为 /dev/null 或 fd merge (&)
+			target := strings.TrimSpace(command[idx+len(op):])
+			if strings.HasPrefix(target, "/dev/null") || strings.HasPrefix(target, "&") {
+				idx = strings.Index(command[idx+len(op):], op)
+				if idx >= 0 {
+					idx += len(op)
+				}
+				continue
+			}
+			return true // 真正的文件写入 redirect
+		}
+	}
+
+	return false
 }
 
 // ---------- bash (host — L2 宿主机直接执行) ----------
@@ -648,8 +877,9 @@ type lookupSkillInput struct {
 	Name string `json:"name"`
 }
 
-// executeLookupSkill 从缓存返回完整 SKILL.md 内容。
-func executeLookupSkill(inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+// executeLookupSkill 从缓存或 VFS 返回完整 SKILL.md 内容。
+// 降级链: SkillsCache (文件扫描模式) → VFS L2 (Boot 模式)
+func executeLookupSkill(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
 	var input lookupSkillInput
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
 		return "", fmt.Errorf("invalid lookup_skill input: %w", err)
@@ -658,12 +888,11 @@ func executeLookupSkill(inputJSON json.RawMessage, params ToolExecParams) (strin
 		return "", fmt.Errorf("lookup_skill: skill name is required")
 	}
 
-	if params.SkillsCache == nil {
-		return fmt.Sprintf("[Skill %q not found: no skills loaded]", input.Name), nil
-	}
-
-	content, ok := params.SkillsCache[input.Name]
-	if !ok {
+	// 主路径: 从文件扫描缓存读取
+	if params.SkillsCache != nil {
+		if content, ok := params.SkillsCache[input.Name]; ok {
+			return content, nil
+		}
 		// 列出可用技能帮助 LLM 修正
 		var available []string
 		for name := range params.SkillsCache {
@@ -672,7 +901,548 @@ func executeLookupSkill(inputJSON json.RawMessage, params ToolExecParams) (strin
 		return fmt.Sprintf("[Skill %q not found. Available skills: %s]", input.Name, strings.Join(available, ", ")), nil
 	}
 
-	return content, nil
+	// 降级路径: Boot 模式 → VFS 搜索 + L2 读取
+	if params.UHMSBridge != nil {
+		// 先精确搜索找到 category
+		hits, err := params.UHMSBridge.SearchSkillsVFS(ctx, input.Name, 5)
+		if err != nil {
+			return fmt.Sprintf("[lookup_skill: VFS search failed: %v]", err), nil
+		}
+		for _, h := range hits {
+			if strings.EqualFold(h.Name, input.Name) {
+				content, readErr := params.UHMSBridge.ReadSkillVFS(ctx, h.Category, h.Name)
+				if readErr != nil {
+					return fmt.Sprintf("[lookup_skill: VFS read failed for %q: %v]", input.Name, readErr), nil
+				}
+				return content, nil
+			}
+		}
+		return fmt.Sprintf("[Skill %q not found in VFS index]", input.Name), nil
+	}
+
+	return fmt.Sprintf("[Skill %q not found: no skills loaded]", input.Name), nil
+}
+
+// ---------- search_skills ----------
+
+type searchSkillsInput struct {
+	Query string `json:"query"`
+	TopK  int    `json:"top_k,omitempty"`
+}
+
+// executeSearchSkills 搜索技能索引（VFS/Qdrant），返回匹配技能的 L0 摘要。
+// 降级链: UHMSBridge.SearchSkillsVFS → SkillsCache 关键词过滤
+func executeSearchSkills(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	var input searchSkillsInput
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return "", fmt.Errorf("invalid search_skills input: %w", err)
+	}
+	if input.Query == "" {
+		return "", fmt.Errorf("search_skills: query is required")
+	}
+	topK := input.TopK
+	if topK <= 0 {
+		topK = 10
+	}
+
+	// 主路径: VFS/Qdrant 搜索
+	if params.UHMSBridge != nil {
+		distributing := params.UHMSBridge.IsSkillsDistributing()
+		hits, err := params.UHMSBridge.SearchSkillsVFS(ctx, input.Query, topK)
+		if err != nil {
+			slog.Warn("search_skills: VFS search failed, trying cache fallback", "error", err)
+			// fall through → SkillsCache 降级（F-3: 下方统一追加 distributing note）
+		} else if len(hits) > 0 {
+			result := formatSkillSearchHits(hits)
+			if distributing {
+				result += "\n[Note: Skills indexing is in progress. Some skills may not appear yet. Retry shortly.]"
+			}
+			return result, nil
+		} else if distributing && params.SkillsCache != nil {
+			// F-2: VFS 零结果 + 分发中 + cache 可用 → cache 可能有更完整数据
+			slog.Debug("search_skills: VFS returned 0 during distributing, trying cache fallback")
+			// fall through → SkillsCache 降级
+		} else {
+			// VFS 零结果（非分发中，或 cache 不可用）
+			msg := fmt.Sprintf("[No matching skills found for query %q. Try broader keywords or check available skill categories.]", input.Query)
+			if distributing {
+				msg += "\n[Note: Skills indexing is in progress. More results may appear shortly.]"
+			}
+			return msg, nil
+		}
+	}
+
+	// 降级路径: SkillsCache 关键词过滤
+	if params.SkillsCache != nil {
+		result := searchSkillsCacheFallback(input.Query, topK, params.SkillsCache)
+		// F-3: VFS 错误/零结果降级到 cache，分发中追加 note
+		if params.UHMSBridge != nil && params.UHMSBridge.IsSkillsDistributing() {
+			result += "\n[Note: Skills indexing is in progress. Some skills may not appear yet. Retry shortly.]"
+		}
+		return result, nil
+	}
+
+	return "[No skills index available. Skills may still be loading — retry in a few seconds.]", nil
+}
+
+// formatSkillSearchHits 格式化搜索结果为 LLM 可读文本。
+func formatSkillSearchHits(hits []SkillSearchHit) string {
+	if len(hits) == 0 {
+		return "[No matching skills found]"
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d skills:\n\n", len(hits)))
+	for i, h := range hits {
+		sb.WriteString(fmt.Sprintf("%d. **%s** [%s]\n", i+1, h.Name, h.Category))
+		if h.Abstract != "" {
+			sb.WriteString("   ")
+			sb.WriteString(h.Abstract)
+			sb.WriteString("\n")
+		}
+		sb.WriteByte('\n')
+	}
+	sb.WriteString("Use `lookup_skill` with the skill name to read full content.")
+	return sb.String()
+}
+
+// searchSkillsCacheFallback 在 SkillsCache 中按关键词过滤技能。
+func searchSkillsCacheFallback(query string, topK int, cache map[string]string) string {
+	queryLower := strings.ToLower(query)
+	terms := strings.Fields(queryLower)
+
+	type match struct {
+		name  string
+		score int
+	}
+	var matches []match
+
+	for name, content := range cache {
+		nameLower := strings.ToLower(name)
+		contentLower := strings.ToLower(content)
+		score := 0
+		for _, t := range terms {
+			if strings.Contains(nameLower, t) {
+				score += 3 // name 匹配权重高
+			}
+			if strings.Contains(contentLower, t) {
+				score += 1
+			}
+		}
+		if score > 0 {
+			matches = append(matches, match{name: name, score: score})
+		}
+	}
+
+	// 按分数降序排序
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].score > matches[j].score
+	})
+	if len(matches) > topK {
+		matches = matches[:topK]
+	}
+
+	if len(matches) == 0 {
+		return fmt.Sprintf("[No skills matching %q found]", query)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d skills matching %q:\n\n", len(matches), query))
+	for i, m := range matches {
+		sb.WriteString(fmt.Sprintf("%d. **%s**\n", i+1, m.name))
+	}
+	sb.WriteString("\nUse `lookup_skill` with the skill name to read full content.")
+	return sb.String()
+}
+
+// ---------- channel detection ----------
+
+// isNonWebChannel 判断 sessionKey 是否来自非 Web 渠道（飞书/钉钉/企微等）。
+// 非 Web 渠道无法响应 coder confirm 弹窗，因此自动 bypass 确认流程。
+// sessionKey 格式: "feishu:<chatID>", "dingtalk:<chatID>", "wecom:<fromUser>" 等。
+func isNonWebChannel(sessionKey string) bool {
+	prefixes := []string{"feishu:", "dingtalk:", "wecom:", "slack:", "discord:", "telegram:", "imessage:", "signal:", "whatsapp:", "line:"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(sessionKey, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------- web_search ----------
+
+// executeWebSearch 执行联网搜索并返回格式化结果。
+func executeWebSearch(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	if params.WebSearchProvider == nil {
+		return "[web_search is not available: no search provider configured. Configure bocha or google search API key in settings.]", nil
+	}
+
+	var input struct {
+		Query      string `json:"query"`
+		MaxResults int    `json:"max_results"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return "", fmt.Errorf("invalid web_search input: %w", err)
+	}
+	if input.Query == "" {
+		return "", fmt.Errorf("web_search: query is required")
+	}
+	if input.MaxResults <= 0 {
+		input.MaxResults = 8
+	}
+
+	results, err := params.WebSearchProvider.Search(ctx, input.Query, input.MaxResults)
+	if err != nil {
+		slog.Error("web_search failed", "query", input.Query, "error", err)
+		return fmt.Sprintf("[web_search error: %v]", err), nil
+	}
+
+	if len(results) == 0 {
+		return fmt.Sprintf("[No search results for %q]", input.Query), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Search results for %q (%d results):\n\n", input.Query, len(results)))
+	for i, r := range results {
+		sb.WriteString(fmt.Sprintf("%d. **%s**\n   URL: %s\n", i+1, r.Title, r.URL))
+		if r.Snippet != "" {
+			sb.WriteString("   ")
+			sb.WriteString(r.Snippet)
+			sb.WriteString("\n")
+		}
+		sb.WriteByte('\n')
+	}
+	return sb.String(), nil
+}
+
+// ---------- browser (浏览器自动化工具) ----------
+
+// classifyBrowserError 对浏览器操作错误进行结构化分类。
+// Phase 3.2: Transient(可重试) / Structural(需 LLM 重规划) / Fatal(中止)。
+func classifyBrowserError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	// Fatal: CDP 连接断开 / 页面崩溃
+	if strings.Contains(msg, "websocket") || strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "target closed") || strings.Contains(msg, "page crashed") ||
+		strings.Contains(msg, "context canceled") || strings.Contains(msg, "context deadline") {
+		return "fatal"
+	}
+	// Transient: 元素未加载/不可见/动画中（可能很快就绪）
+	if strings.Contains(msg, "not visible") || strings.Contains(msg, "not stable") ||
+		strings.Contains(msg, "animating") || strings.Contains(msg, "actionability timeout") ||
+		strings.Contains(msg, "not found") {
+		return "transient"
+	}
+	// Structural: 选择器无效 / 元素不存在 / 严格模式冲突
+	return "structural"
+}
+
+// executeBrowserTool 执行浏览器自动化工具调用。
+// 通过 CDP 直连浏览器，比 Argus 屏幕坐标操控更高效精准。
+func executeBrowserTool(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	if params.BrowserController == nil {
+		return "[Browser tool is not configured. Enable browser in config and ensure CDP is running.]", nil
+	}
+
+	var input struct {
+		Action   string `json:"action"`
+		URL      string `json:"url"`
+		Selector string `json:"selector"`
+		Text     string `json:"text"`
+		Script   string `json:"script"`
+		Ref      string `json:"ref"`  // Phase 1: ARIA ref 标识符（如 "e1"），用于 click_ref/fill_ref
+		Goal     string `json:"goal"` // Phase 4: ai_browse 意图目标
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return "", fmt.Errorf("parse browser input: %w", err)
+	}
+
+	bc := params.BrowserController
+
+	switch input.Action {
+	case "navigate":
+		if input.URL == "" {
+			return "[Error: url is required for navigate action]", nil
+		}
+		if err := bc.Navigate(ctx, input.URL); err != nil {
+			return fmt.Sprintf("[Browser navigate error: %s]", err), nil
+		}
+		// Phase 3: 操作后截图验证
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("Navigated to %s", input.URL)), nil
+
+	case "get_content":
+		// Phase 1: 优先返回 ARIA 快照（语义结构 + ref 标注，token 消耗降低 ~80%）。
+		// 降级到 innerText（当 ARIA 不可用时）。
+		snapshot, snapErr := bc.SnapshotAI(ctx)
+		if snapErr == nil && snapshot != nil {
+			if snapText, ok := snapshot["snapshot"].(string); ok && snapText != "" {
+				var sb strings.Builder
+				sb.WriteString("## Page Content (ARIA Accessibility Tree)\n\n")
+				sb.WriteString("Use element refs (e.g. e1, e2) with click_ref/fill_ref for interactions.\n\n")
+				if len(snapText) > 40000 {
+					snapText = truncateForEvent(snapText, 40000)
+				}
+				sb.WriteString(snapText)
+				if refs, ok := snapshot["refs"]; ok {
+					refsJSON, _ := json.Marshal(refs)
+					sb.WriteString(fmt.Sprintf("\n\n## Element Refs\n%s", string(refsJSON)))
+				}
+				return sb.String(), nil
+			}
+		}
+		// 降级: ARIA 不可用，使用 innerText
+		content, err := bc.GetContent(ctx)
+		if err != nil {
+			return fmt.Sprintf("[Browser get_content error: %s]", err), nil
+		}
+		if len(content) > 50000 {
+			content = truncateForEvent(content, 50000)
+		}
+		return content, nil
+
+	case "click":
+		if input.Selector == "" {
+			return "[Error: selector is required for click action]", nil
+		}
+		if err := bc.Click(ctx, input.Selector); err != nil {
+			errClass := classifyBrowserError(err)
+			if errClass == "transient" {
+				return fmt.Sprintf("[Browser click error (transient — element may still be loading, try wait_for or observe first): %s]", err), nil
+			}
+			if errClass == "fatal" {
+				return fmt.Sprintf("[Browser click error (fatal — CDP connection lost): %s]", err), nil
+			}
+			return fmt.Sprintf("[Browser click error (structural — use observe to check page state): %s]", err), nil
+		}
+		// Phase 3: 操作后截图验证
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("Clicked element: %s", input.Selector)), nil
+
+	case "type":
+		if input.Selector == "" || input.Text == "" {
+			return "[Error: selector and text are required for type action]", nil
+		}
+		if err := bc.Type(ctx, input.Selector, input.Text); err != nil {
+			errClass := classifyBrowserError(err)
+			if errClass == "transient" {
+				return fmt.Sprintf("[Browser type error (transient — element may still be loading): %s]", err), nil
+			}
+			if errClass == "fatal" {
+				return fmt.Sprintf("[Browser type error (fatal — CDP connection lost): %s]", err), nil
+			}
+			return fmt.Sprintf("[Browser type error (structural — use observe to check page state): %s]", err), nil
+		}
+		// Phase 3: 操作后截图验证
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("Typed text into: %s", input.Selector)), nil
+
+	case "screenshot":
+		data, mimeType, err := bc.Screenshot(ctx)
+		if err != nil {
+			return fmt.Sprintf("[Browser screenshot error: %s]", err), nil
+		}
+		// D3-F1: 将截图以多模态格式返回，使 LLM 能真正看到图像内容。
+		// 参照 executeArgusTool 的 __MULTIMODAL__ 返回路径。
+		if len(data) > 0 {
+			blocks := []map[string]interface{}{
+				{"type": "text", "text": fmt.Sprintf("Screenshot captured (%s, %d bytes)", mimeType, len(data))},
+				{"type": "image", "source": map[string]interface{}{
+					"type":       "base64",
+					"media_type": mimeType,
+					"data":       base64.StdEncoding.EncodeToString(data),
+				}},
+			}
+			if blocksJSON, jErr := json.Marshal(blocks); jErr == nil {
+				return "__MULTIMODAL__" + string(blocksJSON), nil
+			}
+		}
+		return fmt.Sprintf("Screenshot captured (%s)", mimeType), nil
+
+	case "evaluate":
+		if !params.BrowserEvaluateEnabled {
+			return "[Browser evaluate is disabled by configuration. Set browser.evaluateEnabled=true to enable JavaScript execution.]", nil
+		}
+		if input.Script == "" {
+			return "[Error: script is required for evaluate action]", nil
+		}
+		result, err := bc.Evaluate(ctx, input.Script)
+		if err != nil {
+			return fmt.Sprintf("[Browser evaluate error: %s]", err), nil
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Sprintf("[Browser evaluate: result not serializable: %s]", err), nil
+		}
+		return string(resultJSON), nil
+
+	case "wait_for":
+		if input.Selector == "" {
+			return "[Error: selector is required for wait_for action]", nil
+		}
+		if err := bc.WaitForSelector(ctx, input.Selector); err != nil {
+			return fmt.Sprintf("[Browser wait_for error: %s]", err), nil
+		}
+		return fmt.Sprintf("Element found: %s", input.Selector), nil
+
+	case "go_back":
+		if err := bc.GoBack(ctx); err != nil {
+			return fmt.Sprintf("[Browser go_back error: %s]", err), nil
+		}
+		return "Navigated back", nil
+
+	case "go_forward":
+		if err := bc.GoForward(ctx); err != nil {
+			return fmt.Sprintf("[Browser go_forward error: %s]", err), nil
+		}
+		return "Navigated forward", nil
+
+	case "get_url":
+		url, err := bc.GetURL(ctx)
+		if err != nil {
+			return fmt.Sprintf("[Browser get_url error: %s]", err), nil
+		}
+		return url, nil
+
+	// ---------- Phase 1: ARIA 快照 + ref 元素交互 ----------
+
+	case "observe":
+		// 获取 ARIA 无障碍树快照 + 截图，让 LLM 通过结构化数据理解页面。
+		// 行业对标: browser-use (SOM 标注)、Anthropic CU (AX Tree)、MultiOn (AX Tree)
+		snapshot, snapErr := bc.SnapshotAI(ctx)
+		data, mimeType, scrErr := bc.Screenshot(ctx)
+
+		var parts []string
+
+		// ARIA 快照部分
+		if snapErr != nil {
+			parts = append(parts, fmt.Sprintf("[ARIA snapshot error: %s]", snapErr))
+		} else if snapshot != nil {
+			if snapText, ok := snapshot["snapshot"].(string); ok {
+				parts = append(parts, "## Page Structure (ARIA Accessibility Tree)\n")
+				parts = append(parts, "Use element refs (e.g. e1, e2) with click_ref/fill_ref actions.\n")
+				if len(snapText) > 30000 {
+					snapText = truncateForEvent(snapText, 30000)
+				}
+				parts = append(parts, snapText)
+			}
+			if refs, ok := snapshot["refs"]; ok {
+				refsJSON, _ := json.Marshal(refs)
+				parts = append(parts, fmt.Sprintf("\n## Element Refs\n%s", string(refsJSON)))
+			}
+		}
+
+		// 以多模态格式返回截图 + ARIA 文本
+		if scrErr == nil && len(data) > 0 {
+			text := strings.Join(parts, "\n")
+			blocks := []map[string]interface{}{
+				{"type": "text", "text": text},
+				{"type": "image", "source": map[string]interface{}{
+					"type":       "base64",
+					"media_type": mimeType,
+					"data":       base64.StdEncoding.EncodeToString(data),
+				}},
+			}
+			if blocksJSON, jErr := json.Marshal(blocks); jErr == nil {
+				return "__MULTIMODAL__" + string(blocksJSON), nil
+			}
+		}
+
+		// 降级: 无截图，仅返回 ARIA 文本
+		if len(parts) > 0 {
+			return strings.Join(parts, "\n"), nil
+		}
+		return "[observe failed: no snapshot or screenshot available]", nil
+
+	case "click_ref":
+		// 通过 ARIA ref 点击元素，比 CSS selector 更健壮。
+		if input.Ref == "" {
+			return "[Error: ref is required for click_ref action (e.g. \"e1\")]", nil
+		}
+		if err := bc.ClickRef(ctx, input.Ref); err != nil {
+			errClass := classifyBrowserError(err)
+			if errClass == "transient" {
+				return fmt.Sprintf("[Browser click_ref error (transient — try observe to refresh refs): %s]", err), nil
+			}
+			if errClass == "fatal" {
+				return fmt.Sprintf("[Browser click_ref error (fatal — CDP connection lost): %s]", err), nil
+			}
+			return fmt.Sprintf("[Browser click_ref error (structural — ref may be stale, run observe again): %s]", err), nil
+		}
+		// Phase 3: 操作后截图验证
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("Clicked element ref: %s", input.Ref)), nil
+
+	case "fill_ref":
+		// 通过 ARIA ref 填入文本。
+		if input.Ref == "" || input.Text == "" {
+			return "[Error: ref and text are required for fill_ref action]", nil
+		}
+		if err := bc.FillRef(ctx, input.Ref, input.Text); err != nil {
+			errClass := classifyBrowserError(err)
+			if errClass == "transient" {
+				return fmt.Sprintf("[Browser fill_ref error (transient — try observe to refresh refs): %s]", err), nil
+			}
+			if errClass == "fatal" {
+				return fmt.Sprintf("[Browser fill_ref error (fatal — CDP connection lost): %s]", err), nil
+			}
+			return fmt.Sprintf("[Browser fill_ref error (structural — ref may be stale, run observe again): %s]", err), nil
+		}
+		// Phase 3: 操作后截图验证
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("Filled text into element ref: %s", input.Ref)), nil
+
+	case "ai_browse":
+		// Phase 4: Mariner 风格意图级浏览任务。
+		// 接受 goal 参数，在隔离循环中执行 observe→plan→act，最多 20 步。
+		// 极大减少主对话 round-trip 和 token 消耗。
+		if input.Goal == "" {
+			return "[Error: goal is required for ai_browse action (e.g. \"Search for MacBook Pro on jd.com\")]", nil
+		}
+		result, err := bc.AIBrowse(ctx, input.Goal)
+		if err != nil {
+			errClass := classifyBrowserError(err)
+			if errClass == "fatal" {
+				return fmt.Sprintf("[Browser ai_browse error (fatal): %s]", err), nil
+			}
+			return fmt.Sprintf("[Browser ai_browse error: %s]", err), nil
+		}
+		// 附带最终截图
+		return browserResultWithScreenshot(ctx, bc, fmt.Sprintf("AI Browse completed.\n\n%s", result)), nil
+
+	default:
+		return fmt.Sprintf("[Unknown browser action: %s]", input.Action), nil
+	}
+}
+
+// browserResultWithScreenshot 在操作结果中附带截图，让 LLM 验证操作效果。
+// Phase 3: Anthropic CU 核心推荐 — 每个改变页面状态的操作后自动截图。
+// 如果截图失败，仅返回纯文本结果（不影响操作本身）。
+// maxBrowserScreenshotBytes caps embedded screenshots at 512 KB raw (~680 KB base64).
+// Larger screenshots are silently dropped to avoid bloating LLM context.
+const maxBrowserScreenshotBytes = 512 * 1024
+
+func browserResultWithScreenshot(ctx context.Context, bc interface {
+	Screenshot(ctx context.Context) ([]byte, string, error)
+}, textResult string) string {
+	data, mimeType, err := bc.Screenshot(ctx)
+	if err != nil || len(data) == 0 {
+		return textResult
+	}
+	if len(data) > maxBrowserScreenshotBytes {
+		// Screenshot too large for inline embedding; return text only.
+		return textResult
+	}
+	blocks := []map[string]interface{}{
+		{"type": "text", "text": textResult},
+		{"type": "image", "source": map[string]interface{}{
+			"type":       "base64",
+			"media_type": mimeType,
+			"data":       base64.StdEncoding.EncodeToString(data),
+		}},
+	}
+	if blocksJSON, jErr := json.Marshal(blocks); jErr == nil {
+		return "__MULTIMODAL__" + string(blocksJSON)
+	}
+	return textResult
 }
 
 // ---------- helpers ----------
@@ -693,6 +1463,11 @@ func resolveToolPath(path, workspaceDir string) string {
 func executeArgusTool(ctx context.Context, name string, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
 	mcpToolName := strings.TrimPrefix(name, "argus_")
 
+	// NoNetwork 合约约束: 阻断需要网络的 Argus 操作
+	if mcpToolName == "open_url" && params.DelegationContract != nil && params.DelegationContract.Constraints.NoNetwork {
+		return "[Argus open_url blocked: delegation contract prohibits network access]", nil
+	}
+
 	// 风险分级审批门
 	risk := ClassifyActionRisk(mcpToolName)
 	approvalMode := "medium_and_above" // 默认模式
@@ -706,16 +1481,90 @@ func executeArgusTool(ctx context.Context, name string, inputJSON json.RawMessag
 		"approvalMode", approvalMode,
 	)
 
-	if ShouldRequireApproval(risk, approvalMode) && params.CoderConfirmation != nil {
-		approved, err := params.CoderConfirmation.RequestConfirmation(ctx, name, inputJSON)
-		if err != nil {
-			return fmt.Sprintf("[Argus approval error: %s]", err), nil
-		}
-		if !approved {
-			return "[User denied argus operation]", nil
+	if ShouldRequireApproval(risk, approvalMode) {
+		if isNonWebChannel(params.SessionKey) {
+			// Fix 1: 非 Web 渠道 — RiskHigh 走 escalation（飞书审批卡片），不静默放行
+			if risk >= RiskHigh {
+				if params.CoderConfirmation != nil {
+					approved, err := params.CoderConfirmation.RequestConfirmation(ctx, name, inputJSON, params.SessionKey)
+					if err != nil {
+						return fmt.Sprintf("[Argus approval error: %s]", err), nil
+					}
+					if !approved {
+						return "[User denied argus operation]", nil
+					}
+				} else {
+					// Fix 3: Fail-closed: 无审批门控 + 高风险 → 拒绝
+					return "[Argus high-risk operation blocked: no approval gate on non-web channel]", nil
+				}
+			} else {
+				// RiskMedium: 非 Web 渠道保持 auto-approve（click/type 是常规操作）
+				slog.Info("non-web channel auto-approved argus tool (medium risk)",
+					"tool", mcpToolName,
+					"risk", RiskLevelString(risk),
+					"sessionKey", params.SessionKey,
+				)
+			}
+		} else if params.CoderConfirmation != nil {
+			// Web 频道走 CoderConfirmation 弹窗（现有逻辑不变）
+			approved, err := params.CoderConfirmation.RequestConfirmation(ctx, name, inputJSON, params.SessionKey)
+			if err != nil {
+				return fmt.Sprintf("[Argus approval error: %s]", err), nil
+			}
+			if !approved {
+				return "[User denied argus operation]", nil
+			}
+		} else {
+			// Fix 3: Fail-closed: CoderConfirmation==nil + Web 频道 → 拒绝
+			return "[Argus operation blocked: no approval gate available]", nil
 		}
 	}
 
+	// 优先使用多模态返回（保留 image blocks），降级到纯文本
+	if params.ArgusBridge != nil {
+		blocks, mmErr := params.ArgusBridge.AgentCallToolMultimodal(ctx, mcpToolName, inputJSON, 30*time.Second)
+		slog.Debug("argus multimodal result", "tool", mcpToolName, "blockCount", len(blocks), "error", mmErr)
+		if mmErr == nil && len(blocks) > 0 {
+			// 检查是否包含 image blocks
+			hasImage := false
+			for _, b := range blocks {
+				slog.Debug("argus block", "type", b.Type, "hasSource", b.Source != nil, "textLen", len(b.Text))
+				if b.Type == "image" {
+					hasImage = true
+				}
+			}
+			if hasImage {
+				// 返回特殊前缀标记，由 attempt_runner 识别并构建多模态 tool_result
+				jsonBytes, jErr := json.Marshal(blocks)
+				if jErr == nil {
+					slog.Info("argus: returning __MULTIMODAL__ with image", "tool", mcpToolName, "jsonLen", len(jsonBytes))
+					return "__MULTIMODAL__" + string(jsonBytes), nil
+				}
+				slog.Warn("argus: json marshal failed, falling through", "error", jErr)
+			}
+			// 无 image，提取文本
+			var sb strings.Builder
+			for _, b := range blocks {
+				if b.Type == "text" {
+					if sb.Len() > 0 {
+						sb.WriteString("\n")
+					}
+					sb.WriteString(b.Text)
+				}
+			}
+			slog.Debug("argus: no image blocks, returning text", "textLen", sb.Len())
+			return sb.String(), nil
+		}
+		// multimodal 失败，降级
+		if mmErr != nil {
+			slog.Debug("argus multimodal failed, falling back to text", "error", mmErr)
+		}
+	}
+
+	// 降级：纯文本模式
+	if params.ArgusBridge == nil {
+		return "[Argus screen observer is not available. Ensure gateway is running with Argus enabled.]", nil
+	}
 	output, err := params.ArgusBridge.AgentCallTool(ctx, mcpToolName, inputJSON, 30*time.Second)
 	if err != nil {
 		return fmt.Sprintf("[Argus tool error: %s]", err), nil
@@ -834,4 +1683,186 @@ func formatPermissionDenied(tool, detail, level string) string {
    或前往 安全设置 修改安全级别。
    Use the permission popup in chat to temporarily authorize,
    or change your security level in Settings → Security.`, toolDesc, detail, desc)
+}
+
+// ---------- send_media 工具 ----------
+
+// sendMediaInput send_media 工具参数。
+type sendMediaInput struct {
+	Target      string `json:"target"`       // "channel:id" 格式，空值时使用 SessionKey
+	FilePath    string `json:"file_path"`    // 本地文件路径（优先）
+	MediaBase64 string `json:"media_base64"` // base64 编码数据
+	MimeType    string `json:"mime_type"`    // MIME 类型（file_path 模式下可自动检测）
+	Message     string `json:"message"`      // 随文件一起发送的文字
+}
+
+// maxMediaFileSize 最大媒体文件大小（30MB，匹配飞书 UploadFile 限制）。
+const maxMediaFileSize = 30 * 1024 * 1024
+
+// executeSendMedia 执行 send_media 工具调用。
+func executeSendMedia(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	if params.MediaSender == nil {
+		return "[send_media] Media sender is not available. No channel is configured.", nil
+	}
+
+	var input sendMediaInput
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return fmt.Sprintf("[send_media] Invalid input: %v", err), nil
+	}
+
+	// 解析 target
+	channelID, to := parseSendMediaTarget(input.Target, params.SessionKey)
+	if channelID == "" {
+		return "[send_media] No target specified and no session channel available. Tip: omit 'target' entirely to use the current conversation channel. Do NOT fabricate channel IDs.", nil
+	}
+
+	var data []byte
+	mimeType := input.MimeType
+
+	switch {
+	case input.FilePath != "":
+		// 路径安全校验：workspace/scope 边界（与 read_file/write_file 一致）
+		if err := validateToolPathScoped(input.FilePath, params.ScopePaths, params.WorkspaceDir); err != nil {
+			return fmt.Sprintf("[send_media] Path access denied: %v", err), nil
+		}
+
+		// 先检查文件大小，避免大文件 OOM
+		fi, err := os.Stat(input.FilePath)
+		if err != nil {
+			return fmt.Sprintf("[send_media] Failed to stat file: %v. Ensure the path is absolute and the file exists. Use 'ls' to verify the file path first.", err), nil
+		}
+		if fi.Size() > maxMediaFileSize {
+			return fmt.Sprintf("[send_media] File too large: %d bytes (max %d bytes / 30MB)", fi.Size(), maxMediaFileSize), nil
+		}
+
+		fileData, err := os.ReadFile(input.FilePath)
+		if err != nil {
+			return fmt.Sprintf("[send_media] Failed to read file: %v", err), nil
+		}
+		data = fileData
+
+		// MIME 自动检测
+		if mimeType == "" {
+			mimeType = detectMimeType(input.FilePath)
+		}
+
+	case input.MediaBase64 != "":
+		decoded, err := base64.StdEncoding.DecodeString(input.MediaBase64)
+		if err != nil {
+			return fmt.Sprintf("[send_media] Invalid base64 data: %v", err), nil
+		}
+		if len(decoded) > maxMediaFileSize {
+			return fmt.Sprintf("[send_media] Data too large: %d bytes (max %d bytes / 30MB)", len(decoded), maxMediaFileSize), nil
+		}
+		data = decoded
+
+	default:
+		return "[send_media] Either file_path or media_base64 is required. Use file_path with an absolute path (e.g. '/tmp/image.png'). To send a screenshot: first run 'screencapture -x /tmp/screenshot.png' via bash, then call send_media with file_path='/tmp/screenshot.png'.", nil
+	}
+
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	slog.Info("send_media: sending file",
+		"target", channelID+":"+to,
+		"mimeType", mimeType,
+		"size", len(data),
+	)
+
+	if err := params.MediaSender.SendMedia(ctx, channelID, to, data, mimeType, input.Message); err != nil {
+		return fmt.Sprintf("[send_media] Failed to send: %v", err), nil
+	}
+
+	// 保存本地副本，供 Web 端显示（内联实现，避免循环依赖）。
+	var savedPath string
+	if cfgDir, cfgErr := os.UserConfigDir(); cfgErr == nil {
+		dir := filepath.Join(cfgDir, "openacosmi", "media", "sent-media")
+		if mkErr := os.MkdirAll(dir, 0o700); mkErr == nil {
+			ext := ".bin"
+			if exts, _ := mime.ExtensionsByType(mimeType); len(exts) > 0 {
+				ext = exts[0]
+			}
+			if f, fErr := os.CreateTemp(dir, "sent-*"+ext); fErr == nil {
+				if _, wErr := f.Write(data); wErr == nil {
+					savedPath = f.Name()
+				} else {
+					slog.Warn("send_media: failed to write local copy", "error", wErr)
+				}
+				f.Close()
+			}
+		}
+	}
+
+	// 构建状态 JSON（text block）。
+	statusResult := map[string]interface{}{
+		"status":   "sent",
+		"target":   channelID + ":" + to,
+		"size":     len(data),
+		"mimeType": mimeType,
+	}
+	if savedPath != "" {
+		statusResult["savedPath"] = savedPath
+	}
+	statusJSON, _ := json.Marshal(statusResult)
+
+	// 小于 5MB 时返回 __MULTIMODAL__，触发 mediaBlocks 传播链 → 前端显示图片。
+	const maxMultimodalBytes = 5 * 1024 * 1024
+	if len(data) <= maxMultimodalBytes {
+		blocks := []map[string]interface{}{
+			{"type": "text", "text": string(statusJSON)},
+			{"type": "image", "source": map[string]interface{}{
+				"type":       "base64",
+				"media_type": mimeType,
+				"data":       base64.StdEncoding.EncodeToString(data),
+			}},
+		}
+		if blocksJSON, err := json.Marshal(blocks); err == nil {
+			return "__MULTIMODAL__" + string(blocksJSON), nil
+		}
+	}
+	return string(statusJSON), nil
+}
+
+// parseSendMediaTarget 解析 target 为 channelID + to。
+// target 格式: "channel:id"（按第一个 ":" 分割）。
+// 空值时 fallback 到 sessionKey。
+func parseSendMediaTarget(target, sessionKey string) (channelID, to string) {
+	raw := target
+	if raw == "" {
+		raw = sessionKey
+	}
+	if raw == "" {
+		return "", ""
+	}
+	idx := strings.Index(raw, ":")
+	if idx < 0 {
+		return raw, ""
+	}
+	return raw[:idx], raw[idx+1:]
+}
+
+// detectMimeType 从文件扩展名推导 MIME 类型。
+func detectMimeType(filePath string) string {
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// 办公文档扩展名 → MIME（mime 标准库可能不识别这些）
+	officeTypes := map[string]string{
+		".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		".ppt":  "application/vnd.ms-powerpoint",
+		".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		".doc":  "application/vnd.ms-word",
+		".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		".xls":  "application/vnd.ms-excel",
+	}
+	if t, ok := officeTypes[ext]; ok {
+		return t
+	}
+
+	// 标准库检测（覆盖 .pdf, .png, .jpg, .gif, .mp4 等）
+	if t := mime.TypeByExtension(ext); t != "" {
+		return t
+	}
+
+	return "application/octet-stream"
 }

@@ -9,8 +9,10 @@ export type SubAgentEntry = {
     model: string;
     intervalMs: number;
     goal: string;
-    status: "running" | "stopped" | "error";
+    status: "running" | "stopped" | "error" | "degraded" | "starting" | "available";
     error?: string;
+    provider?: string;     // open-coder: 当前 provider
+    configured?: boolean;  // open-coder: 是否已显式配置
 };
 
 export type SubAgentsState = {
@@ -46,13 +48,45 @@ function defaultSubAgents(): SubAgentEntry[] {
 }
 
 export async function loadSubAgents(state: SubAgentsState) {
+    if (!state.client || !state.connected) return;
     if (state.subagentsLoading) return;
-    // 当前无 subagent.list 方法，使用本地默认值
-    // 未来可对接 subagent.list WS 方法
-    if (state.subagentsList.length === 0) {
-        state.subagentsList = defaultSubAgents();
+    state.subagentsLoading = true;
+    state.subagentsError = null;
+    try {
+        type ListAgent = {
+            id: string; label: string; status: string; error?: string;
+            provider?: string; model?: string; configured?: boolean;
+        };
+        type ListResult = { agents: ListAgent[] };
+        const res = await state.client.request<ListResult>("subagent.list", {});
+        const prev = state.subagentsList;
+        state.subagentsList = (res.agents ?? []).map((a) => {
+            const old = prev.find((e) => e.id === a.id);
+            return {
+                id: a.id,
+                label: a.label,
+                status: a.status as SubAgentEntry["status"],
+                error: a.error,
+                enabled:
+                    a.status === "running" ||
+                    a.status === "degraded" ||
+                    a.status === "starting" ||
+                    a.status === "available",
+                model: a.model || old?.model || "none",
+                intervalMs: old?.intervalMs ?? (a.id === "argus-screen" ? 1000 : 0),
+                goal: old?.goal ?? "",
+                provider: a.provider || "",
+                configured: a.configured ?? false,
+            };
+        });
+    } catch (err) {
+        state.subagentsError = err instanceof Error ? err.message : String(err);
+        if (state.subagentsList.length === 0) {
+            state.subagentsList = defaultSubAgents();
+        }
+    } finally {
+        state.subagentsLoading = false;
     }
-    state.subagentsLoading = false;
 }
 
 export async function toggleSubAgent(state: SubAgentsState, agentId: string, enabled: boolean) {

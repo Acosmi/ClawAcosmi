@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/session"
+	"github.com/openacosmi/claw-acismi/internal/session"
 )
 
 // TS 对照: auto-reply/reply/session-updates.ts (276L)

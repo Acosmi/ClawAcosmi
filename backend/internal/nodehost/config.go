@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // ---------- 类型定义 ----------

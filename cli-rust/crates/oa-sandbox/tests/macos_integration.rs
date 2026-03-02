@@ -58,7 +58,7 @@ fn echo_hello_in_sandbox() {
     let config = make_config(
         "/bin/echo",
         &["hello", "world"],
-        SecurityLevel::L1Sandbox,
+        SecurityLevel::L1Allowlist,
         None,
     );
     let output = runner.run(&config).unwrap();
@@ -80,7 +80,7 @@ fn command_with_nonzero_exit() {
     let config = make_config(
         "/bin/sh",
         &["-c", "exit 42"],
-        SecurityLevel::L1Sandbox,
+        SecurityLevel::L1Allowlist,
         None,
     );
     let output = runner.run(&config).unwrap();
@@ -95,7 +95,7 @@ fn command_not_found_returns_error() {
         return;
     }
 
-    let config = make_config("/nonexistent/binary", &[], SecurityLevel::L1Sandbox, None);
+    let config = make_config("/nonexistent/binary", &[], SecurityLevel::L1Allowlist, None);
     let result = runner.run(&config);
 
     assert!(result.is_err());
@@ -116,7 +116,7 @@ fn can_read_workspace_files() {
     std::fs::write(&test_file, "sandbox-content").unwrap();
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "/bin/cat".into(),
         args: vec![test_file.to_str().unwrap().into()],
         workspace: tmpdir.path().to_path_buf(),
@@ -147,7 +147,7 @@ fn can_write_to_workspace_in_l1() {
     let output_file = tmpdir.path().join("output.txt");
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "/bin/sh".into(),
         args: vec![
             "-c".into(),
@@ -230,7 +230,7 @@ fn timeout_kills_long_running_process() {
     }
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "/bin/sleep".into(),
         args: vec!["60".into()],
         workspace: std::env::temp_dir(),
@@ -274,7 +274,7 @@ fn additional_mount_readonly() {
     let workspace = tempfile::tempdir().unwrap();
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "/bin/cat".into(),
         args: vec![extra_file.to_str().unwrap().into()],
         workspace: workspace.path().to_path_buf(),
@@ -311,7 +311,7 @@ fn env_vars_passed_to_sandbox() {
     env.insert("MY_TEST_VAR".into(), "test_value_123".into());
 
     let config = SandboxConfig {
-        security_level: SecurityLevel::L1Sandbox,
+        security_level: SecurityLevel::L1Allowlist,
         command: "/bin/sh".into(),
         args: vec!["-c".into(), "echo $MY_TEST_VAR".into()],
         workspace: std::env::temp_dir(),

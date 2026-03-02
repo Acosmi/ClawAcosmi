@@ -8,7 +8,7 @@ package runner
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // --- 模型解析 ---
@@ -75,6 +75,7 @@ type AttemptResult struct {
 	SessionIDUsed         string              `json:"sessionIdUsed,omitempty"`
 	LastAssistant         *AssistantMessage   `json:"lastAssistant,omitempty"`
 	AssistantTexts        []string            `json:"assistantTexts,omitempty"`
+	MediaBlocks           []MediaBlock        `json:"mediaBlocks,omitempty"`
 	ToolMetas             []interface{}       `json:"toolMetas,omitempty"`
 	LastToolError         string              `json:"lastToolError,omitempty"`
 	CompactionCount       int                 `json:"compactionCount,omitempty"`
@@ -131,8 +132,23 @@ type AttemptParams struct {
 	// SecurityLevelFunc 动态获取当前有效安全级别（含临时提权）。
 	// 由 server.go 注入，内部调用 EscalationManager.GetEffectiveLevel()。
 	SecurityLevelFunc func() string
+	// MountRequestsFunc 动态获取临时挂载请求（Phase 3.4）。
+	MountRequestsFunc func() []MountRequestForSandbox
 	// DelegationContract 委托合约约束（可选，nil = 主 agent 无合约限制）。
 	DelegationContract *DelegationContract
+	// PromptMode 提示词模式（"full"|"minimal"|"none"，空 = "full"）。
+	// 子智能体使用 "minimal" 跳过 Self-Update/Messaging/Voice 等无关段落。
+	PromptMode string `json:"promptMode,omitempty"`
+	// OnToolEvent 结构化工具事件回调（可选，nil = 不广播）。
+	// 工具执行前后调用，用于频道广播工具名称、参数摘要和结果摘要。
+	OnToolEvent func(event ToolEvent)
+	// AgentChannel 异步消息通道（可选，nil = 不支持求助通道）。
+	// Phase 4: 三级指挥体系 — 子智能体执行中异步向主智能体求助。
+	AgentChannel *AgentChannel
+	// AgentType 子智能体类型（可选，空字符串 = 主智能体）。
+	// 值: "coder" / "argus" / "media"
+	// 用于在 RunAttempt 中按类型注入子智能体专属工具。
+	AgentType string `json:"agentType,omitempty"`
 }
 
 // --- Compaction ---

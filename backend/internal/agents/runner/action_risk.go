@@ -23,29 +23,32 @@ const (
 	RiskHigh   ActionRiskLevel = 3 // 导航、表单提交、文件操作
 )
 
-// actionRiskMap 工具名 → 危险等级映射。
+// actionRiskMap Argus MCP 工具名 → 危险等级映射。
+// 覆盖全部 16 个 Argus MCP 工具（感知 7 + 动作 7 + macOS 1 + Shell 1）。
+// 未知工具默认 RiskMedium（安全保守策略）。
 var actionRiskMap = map[string]ActionRiskLevel{
-	// 纯读（RiskNone）
-	"screenshot":     RiskNone,
-	"capture_screen": RiskNone,
-	"get_elements":   RiskNone,
-	"wait":           RiskNone,
-	"query":          RiskNone,
+	// 感知（RiskNone）— 纯只读
+	"capture_screen":   RiskNone,
+	"describe_scene":   RiskNone,
+	"locate_element":   RiskNone,
+	"read_text":        RiskNone,
+	"detect_dialog":    RiskNone,
+	"watch_for_change": RiskNone,
+	"mouse_position":   RiskNone,
 
 	// 低风险（RiskLow）
 	"scroll": RiskLow,
-	"hover":  RiskLow,
 
-	// 中风险（RiskMedium）
+	// 中风险（RiskMedium）— 交互操作
 	"click":          RiskMedium,
-	"type":           RiskMedium,
-	"select":         RiskMedium,
+	"double_click":   RiskMedium,
+	"type_text":      RiskMedium,
+	"press_key":      RiskMedium,
+	"hotkey":         RiskMedium,
 	"macos_shortcut": RiskMedium,
 
-	// 高风险（RiskHigh）
-	"navigate":  RiskHigh,
-	"submit":    RiskHigh,
-	"upload":    RiskHigh,
+	// 高风险（RiskHigh）— 导航/执行
+	"open_url":  RiskHigh,
 	"run_shell": RiskHigh,
 }
 

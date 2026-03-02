@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	pkgmedia "github.com/anthropic/open-acosmi/pkg/media"
+	pkgmedia "github.com/openacosmi/claw-acismi/pkg/media"
 )
 
 // WhatsApp 媒体加载 — 继承自 src/web/media.ts (336L)

@@ -65,6 +65,18 @@ export type SkillsProps = {
   onDistribute: () => void;
 };
 
+function translateSkillName(skill: SkillStatusEntry): string {
+  const key = `skillName.${skill.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const translated = t(key);
+  return translated === key ? skill.name : translated;
+}
+
+function translateSkillDesc(skill: SkillStatusEntry): string {
+  const key = `skillDesc.${skill.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const translated = t(key);
+  return translated === key ? skill.description : translated;
+}
+
 export function renderSkills(props: SkillsProps) {
   const skills = props.report?.skills ?? [];
   const filter = props.filter.trim().toLowerCase();
@@ -164,107 +176,103 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
   if (skill.blockedByAllowlist) {
     reasons.push(t("agents.skill.blockedByAllowlist"));
   }
+  const isTextIcon = skill.emoji && /[a-zA-Z]{2,}/.test(skill.emoji);
+
   return html`
-    <div class="list-item">
-      <div class="list-main">
-        <div class="list-title">
-          ${skill.emoji ? `${skill.emoji} ` : ""}${skill.name}
-        </div>
-        <div class="list-sub">${clampText(skill.description, 140)}</div>
-        <div class="chip-row" style="margin-top: 6px;">
-          <span class="chip">${skill.source}</span>
-          ${showBundledBadge
-      ? html`
-                  <span class="chip">${t("skills.bundled")}</span>
-                `
-      : nothing
-    }
-          <span class="chip ${skill.eligible ? "chip-ok" : "chip-warn"}">
-            ${skill.eligible ? t("agents.skill.eligible") : t("agents.skill.blocked")}
-          </span>
-          ${skill.disabled
-      ? html`
-                  <span class="chip chip-warn">${t("agents.skill.disabled")}</span>
-                `
-      : nothing
-    }
-          ${skill.distributed
-      ? html`<span class="chip chip-ok">已VFS分级</span>`
-      : html`<span class="chip chip-warn">未分级</span>`
-    }
-        </div>
-        ${missing.length > 0
-      ? html`
-              <div class="muted" style="margin-top: 6px;">
-                ${t("agents.skill.missing", { list: missing.join(", ") })}
-              </div>
-            `
-      : nothing
-    }
-        ${reasons.length > 0
-      ? html`
-              <div class="muted" style="margin-top: 6px;">
-                ${t("agents.skill.reason", { list: reasons.join(", ") })}
-              </div>
-            `
-      : nothing
-    }
+    <div class="skill-card">
+      <div class="skill-card-icon" style="${isTextIcon ? 'font-size: 10px; font-weight: 600; line-height: 1.2; text-align: center; word-break: break-word; padding: 2px;' : ''}">
+        ${skill.emoji ? skill.emoji : html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>`}
       </div>
-      <div class="list-meta">
-        <div class="row" style="justify-content: flex-end; flex-wrap: wrap;">
-          <button
-            class="btn"
-            ?disabled=${busy}
-            @click=${() => props.onToggle(skill.skillKey, skill.disabled)}
-          >
-            ${skill.disabled ? t("skills.enable") : t("skills.disable")}
-          </button>
-          ${canInstall
+      
+      <div class="skill-card-content">
+        <div class="skill-card-title">${translateSkillName(skill)}</div>
+        <div class="skill-card-desc">${translateSkillDesc(skill)}</div>
+      </div>
+      
+      <div class="skill-card-actions">
+        ${canInstall
       ? html`<button
-                class="btn"
-                ?disabled=${busy}
-                @click=${() => props.onInstall(skill.skillKey, skill.name, skill.install[0].id)}
-              >
-                ${busy ? t("skills.installing") : skill.install[0].label}
-              </button>`
-      : nothing
-    }
-        </div>
-        ${message
-      ? html`<div
-              class="muted"
-              style="margin-top: 8px; color: ${message.kind === "error"
-          ? "var(--danger-color, #d14343)"
-          : "var(--success-color, #0a7f5a)"
-        };"
+              class="skill-btn-install"
+              title="${skill.install[0].label}"
+              ?disabled=${busy}
+              @click=${() => props.onInstall(skill.skillKey, skill.name, skill.install[0].id)}
             >
-              ${message.message}
-            </div>`
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>`
       : nothing
     }
-        ${skill.primaryEnv
-      ? html`
-              <div class="field" style="margin-top: 10px;">
-                <span>${t("skills.apiKey")}</span>
-                <input
-                  type="password"
-                  .value=${apiKey}
-                  @input=${(e: Event) =>
-          props.onEdit(skill.skillKey, (e.target as HTMLInputElement).value)}
-                />
-              </div>
-              <button
-                class="btn primary"
-                style="margin-top: 8px;"
-                ?disabled=${busy}
-                @click=${() => props.onSaveKey(skill.skillKey)}
-              >
-                ${t("skills.saveKey")}
-              </button>
-            `
-      : nothing
-    }
+        
+        <label class="skill-toggle" title="${skill.disabled ? t('skills.enable') : t('skills.disable')}">
+          <input 
+            type="checkbox" 
+            ?checked=${!skill.disabled} 
+            ?disabled=${busy}
+            @change=${() => props.onToggle(skill.skillKey, skill.disabled)}
+          >
+          <span class="skill-toggle-slider"></span>
+        </label>
       </div>
+
+      ${skill.primaryEnv || message || missing.length > 0 || reasons.length > 0
+      ? html`
+          <div class="skill-card-meta" style="flex-basis: 100%; margin-top: 12px; margin-left: -64px;">
+            ${missing.length > 0
+          ? html`
+                  <div class="muted" style="font-size: 12px; margin-bottom: 6px;">
+                    ${t("agents.skill.missing", { list: missing.join(", ") })}
+                  </div>
+                `
+          : nothing
+        }
+            ${reasons.length > 0
+          ? html`
+                  <div class="muted" style="font-size: 12px; margin-bottom: 6px;">
+                    ${t("agents.skill.reason", { list: reasons.join(", ") })}
+                  </div>
+                `
+          : nothing
+        }
+            ${message
+          ? html`<div
+                  class="muted"
+                  style="font-size: 12px; margin-bottom: 8px; color: ${message.kind === "error"
+              ? "var(--danger-color, #d14343)"
+              : "var(--success-color, #0a7f5a)"
+            };"
+                >
+                  ${message.message}
+                </div>`
+          : nothing
+        }
+            ${skill.primaryEnv
+          ? html`
+                  <div class="row" style="gap: 8px; align-items: center;">
+                    <div class="field" style="flex: 1; margin: 0;">
+                      <input
+                        type="password"
+                        placeholder="${t('skills.apiKey')}"
+                        .value=${apiKey}
+                        @input=${(e: Event) =>
+              props.onEdit(skill.skillKey, (e.target as HTMLInputElement).value)}
+                        style="padding: 4px 8px; font-size: 12px;"
+                      />
+                    </div>
+                    <button
+                      class="btn primary"
+                      style="padding: 4px 10px; font-size: 12px;"
+                      ?disabled=${busy}
+                      @click=${() => props.onSaveKey(skill.skillKey)}
+                    >
+                      ${t("skills.saveKey")}
+                    </button>
+                  </div>
+                `
+          : nothing
+        }
+          </div>
+        `
+      : nothing
+    }
     </div>
   `;
 }

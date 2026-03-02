@@ -8,7 +8,7 @@ package skills
 import (
 	"os"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // envUpdate 记录一次环境变量更新。

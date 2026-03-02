@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // ---------- 常量 ----------

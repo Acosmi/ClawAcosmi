@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ---------- 常量 ----------

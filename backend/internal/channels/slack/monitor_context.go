@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Slack 监控上下文 — 继承自 src/slack/monitor/context.ts (429L)

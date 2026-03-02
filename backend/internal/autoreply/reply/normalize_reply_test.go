@@ -3,7 +3,7 @@ package reply
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 func TestNormalizeReplyPayload_Basic(t *testing.T) {

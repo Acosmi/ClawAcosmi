@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 func TestReplyDispatcher_SendFinalReply(t *testing.T) {

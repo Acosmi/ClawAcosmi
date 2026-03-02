@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn validate_port_valid() {
-        assert!(validate_port("18789"));
+        assert!(validate_port("19001"));
         assert!(validate_port("1"));
         assert!(validate_port("65535"));
     }
@@ -211,7 +211,7 @@ mod tests {
         let cfg = OpenAcosmiConfig::default();
         let result = apply_gateway_config(
             cfg,
-            18789,
+            19001,
             BindModeChoice::Loopback,
             GatewayAuthChoice::Token,
             TailscaleModeChoice::Off,
@@ -220,7 +220,7 @@ mod tests {
             Some("test-token".to_string()),
             None,
         );
-        assert_eq!(result.port, 18789);
+        assert_eq!(result.port, 19001);
         assert_eq!(result.token.as_deref(), Some("test-token"));
         let gw = result.config.gateway.as_ref().expect("gateway config");
         assert_eq!(gw.bind, Some(GatewayBindMode::Loopback));
@@ -231,7 +231,7 @@ mod tests {
         let cfg = OpenAcosmiConfig::default();
         let result = apply_gateway_config(
             cfg,
-            18789,
+            19001,
             BindModeChoice::Lan, // will be overridden
             GatewayAuthChoice::Token,
             TailscaleModeChoice::Serve,
@@ -249,7 +249,7 @@ mod tests {
         let cfg = OpenAcosmiConfig::default();
         let result = apply_gateway_config(
             cfg,
-            18789,
+            19001,
             BindModeChoice::Loopback,
             GatewayAuthChoice::Token, // will be overridden
             TailscaleModeChoice::Funnel,

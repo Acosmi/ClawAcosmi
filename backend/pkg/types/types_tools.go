@@ -345,6 +345,20 @@ type WebSearchGrokConfig struct {
 	InlineCitations *bool  `json:"inlineCitations,omitempty"`
 }
 
+// WebSearchBochaConfig 博查搜索配置
+type WebSearchBochaConfig struct {
+	APIKey  string `json:"apiKey,omitempty"`
+	BaseURL string `json:"baseUrl,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
+}
+
+// WebSearchGoogleConfig Google 搜索配置
+type WebSearchGoogleConfig struct {
+	APIKey         string `json:"apiKey,omitempty"`
+	SearchEngineID string `json:"searchEngineId,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
+}
+
 // WebSearchConfig Web 搜索配置
 type WebSearchConfig struct {
 	Enabled         *bool                      `json:"enabled,omitempty"`
@@ -355,6 +369,8 @@ type WebSearchConfig struct {
 	CacheTTLMinutes *int                       `json:"cacheTtlMinutes,omitempty"`
 	Perplexity      *WebSearchPerplexityConfig `json:"perplexity,omitempty"`
 	Grok            *WebSearchGrokConfig       `json:"grok,omitempty"`
+	Bocha           *WebSearchBochaConfig      `json:"bocha,omitempty"`
+	Google          *WebSearchGoogleConfig     `json:"google,omitempty"`
 }
 
 // WebFetchFirecrawlConfig Firecrawl 配置

@@ -3,8 +3,8 @@ package gateway
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/session"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- ClassifySessionKey ----------
@@ -457,5 +457,47 @@ func TestResolveSessionModelRef_NilEntry(t *testing.T) {
 	p, m := ResolveSessionModelRef(cfg, nil, "")
 	if p == "" || m == "" {
 		t.Errorf("expected resolved model even with nil entry, got provider=%q model=%q", p, m)
+	}
+}
+
+func TestIsCoderSessionKey(t *testing.T) {
+	tests := []struct {
+		key  string
+		want bool
+	}{
+		{"coder:abc-123", true},
+		{"coder:", true},
+		{"coder:some-long-contract-id-uuid", true},
+		{"task:abc-123", false},
+		{"user:abc", false},
+		{"", false},
+		{"coderx:abc", false},
+		{"Coder:abc", false},
+	}
+	for _, tt := range tests {
+		if got := IsCoderSessionKey(tt.key); got != tt.want {
+			t.Errorf("IsCoderSessionKey(%q) = %v, want %v", tt.key, got, tt.want)
+		}
+	}
+}
+
+func TestIsTaskSessionKey(t *testing.T) {
+	tests := []struct {
+		key  string
+		want bool
+	}{
+		{"task:run-123", true},
+		{"task:", true},
+		{"task:some-uuid-run-id", true},
+		{"coder:abc-123", false},
+		{"user:abc", false},
+		{"", false},
+		{"taskx:abc", false},
+		{"Task:abc", false},
+	}
+	for _, tt := range tests {
+		if got := IsTaskSessionKey(tt.key); got != tt.want {
+			t.Errorf("IsTaskSessionKey(%q) = %v, want %v", tt.key, got, tt.want)
+		}
 	}
 }

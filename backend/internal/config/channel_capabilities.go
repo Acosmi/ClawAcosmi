@@ -11,7 +11,7 @@ package config
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // normalizeCapabilities 规范化能力列表

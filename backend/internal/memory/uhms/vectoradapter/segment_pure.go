@@ -61,6 +61,21 @@ func (s *SegmentStore) CreateCollection(name string, dim int) error {
 	return nil
 }
 
+// CreateCollectionV2 creates a collection from JSON config.
+// Pure Go fallback: parses dimension from JSON, ignores HNSW and other advanced settings.
+func (s *SegmentStore) CreateCollectionV2(name string, configJSON []byte) error {
+	var cfg struct {
+		Dimension int `json:"dimension"`
+	}
+	if err := json.Unmarshal(configJSON, &cfg); err != nil {
+		return fmt.Errorf("vectoradapter: parse config JSON: %w", err)
+	}
+	if cfg.Dimension <= 0 {
+		return fmt.Errorf("vectoradapter: invalid dimension %d in config JSON", cfg.Dimension)
+	}
+	return s.CreateCollection(name, cfg.Dimension)
+}
+
 // Upsert inserts or updates a point in the specified collection.
 func (s *SegmentStore) Upsert(collection, pointID string, denseVec []float32, payloadJSON []byte) error {
 	s.mu.Lock()
@@ -132,6 +147,52 @@ func (s *SegmentStore) Search(collection string, queryVec []float32, limit int) 
 	return hits, nil
 }
 
+// SearchV2 performs a brute-force search, ignoring search params (pure Go has no HNSW).
+func (s *SegmentStore) SearchV2(collection string, queryVec []float32, limit int, _ []byte) ([]segmentSearchHit, error) {
+	return s.Search(collection, queryVec, limit)
+}
+
+// scrollHit represents a scroll result (no score, just id + payload).
+type scrollHit struct {
+	ID      string                 `json:"id"`
+	Payload map[string]interface{} `json:"payload"`
+}
+
+// Scroll enumerates up to limit points in a collection (no vector similarity).
+func (s *SegmentStore) Scroll(collection string, limit int) ([]scrollHit, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	col, ok := s.collections[collection]
+	if !ok {
+		return nil, fmt.Errorf("vectoradapter: collection not found: %s", collection)
+	}
+
+	hits := make([]scrollHit, 0, min(limit, len(col.points)))
+	for id, pt := range col.points {
+		if len(hits) >= limit {
+			break
+		}
+		hits = append(hits, scrollHit{
+			ID:      id,
+			Payload: pt.payload,
+		})
+	}
+	return hits, nil
+}
+
+// PointCount returns the number of available points in a collection.
+func (s *SegmentStore) PointCount(collection string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	col, ok := s.collections[collection]
+	if !ok {
+		return 0, fmt.Errorf("vectoradapter: collection not found: %s", collection)
+	}
+	return len(col.points), nil
+}
+
 // Delete removes a point from the collection.
 func (s *SegmentStore) Delete(collection, pointID string) error {
 	s.mu.Lock()
@@ -148,6 +209,11 @@ func (s *SegmentStore) Delete(collection, pointID string) error {
 // Flush is a no-op for the pure Go fallback.
 func (s *SegmentStore) Flush(_ string) error {
 	return nil
+}
+
+// OptimizeCollection is a no-op for the pure Go fallback (no HNSW support).
+func (s *SegmentStore) OptimizeCollection(_ string) (bool, error) {
+	return false, nil
 }
 
 func cosine(a, b []float32) float32 {

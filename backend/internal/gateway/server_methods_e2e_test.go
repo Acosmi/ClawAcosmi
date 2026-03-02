@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/session"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // ============================================================
@@ -320,8 +321,16 @@ func TestE2E_ChatSend_WithDispatcher(t *testing.T) {
 	storePath, store := setupE2EStore(t, sessionKey, sessionId)
 	chatState := NewChatRunState()
 
-	// mock dispatcher 返回一段回复
+	// mock dispatcher 返回一段回复，并模拟管线写入 transcript
 	mockDispatcher := func(ctx context.Context, msgCtx *autoreply.MsgContext, opts *autoreply.GetReplyOptions) ([]autoreply.ReplyPayload, error) {
+		// 模拟真实管线的 persistToTranscript: 写入 AI 回复到 transcript
+		smgr := session.NewSessionManager(storePath)
+		_ = smgr.AppendMessage(sessionId, "", session.TranscriptEntry{
+			Role: "assistant",
+			Content: []session.ContentBlock{
+				{Type: "text", Text: "Mock AI reply from dispatcher"},
+			},
+		})
 		return []autoreply.ReplyPayload{
 			{Text: "Mock AI reply from dispatcher"},
 		}, nil

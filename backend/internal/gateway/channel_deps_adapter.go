@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/channels/discord"
-	"github.com/anthropic/open-acosmi/internal/channels/slack"
-	"github.com/anthropic/open-acosmi/internal/channels/telegram"
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/internal/routing"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/channels/discord"
+	"github.com/openacosmi/claw-acismi/internal/channels/slack"
+	"github.com/openacosmi/claw-acismi/internal/channels/telegram"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/internal/routing"
 )
 
 // ChannelDepsContext 网关子系统集合，由 server.go 构造后传入。
@@ -94,6 +94,8 @@ func buildDiscordDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, 
 			}
 			resolvedSessionId = entry.SessionId
 		}
+		// 回写 SessionID 到 MsgContext（供 pipelineDispatcher 传递到 reply 层）
+		params.Ctx.SessionID = resolvedSessionId
 
 		// 持久化用户消息到 transcript
 		if resolvedSessionId != "" {
@@ -119,6 +121,7 @@ func buildDiscordDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, 
 
 		// 广播 AI 回复到前端
 		replyText := CombineReplyPayloads(result.Replies)
+		mb64, mmime := ExtractMediaFromReplies(result.Replies)
 
 		// 持久化 AI 回复到 transcript
 		if resolvedSessionId != "" && replyText != "" {
@@ -130,8 +133,8 @@ func buildDiscordDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, 
 			})
 		}
 
-		if replyText != "" {
-			broadcastChatReply(dctx.State, params.Ctx, replyText)
+		if replyText != "" || mb64 != "" {
+			broadcastChatReply(dctx.State, params.Ctx, replyText, mb64, mmime)
 		}
 
 		return &discord.DiscordDispatchResult{QueuedFinal: true}, nil
@@ -237,6 +240,7 @@ func buildTelegramDispatcher(dctx *ChannelDepsContext) func(ctx context.Context,
 			}
 			resolvedSessionId = entry.SessionId
 		}
+		params.Ctx.SessionID = resolvedSessionId
 
 		// 持久化用户消息到 transcript
 		if resolvedSessionId != "" {
@@ -260,6 +264,7 @@ func buildTelegramDispatcher(dctx *ChannelDepsContext) func(ctx context.Context,
 		}
 
 		replyText := CombineReplyPayloads(result.Replies)
+		tgMb64, tgMmime := ExtractMediaFromReplies(result.Replies)
 
 		// 持久化 AI 回复到 transcript
 		if resolvedSessionId != "" && replyText != "" {
@@ -271,8 +276,8 @@ func buildTelegramDispatcher(dctx *ChannelDepsContext) func(ctx context.Context,
 			})
 		}
 
-		if replyText != "" {
-			broadcastChatReply(dctx.State, params.Ctx, replyText)
+		if replyText != "" || tgMb64 != "" {
+			broadcastChatReply(dctx.State, params.Ctx, replyText, tgMb64, tgMmime)
 		}
 
 		return &telegram.TelegramDispatchResult{
@@ -416,6 +421,7 @@ func buildSlackDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, pa
 			}
 			resolvedSessionId = entry.SessionId
 		}
+		params.Ctx.SessionID = resolvedSessionId
 
 		// 持久化用户消息到 transcript
 		if resolvedSessionId != "" {
@@ -439,6 +445,7 @@ func buildSlackDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, pa
 		}
 
 		replyText := CombineReplyPayloads(result.Replies)
+		slMb64, slMmime := ExtractMediaFromReplies(result.Replies)
 
 		// 持久化 AI 回复到 transcript
 		if resolvedSessionId != "" && replyText != "" {
@@ -450,8 +457,8 @@ func buildSlackDispatcher(dctx *ChannelDepsContext) func(ctx context.Context, pa
 			})
 		}
 
-		if replyText != "" {
-			broadcastChatReply(dctx.State, params.Ctx, replyText)
+		if replyText != "" || slMb64 != "" {
+			broadcastChatReply(dctx.State, params.Ctx, replyText, slMb64, slMmime)
 		}
 
 		return &slack.SlackDispatchResult{QueuedFinal: true}, nil
@@ -593,7 +600,7 @@ func broadcastChatMessage(state *GatewayState, msgCtx *autoreply.MsgContext, rol
 	}, nil)
 }
 
-func broadcastChatReply(state *GatewayState, msgCtx *autoreply.MsgContext, replyText string) {
+func broadcastChatReply(state *GatewayState, msgCtx *autoreply.MsgContext, replyText, mediaB64, mediaMime string) {
 	bc := state.Broadcaster()
 	if bc == nil || msgCtx == nil {
 		return
@@ -602,11 +609,16 @@ func broadcastChatReply(state *GatewayState, msgCtx *autoreply.MsgContext, reply
 	if channel == "" {
 		channel = "unknown"
 	}
-	bc.Broadcast("chat.message", map[string]interface{}{
+	payload := map[string]interface{}{
 		"sessionKey": msgCtx.SessionKey,
 		"channel":    channel,
 		"role":       "assistant",
 		"text":       replyText,
 		"ts":         time.Now().UnixMilli(),
-	}, nil)
+	}
+	if mediaB64 != "" {
+		payload["mediaBase64"] = mediaB64
+		payload["mediaMimeType"] = mediaMime
+	}
+	bc.Broadcast("chat.message", payload, nil)
 }

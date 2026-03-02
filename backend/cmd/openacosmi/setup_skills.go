@@ -12,10 +12,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/skills"
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/skills"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 辅助函数 ----------
@@ -358,7 +358,7 @@ func SetupSkills(
 					slog.Info(strings.TrimSpace(result.Stdout))
 				}
 				slog.Info("Tip: run `openacosmi doctor` to review skills + requirements.")
-				slog.Info("Docs: https://docs.openacosmi.ai/skills")
+				slog.Info("Docs: docs/skills/")
 			}
 		}
 	}

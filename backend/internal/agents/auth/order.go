@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ResolveProfileUnusableUntil 计算 profile 不可用截止时间。

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
 )
 
 // ---------- Google Provider 检测 ----------

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/anthropic/open-acosmi/internal/agents/runner"
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/agent-runner-execution.ts (605L)

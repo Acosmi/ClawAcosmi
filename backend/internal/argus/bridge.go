@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/mcpclient"
+	"github.com/openacosmi/claw-acismi/internal/mcpclient"
 )
 
 // ---------- 常量 ----------

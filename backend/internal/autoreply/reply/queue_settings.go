@@ -3,7 +3,7 @@ package reply
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/queue/settings.ts (69L)

@@ -1,0 +1,241 @@
+package runner
+
+// result_approval.go — 三级指挥体系 Phase 3: 最终交付门控
+//
+// 质量审核通过后，将结果呈现给用户做最终签收。
+// 用户批准 → 返回正常结果；拒绝 → 返回 "用户要求修改" 给主智能体。
+//
+// 复用 PlanConfirmationManager 的阻塞 channel 模式。
+// WebSocket 事件: result.approve.requested / result.approve.resolved
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// resultApprovalEntry 内部 pending 条目（含过期时间和决策 channel）。
+type resultApprovalEntry struct {
+	ch        chan ResultApprovalDecision
+	expiresAt time.Time
+}
+
+// ---------- 请求 / 决策类型 ----------
+
+// ResultApprovalRequest 结果签收请求。
+type ResultApprovalRequest struct {
+	ID            string            `json:"id"`
+	OriginalTask  string            `json:"originalTask"`
+	ContractID    string            `json:"contractId"`
+	Result        string            `json:"result"`
+	Artifacts     *ThoughtArtifacts `json:"artifacts,omitempty"`
+	ReviewSummary string            `json:"reviewSummary,omitempty"`
+	CreatedAtMs   int64             `json:"createdAtMs"`
+	ExpiresAtMs   int64             `json:"expiresAtMs"`
+}
+
+// ResultApprovalDecision 用户对结果的签收决策。
+type ResultApprovalDecision struct {
+	Action   string `json:"action"`             // "approve" | "reject"
+	Feedback string `json:"feedback,omitempty"` // action=reject 时的拒绝理由 / 修改要求
+}
+
+// ---------- Manager ----------
+
+// ResultApprovalManager 结果签收管理器。
+// 当子智能体结果通过质量审核后:
+//  1. 广播 "result.approve.requested" 给前端（WebSocket）
+//  2. 阻塞等待用户签收决策（approve/reject）或超时
+//  3. 前端通过 "result.approve.resolve" RPC 回调
+//
+// 为 nil 时完全跳过结果签收（兼容现有行为）。
+type ResultApprovalManager struct {
+	mu      sync.Mutex
+	pending map[string]*resultApprovalEntry // id → pending entry (含过期时间)
+
+	broadcast   CoderConfirmBroadcastFunc // 复用广播类型（解耦 runner ↔ gateway）
+	timeout     time.Duration             // 默认 3min（签收比方案确认更快）
+	closeOnce   sync.Once                 // 防止 Close() 重复调用 panic
+	cleanupDone chan struct{}             // 关闭时停止 TTL 清理 goroutine
+}
+
+// NewResultApprovalManager 创建结果签收管理器。
+func NewResultApprovalManager(
+	broadcastFn CoderConfirmBroadcastFunc,
+	timeout time.Duration,
+) *ResultApprovalManager {
+	if timeout <= 0 {
+		timeout = 3 * time.Minute
+	}
+	m := &ResultApprovalManager{
+		pending:     make(map[string]*resultApprovalEntry),
+		broadcast:   broadcastFn,
+		timeout:     timeout,
+		cleanupDone: make(chan struct{}),
+	}
+	go m.ttlCleanupLoop()
+	return m
+}
+
+// RequestResultApproval 请求用户签收子智能体执行结果。
+// 阻塞直到用户决策、超时或 ctx 取消。
+func (m *ResultApprovalManager) RequestResultApproval(ctx context.Context, req ResultApprovalRequest) (ResultApprovalDecision, error) {
+	// 填充默认字段
+	if req.ID == "" {
+		req.ID = uuid.New().String()
+	}
+	now := time.Now()
+	if req.CreatedAtMs == 0 {
+		req.CreatedAtMs = now.UnixMilli()
+	}
+	if req.ExpiresAtMs == 0 {
+		req.ExpiresAtMs = now.Add(m.timeout).UnixMilli()
+	}
+
+	ch := make(chan ResultApprovalDecision, 1)
+
+	m.mu.Lock()
+	m.pending[req.ID] = &resultApprovalEntry{
+		ch:        ch,
+		expiresAt: time.UnixMilli(req.ExpiresAtMs),
+	}
+	m.mu.Unlock()
+
+	// 广播结果签收请求到前端
+	if m.broadcast != nil {
+		m.broadcast("result.approve.requested", req)
+	}
+
+	slog.Debug("result approval requested",
+		"id", req.ID,
+		"contractId", req.ContractID,
+		"task", truncate(req.OriginalTask, 80),
+	)
+
+	// 等待用户决策、超时或 ctx 取消
+	timer := time.NewTimer(m.timeout)
+	defer timer.Stop()
+
+	var decision ResultApprovalDecision
+	select {
+	case decision = <-ch:
+		// 用户已决策
+	case <-timer.C:
+		// 超时自动批准（与 Phase 1 方案确认的超时拒绝不同 —
+		// 结果签收超时意味着用户未响应，默认接受结果更合理）
+		decision = ResultApprovalDecision{Action: "approve", Feedback: "timeout_auto_approved"}
+		slog.Info("result approval timed out, auto-approving",
+			"id", req.ID,
+		)
+	case <-ctx.Done():
+		decision = ResultApprovalDecision{Action: "approve", Feedback: "context_cancelled"}
+		slog.Debug("result approval cancelled by context",
+			"id", req.ID,
+		)
+	}
+
+	// 清理 pending
+	m.mu.Lock()
+	delete(m.pending, req.ID)
+	m.mu.Unlock()
+
+	// 广播决策结果
+	if m.broadcast != nil {
+		m.broadcast("result.approve.resolved", map[string]interface{}{
+			"id":       req.ID,
+			"decision": decision,
+			"ts":       time.Now().UnixMilli(),
+		})
+	}
+
+	return decision, nil
+}
+
+// ResolveResultApproval 处理前端的结果签收决策回调。
+// 由 WebSocket RPC "result.approve.resolve" 调用。
+func (m *ResultApprovalManager) ResolveResultApproval(id string, decision ResultApprovalDecision) error {
+	if decision.Action != "approve" && decision.Action != "reject" {
+		return fmt.Errorf("invalid decision action: %q (expected approve/reject)", decision.Action)
+	}
+
+	m.mu.Lock()
+	entry, ok := m.pending[id]
+	m.mu.Unlock()
+
+	if !ok {
+		return fmt.Errorf("no pending result approval with id: %s", id)
+	}
+
+	// 非阻塞写入（channel 有 1 缓冲）
+	select {
+	case entry.ch <- decision:
+		slog.Debug("result approval resolved",
+			"id", id,
+			"action", decision.Action,
+		)
+	default:
+		// channel 已被写入（超时或重复调用），忽略
+	}
+
+	return nil
+}
+
+// Close 关闭管理器，停止 TTL 清理 goroutine。安全支持重复调用。
+func (m *ResultApprovalManager) Close() {
+	m.closeOnce.Do(func() {
+		close(m.cleanupDone)
+	})
+}
+
+// Timeout 返回签收超时时间。
+func (m *ResultApprovalManager) Timeout() time.Duration {
+	return m.timeout
+}
+
+// PendingCount 返回当前等待签收的请求数（用于监控）。
+func (m *ResultApprovalManager) PendingCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.pending)
+}
+
+// ---------- TTL 清理 ----------
+
+func (m *ResultApprovalManager) ttlCleanupLoop() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.cleanupDone:
+			return
+		case <-ticker.C:
+			m.cleanupExpired()
+		}
+	}
+}
+
+func (m *ResultApprovalManager) cleanupExpired() {
+	now := time.Now()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for id, entry := range m.pending {
+		if now.Before(entry.expiresAt) {
+			continue // 未过期，跳过
+		}
+		// 过期 — auto-approve
+		select {
+		case entry.ch <- ResultApprovalDecision{Action: "approve", Feedback: "ttl_expired"}:
+			slog.Debug("result approval TTL expired, auto-approved", "id", id)
+		default:
+			// channel 已有决策（timer 先触发），只清理 map
+		}
+		delete(m.pending, id)
+	}
+}

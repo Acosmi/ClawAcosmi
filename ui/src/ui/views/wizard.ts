@@ -75,7 +75,7 @@ const STEP_TITLES_FALLBACK_KEYS = ["wizard.chooseProvider", "wizard.apiKey", "wi
 
 // ─── Controller functions ───
 
-export async function startWizard(state: AppViewState): Promise<void> {
+export async function startWizard(state: AppViewState, mode?: string): Promise<void> {
   const client = state.client;
   if (!client) return;
 
@@ -87,11 +87,14 @@ export async function startWizard(state: AppViewState): Promise<void> {
   state.wizardOpen = true;
 
   try {
+    const params: Record<string, unknown> = {};
+    if (mode) params.mode = mode;
+
     const result = await client.request<{
       sessionId: string;
       step?: WizardStep;
       done?: boolean;
-    }>("wizard.start", {});
+    }>("wizard.start", params);
 
     state.wizardState = {
       ...state.wizardState,
@@ -109,6 +112,10 @@ export async function startWizard(state: AppViewState): Promise<void> {
       status: "error",
     };
   }
+}
+
+export async function startOpenCoderWizard(state: AppViewState): Promise<void> {
+  return startWizard(state, "open-coder");
 }
 
 export async function wizardNext(
@@ -178,8 +185,17 @@ export async function cancelWizard(state: AppViewState): Promise<void> {
 }
 
 export function closeWizard(state: AppViewState): void {
+  const wasDone = state.wizardState.status === "done";
   state.wizardOpen = false;
   state.wizardState = { ...WIZARD_INITIAL_STATE };
+
+  // wizard 完成后自动刷新 subagents 数据（配置变更后需要重新加载）
+  if (wasDone) {
+    // 延迟 300ms 确保后端配置写入 + 缓存清除已完成
+    setTimeout(() => {
+      import("../controllers/subagents.ts").then((m) => m.loadSubAgents(state as any));
+    }, 300);
+  }
 }
 
 // ─── Render ───

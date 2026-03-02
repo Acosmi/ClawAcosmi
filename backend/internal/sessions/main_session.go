@@ -6,7 +6,7 @@ package sessions
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/routing"
+	"github.com/openacosmi/claw-acismi/internal/routing"
 )
 
 // ---------- 主会话键 ----------

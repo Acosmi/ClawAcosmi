@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // PluralKit 集成 — 继承自 src/discord/pluralkit.ts (59L)

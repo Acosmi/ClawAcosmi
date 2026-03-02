@@ -13,8 +13,8 @@ import (
 
 	dingtalkstream "github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // DingTalkPlugin 钉钉频道插件
@@ -45,6 +45,16 @@ func NewDingTalkPlugin(cfg *types.OpenAcosmiConfig) *DingTalkPlugin {
 // ID 返回频道标识
 func (p *DingTalkPlugin) ID() channels.ChannelID {
 	return channels.ChannelDingTalk
+}
+
+// UpdateConfig 实现 channels.ConfigUpdater 接口。
+// 热重载时注入新配置，后续 Start() 将使用新凭证（AppKey/AppSecret）建立 Stream 连接。
+func (p *DingTalkPlugin) UpdateConfig(cfg interface{}) {
+	if c, ok := cfg.(*types.OpenAcosmiConfig); ok {
+		p.mu.Lock()
+		p.config = c
+		p.mu.Unlock()
+	}
 }
 
 // Start 启动钉钉频道
@@ -86,34 +96,37 @@ func (p *DingTalkPlugin) Start(accountID string) error {
 		)
 
 		// 路由到 Agent 管线获取回复（优先多模态）
-		var reply string
+		var dispatchReply *channels.DispatchReply
 		if p.DispatchMultimodalFunc != nil {
 			// 构建 ChannelMessage（当前只有文本，Phase B 扩展）
 			cm := &channels.ChannelMessage{
 				Text:        text,
 				MessageType: "text",
 			}
-			reply = p.DispatchMultimodalFunc(
+			dispatchReply = p.DispatchMultimodalFunc(
 				"dingtalk", capturedAccountID, chatID, userID, cm)
 		} else if p.DispatchFunc != nil {
-			reply = p.DispatchFunc(context.Background(),
+			replyText := p.DispatchFunc(context.Background(),
 				"dingtalk", capturedAccountID, chatID, userID, text)
+			if replyText != "" {
+				dispatchReply = &channels.DispatchReply{Text: replyText}
+			}
 		} else {
 			slog.Warn("dingtalk: DispatchFunc not set, message not routed to agent",
 				"account", capturedAccountID)
 		}
 
-		if reply != "" {
+		if dispatchReply != nil && dispatchReply.Text != "" {
 			// 发送回复（根据会话类型选择群消息或单聊消息）
 			sender := p.GetSender(capturedAccountID)
 			if sender != nil {
 				if strings.HasPrefix(chatID, "cid") {
-					if err := sender.SendGroupMessage(context.Background(), chatID, reply); err != nil {
+					if err := sender.SendGroupMessage(context.Background(), chatID, dispatchReply.Text); err != nil {
 						slog.Error("dingtalk: failed to send group reply",
 							"account", capturedAccountID, "chat_id", chatID, "error", err)
 					}
 				} else {
-					if err := sender.SendOToMessage(context.Background(), []string{userID}, reply); err != nil {
+					if err := sender.SendOToMessage(context.Background(), []string{userID}, dispatchReply.Text); err != nil {
 						slog.Error("dingtalk: failed to send reply",
 							"account", capturedAccountID, "user_id", userID, "error", err)
 					}

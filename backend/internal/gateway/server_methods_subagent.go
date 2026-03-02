@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/anthropic/open-acosmi/internal/argus"
+	"github.com/openacosmi/claw-acismi/internal/argus"
+	types "github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // SubagentHandlers 返回子智能体方法映射。
@@ -21,20 +22,31 @@ func SubagentHandlers() map[string]GatewayMethodHandler {
 // ---------- subagent.list ----------
 
 type subagentEntry struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Status string `json:"status"` // "running" | "stopped" | "error" | "degraded" | "starting"
-	Error  string `json:"error,omitempty"`
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	Status     string `json:"status"` // "running" | "stopped" | "error" | "degraded" | "starting"
+	Error      string `json:"error,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Configured bool   `json:"configured,omitempty"`
 }
 
 func handleSubagentList(ctx *MethodHandlerContext) {
 	var entries []subagentEntry
 
+	// 热加载最新配置（wizard 保存后 ctx.Context.Config 仍为启动快照）
+	liveCfg := ctx.Context.Config
+	if ctx.Context.ConfigLoader != nil {
+		if fresh, err := ctx.Context.ConfigLoader.LoadConfig(); err == nil {
+			liveCfg = fresh
+		}
+	}
+
 	// 1. Argus 视觉子智能体
 	entries = append(entries, buildArgusEntry(ctx.Context.ArgusBridge))
 
 	// 2. oa-coder 编程子智能体
-	entries = append(entries, buildCoderEntry(ctx.Context.CoderConfirmMgr != nil))
+	entries = append(entries, buildCoderEntry(ctx.Context.CoderConfirmMgr != nil, liveCfg))
 
 	ctx.Respond(true, map[string]interface{}{
 		"agents": entries,
@@ -44,7 +56,7 @@ func handleSubagentList(ctx *MethodHandlerContext) {
 func buildArgusEntry(bridge *argus.Bridge) subagentEntry {
 	entry := subagentEntry{
 		ID:    "argus-screen",
-		Label: "Vision Observer",
+		Label: "灵瞳 Vision",
 	}
 	if bridge == nil {
 		entry.Status = "stopped"
@@ -65,17 +77,26 @@ func buildArgusEntry(bridge *argus.Bridge) subagentEntry {
 	return entry
 }
 
-func buildCoderEntry(confirmMgrAvailable bool) subagentEntry {
+func buildCoderEntry(confirmMgrAvailable bool, cfg *types.OpenAcosmiConfig) subagentEntry {
 	entry := subagentEntry{
 		ID:    "oa-coder",
-		Label: "Coder Agent",
+		Label: "Open Coder",
 	}
 	// oa-coder 是按需 spawn 的 LLM session，不是持久进程。
 	// 只要 CoderConfirmMgr 已初始化，说明 coder 子系统可用。
 	if confirmMgrAvailable {
-		entry.Status = "running"
+		entry.Status = "available"
 	} else {
 		entry.Status = "stopped"
+	}
+
+	// 填充 provider/model/configured 状态
+	entry.Configured = cfg != nil && cfg.SubAgents != nil && cfg.SubAgents.OpenCoder != nil
+	if entry.Configured {
+		// 仅已显式配置时返回 provider/model，避免暴露 fallback 供应商品牌
+		provider, model, _, _ := resolveOpenCoderConfig(cfg)
+		entry.Provider = provider
+		entry.Model = model
 	}
 	return entry
 }

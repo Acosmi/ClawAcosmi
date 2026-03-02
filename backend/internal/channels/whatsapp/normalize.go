@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/utils"
+	"github.com/openacosmi/claw-acismi/pkg/utils"
 )
 
 // WhatsApp 号码/JID 规范化 — 继承自 src/whatsapp/normalize.ts (81L)

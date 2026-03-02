@@ -5,7 +5,7 @@ package signal
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 func TestResolveSignalReactionLevel_Off(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ---------- exec.approvals.get ----------

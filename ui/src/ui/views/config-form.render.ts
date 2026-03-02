@@ -240,39 +240,48 @@ const sectionIcons = {
 // Section metadata
 export const SECTION_META: Record<string, { label: string; description: string }> = {
   env: {
-    label: "Environment Variables",
-    description: "Environment variables passed to the gateway process",
+    label: t("configForm.section.env.label"),
+    description: t("configForm.section.env.desc"),
   },
-  update: { label: "Updates", description: "Auto-update settings and release channel" },
-  agents: { label: "Agents", description: "Agent configurations, models, and identities" },
-  auth: { label: "Authentication", description: "API keys and authentication profiles" },
+  update: { label: t("configForm.section.update.label"), description: t("configForm.section.update.desc") },
+  agents: { label: t("configForm.section.agents.label"), description: t("configForm.section.agents.desc") },
+  auth: { label: t("configForm.section.auth.label"), description: t("configForm.section.auth.desc") },
   channels: {
-    label: "Channels",
-    description: "Messaging channels (Telegram, Discord, Slack, etc.)",
+    label: t("configForm.section.channels.label"),
+    description: t("configForm.section.channels.desc"),
   },
-  messages: { label: "Messages", description: "Message handling and routing settings" },
-  commands: { label: "Commands", description: "Custom slash commands" },
-  hooks: { label: "Hooks", description: "Webhooks and event hooks" },
-  skills: { label: "Skills", description: "Skill packs and capabilities" },
-  tools: { label: "Tools", description: "Tool configurations (browser, search, etc.)" },
-  gateway: { label: "Gateway", description: "Gateway server settings (port, auth, binding)" },
-  wizard: { label: "Setup Wizard", description: "Setup wizard state and history" },
+  messages: { label: t("configForm.section.messages.label"), description: t("configForm.section.messages.desc") },
+  commands: { label: t("configForm.section.commands.label"), description: t("configForm.section.commands.desc") },
+  hooks: { label: t("configForm.section.hooks.label"), description: t("configForm.section.hooks.desc") },
+  skills: { label: t("configForm.section.skills.label"), description: t("configForm.section.skills.desc") },
+  tools: { label: t("configForm.section.tools.label"), description: t("configForm.section.tools.desc") },
+  gateway: { label: t("configForm.section.gateway.label"), description: t("configForm.section.gateway.desc") },
+  wizard: { label: t("configForm.section.wizard.label"), description: t("configForm.section.wizard.desc") },
   // Additional sections
-  meta: { label: "Metadata", description: "Gateway metadata and version information" },
-  logging: { label: "Logging", description: "Log levels and output configuration" },
-  browser: { label: "Browser", description: "Browser automation settings" },
-  ui: { label: "UI", description: "User interface preferences" },
-  models: { label: "Models", description: "AI model configurations and providers" },
-  bindings: { label: "Bindings", description: "Key bindings and shortcuts" },
-  broadcast: { label: "Broadcast", description: "Broadcast and notification settings" },
-  audio: { label: "Audio", description: "Audio input/output settings" },
-  session: { label: "Session", description: "Session management and persistence" },
-  cron: { label: "Cron", description: "Scheduled tasks and automation" },
-  web: { label: "Web", description: "Web server and API settings" },
-  discovery: { label: "Discovery", description: "Service discovery and networking" },
-  canvasHost: { label: "Canvas Host", description: "Canvas rendering and display" },
-  talk: { label: "Talk", description: "Voice and speech settings" },
-  plugins: { label: "Plugins", description: "Plugin management and extensions" },
+  meta: { label: t("configForm.section.meta.label"), description: t("configForm.section.meta.desc") },
+  logging: { label: t("configForm.section.logging.label"), description: t("configForm.section.logging.desc") },
+  browser: { label: t("configForm.section.browser.label"), description: t("configForm.section.browser.desc") },
+  ui: { label: t("configForm.section.ui.label"), description: t("configForm.section.ui.desc") },
+  models: { label: t("configForm.section.models.label"), description: t("configForm.section.models.desc") },
+  bindings: { label: t("configForm.section.bindings.label"), description: t("configForm.section.bindings.desc") },
+  broadcast: { label: t("configForm.section.broadcast.label"), description: t("configForm.section.broadcast.desc") },
+  audio: { label: t("configForm.section.audio.label"), description: t("configForm.section.audio.desc") },
+  session: { label: t("configForm.section.session.label"), description: t("configForm.section.session.desc") },
+  cron: { label: t("configForm.section.cron.label"), description: t("configForm.section.cron.desc") },
+  web: { label: t("configForm.section.web.label"), description: t("configForm.section.web.desc") },
+  discovery: { label: t("configForm.section.discovery.label"), description: t("configForm.section.discovery.desc") },
+  canvasHost: { label: t("configForm.section.canvasHost.label"), description: t("configForm.section.canvasHost.desc") },
+  talk: { label: t("configForm.section.talk.label"), description: t("configForm.section.talk.desc") },
+  plugins: { label: t("configForm.section.plugins.label"), description: t("configForm.section.plugins.desc") },
+  approvals: { label: t("configForm.section.approvals.label"), description: t("configForm.section.approvals.desc") },
+  diagnostics: { label: t("configForm.section.diagnostics.label"), description: t("configForm.section.diagnostics.desc") },
+  docConv: { label: t("configForm.section.docConv.label"), description: t("configForm.section.docConv.desc") },
+  imageUnderstanding: { label: t("configForm.section.imageUnderstanding.label"), description: t("configForm.section.imageUnderstanding.desc") },
+  markdown: { label: t("configForm.section.markdown.label"), description: t("configForm.section.markdown.desc") },
+  memory: { label: t("configForm.section.memory.label"), description: t("configForm.section.memory.desc") },
+  nodeHost: { label: t("configForm.section.nodeHost.label"), description: t("configForm.section.nodeHost.desc") },
+  stt: { label: t("configForm.section.stt.label"), description: t("configForm.section.stt.desc") },
+  subAgents: { label: t("configForm.section.subAgents.label"), description: t("configForm.section.subAgents.desc") },
 };
 
 function getSectionIcon(key: string) {
@@ -414,7 +423,7 @@ export function renderConfigForm(props: ConfigFormProps) {
       <div class="config-empty">
         <div class="config-empty__icon">${icons.search}</div>
         <div class="config-empty__text">
-          ${searchQuery ? `No settings match "${searchQuery}"` : "No settings in this section"}
+          ${searchQuery ? t("configForm.noMatchSearch", { query: searchQuery }) : t("configForm.noMatchSection")}
         </div>
       </div>
     `;

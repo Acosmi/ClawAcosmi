@@ -156,14 +156,14 @@ mod tests {
 
     #[test]
     fn url_loopback_no_token() {
-        let url = resolve_dashboard_url(18789, "loopback", None, None, None);
-        assert_eq!(url, "http://127.0.0.1:18789");
+        let url = resolve_dashboard_url(19001, "loopback", None, None, None);
+        assert_eq!(url, "http://127.0.0.1:19001");
     }
 
     #[test]
     fn url_with_token_as_fragment() {
-        let url = resolve_dashboard_url(18789, "loopback", None, None, Some("secret"));
-        assert!(url.starts_with("http://127.0.0.1:18789#token="));
+        let url = resolve_dashboard_url(19001, "loopback", None, None, Some("secret"));
+        assert!(url.starts_with("http://127.0.0.1:19001#token="));
         assert!(url.contains("secret"));
     }
 
@@ -193,13 +193,13 @@ mod tests {
 
     #[test]
     fn url_empty_token_omits_fragment() {
-        let url = resolve_dashboard_url(18789, "loopback", None, None, Some(""));
-        assert_eq!(url, "http://127.0.0.1:18789");
+        let url = resolve_dashboard_url(19001, "loopback", None, None, Some(""));
+        assert_eq!(url, "http://127.0.0.1:19001");
     }
 
     #[test]
     fn url_token_special_chars_encoded() {
-        let url = resolve_dashboard_url(18789, "loopback", None, None, Some("a b&c=d"));
+        let url = resolve_dashboard_url(19001, "loopback", None, None, Some("a b&c=d"));
         assert!(url.contains("#token="));
         // The token should be percent-encoded
         assert!(!url.contains(' '));

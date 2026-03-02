@@ -3,7 +3,7 @@ package reply
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/reply-payloads.ts (124L)
@@ -90,6 +90,7 @@ func IsRenderablePayload(payload autoreply.ReplyPayload) bool {
 	return payload.Text != "" ||
 		payload.MediaURL != "" ||
 		len(payload.MediaURLs) > 0 ||
+		payload.MediaBase64 != "" ||
 		payload.AudioAsVoice ||
 		len(payload.ChannelData) > 0
 }

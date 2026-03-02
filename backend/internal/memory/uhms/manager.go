@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,6 +61,14 @@ type DefaultManager struct {
 	// Protected by mu. Persisted to VFS root as .last_summary; restored on gateway restart.
 	lastSummary string
 
+	// pendingOps tracks async operations (CommitSession, persistLastSummary, etc.)
+	// so that Close() can wait for them to finish before releasing resources.
+	pendingOps sync.WaitGroup
+
+	// skillsDistributing is set to 1 while autoDistributeSkills is indexing skills.
+	// Agent queries still execute but results include a note about partial indexing.
+	skillsDistributing atomic.Int32
+
 	mu     sync.RWMutex
 	closed bool
 }
@@ -98,13 +107,50 @@ func NewManager(cfg UHMSConfig, llm LLMProvider) (*DefaultManager, error) {
 	return m, nil
 }
 
-// SetVectorBackend injects optional vector search components.
-// Call after NewManager when VectorMode != off.
-func (m *DefaultManager) SetVectorBackend(idx VectorIndex, emb EmbeddingProvider) {
+// Config returns a pointer to the UHMSConfig used to initialize this manager.
+func (m *DefaultManager) Config() *UHMSConfig {
+	return &m.cfg
+}
+
+// SetSkillsDistributing sets the distributing flag. Called by autoDistributeSkills.
+func (m *DefaultManager) SetSkillsDistributing(v bool) {
+	if v {
+		m.skillsDistributing.Store(1)
+	} else {
+		m.skillsDistributing.Store(0)
+	}
+}
+
+// IsSkillsDistributing returns true while autoDistributeSkills is indexing.
+func (m *DefaultManager) IsSkillsDistributing() bool {
+	return m.skillsDistributing.Load() != 0
+}
+
+// SetSearchEngine injects the core search engine (Segment index) for system collections.
+// This enables SearchSystemEntries (skills, plugins, sessions) without requiring an embedding provider.
+// Always call this during gateway init to ensure the search engine is available.
+func (m *DefaultManager) SetSearchEngine(idx VectorIndex) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.vectorIndex = idx
+}
+
+// SetVectorBackend injects vector search components (index + embedding provider) for memory semantic search.
+// Call after NewManager when VectorMode != off. This replaces any prior search engine index.
+// The old vector index (if any) is closed to release Rust FFI resources.
+func (m *DefaultManager) SetVectorBackend(idx VectorIndex, emb EmbeddingProvider) {
+	m.mu.Lock()
+	oldIdx := m.vectorIndex
+	m.vectorIndex = idx
 	m.embedder = emb
+	m.mu.Unlock()
+
+	// Close old index outside lock to avoid holding the lock during FFI cleanup.
+	if oldIdx != nil && oldIdx != idx {
+		if err := oldIdx.Close(); err != nil {
+			slog.Warn("uhms: failed to close old vector index during backend upgrade", "error", err)
+		}
+	}
 }
 
 // SetCompactionClient injects the optional Anthropic Compaction API client.
@@ -531,6 +577,8 @@ func (m *DefaultManager) CompressIfNeeded(ctx context.Context, messages []Messag
 // ============================================================================
 
 func (m *DefaultManager) CommitSession(ctx context.Context, userID, sessionKey string, transcript []Message) (*CommitResult, error) {
+	m.pendingOps.Add(1)
+	defer m.pendingOps.Done()
 	return commitSession(ctx, m, userID, sessionKey, transcript)
 }
 
@@ -647,9 +695,7 @@ func (m *DefaultManager) DeleteMemory(ctx context.Context, userID, id string) er
 // ============================================================================
 
 func (m *DefaultManager) ListMemories(ctx context.Context, userID string, opts ListOptions) ([]Memory, int64, error) {
-	if userID == "" {
-		return nil, 0, fmt.Errorf("uhms: user_id is required")
-	}
+	// userID 为空时查询所有用户的记忆（管理页面使用）
 
 	memories, err := m.store.ListMemories(userID, opts)
 	if err != nil {
@@ -840,11 +886,29 @@ func extractBriefSections(summary string) string {
 // VFS returns the underlying LocalVFS instance.
 func (m *DefaultManager) VFS() *LocalVFS { return m.vfs }
 
+// VectorIndex returns the underlying VectorIndex (may be nil if VectorMode==off).
+func (m *DefaultManager) VectorIndex() VectorIndex {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.vectorIndex
+}
+
 // ============================================================================
 // Close
 // ============================================================================
 
 func (m *DefaultManager) Close() error {
+	// 等待所有 pending 异步操作完成（CommitSession、persistLastSummary 等），
+	// 最多等待 30 秒，防止关机时丢失记忆数据。
+	done := make(chan struct{})
+	go func() { m.pendingOps.Wait(); close(done) }()
+	select {
+	case <-done:
+		slog.Info("uhms: all pending operations flushed before close")
+	case <-time.After(30 * time.Second):
+		slog.Warn("uhms: pending operations flush timeout (30s), proceeding with close")
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -888,24 +952,177 @@ func (m *DefaultManager) IndexSystemEntry(ctx context.Context, collection, id st
 
 // SearchSystemEntries searches a system collection by payload fields.
 // Returns hits with payload data including vfs_path for tiered content loading.
+//
+// 降级链:
+//  1. Qdrant SearchByPayload (vectorIndex != nil + 支持 payloadSearcher)
+//  2. VFS meta.json 关键词扫描 (vectorIndex == nil 或 Qdrant 失败)
 func (m *DefaultManager) SearchSystemEntries(ctx context.Context, collection, query string, topK int) ([]PayloadHit, error) {
 	m.mu.RLock()
 	vi := m.vectorIndex
 	m.mu.RUnlock()
 
-	if vi == nil {
-		return nil, fmt.Errorf("uhms: vector index not initialized")
+	// 主路径: Qdrant payload search
+	if vi != nil {
+		type payloadSearcher interface {
+			SearchByPayload(ctx context.Context, collection, query string, topK int) ([]PayloadHit, error)
+		}
+		if ps, ok := vi.(payloadSearcher); ok {
+			hits, err := ps.SearchByPayload(ctx, collection, query, topK)
+			if err == nil && len(hits) > 0 {
+				return hits, nil
+			}
+			if err != nil {
+				// Qdrant 失败 → fall through to VFS fallback
+				slog.Warn("uhms: Qdrant payload search failed, falling back to VFS",
+					"collection", collection, "error", err)
+			} else {
+				// 0 hits — 可能是纯 Go 重启后数据丢失，降级到 VFS
+				slog.Debug("uhms: Qdrant payload search returned 0 hits, falling back to VFS",
+					"collection", collection, "query", query)
+			}
+		}
 	}
 
-	// Type assert to access payload search
-	type payloadSearcher interface {
-		SearchByPayload(ctx context.Context, collection, query string, topK int) ([]PayloadHit, error)
-	}
-	if ps, ok := vi.(payloadSearcher); ok {
-		return ps.SearchByPayload(ctx, collection, query, topK)
+	// 降级路径: VFS meta.json 关键词扫描
+	return m.searchSystemEntriesVFSFallback(ctx, collection, query, topK)
+}
+
+// searchSystemEntriesVFSFallback 在 vectorIndex 不可用时，扫描 VFS meta.json 进行关键词匹配。
+func (m *DefaultManager) searchSystemEntriesVFSFallback(_ context.Context, collection, query string, topK int) ([]PayloadHit, error) {
+	if m.vfs == nil {
+		return nil, fmt.Errorf("uhms: neither vector index nor VFS available")
 	}
 
-	return nil, fmt.Errorf("uhms: vector index does not support payload search")
+	ns := collectionToNamespace(collection)
+
+	// 列出所有 category
+	categories, err := m.vfs.ListSystemCategories(ns)
+	if err != nil {
+		return nil, fmt.Errorf("uhms: VFS list categories for %s: %w", ns, err)
+	}
+
+	// 分词
+	queryTerms := tokenizeQuery(query)
+	if len(queryTerms) == 0 {
+		return nil, nil
+	}
+
+	type scored struct {
+		hit   PayloadHit
+		score float64
+	}
+	var candidates []scored
+
+	for _, cat := range categories {
+		refs, listErr := m.vfs.ListSystemEntries(ns, cat)
+		if listErr != nil {
+			continue
+		}
+		for _, ref := range refs {
+			meta, metaErr := m.vfs.ReadSystemMeta(ns, cat, ref.ID)
+			if metaErr != nil || meta == nil {
+				continue
+			}
+
+			// 扩大搜索范围: 将 L0 摘要注入 meta 用于关键词匹配
+			// 解决 meta 字段（name/description/tags/category）关键词不足导致搜索失败的问题
+			if l0, l0Err := m.vfs.ReadSystemL0(ns, cat, ref.ID); l0Err == nil && l0 != "" {
+				meta["_l0_content"] = l0
+			}
+
+			score := vfsMetaKeywordScore(meta, queryTerms)
+			if score <= 0 {
+				continue
+			}
+
+			vfsPath := fmt.Sprintf("_system/%s/%s/%s", ns, cat, ref.ID)
+			candidates = append(candidates, scored{
+				hit: PayloadHit{
+					ID:      ref.ID,
+					Payload: meta,
+					Score:   score,
+					VFSPath: vfsPath,
+				},
+				score: score,
+			})
+		}
+	}
+
+	// 按分数降序排序
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	// 取 topK
+	if topK <= 0 {
+		topK = 10
+	}
+	if len(candidates) > topK {
+		candidates = candidates[:topK]
+	}
+
+	hits := make([]PayloadHit, len(candidates))
+	for i, c := range candidates {
+		hits[i] = c.hit
+	}
+	return hits, nil
+}
+
+// collectionToNamespace 将 Qdrant collection 名映射为 VFS namespace。
+func collectionToNamespace(collection string) string {
+	switch collection {
+	case "sys_skills":
+		return "skills"
+	case "sys_plugins":
+		return "plugins"
+	case "sys_sessions":
+		return "sessions"
+	default:
+		// 去除 "sys_" 前缀
+		return strings.TrimPrefix(collection, "sys_")
+	}
+}
+
+// tokenizeQuery 将查询分词为小写 terms。
+func tokenizeQuery(query string) []string {
+	fields := strings.Fields(strings.ToLower(query))
+	var terms []string
+	for _, f := range fields {
+		f = strings.TrimSpace(f)
+		if len(f) >= 2 { // 忽略过短的词
+			terms = append(terms, f)
+		}
+	}
+	return terms
+}
+
+// vfsMetaKeywordScore 计算 meta.json 字段与查询词的匹配分数。
+// 匹配 name, description, tags, category 及注入的 _l0_content 字段。
+func vfsMetaKeywordScore(meta map[string]interface{}, queryTerms []string) float64 {
+	// 拼接可搜索字段（含注入的 L0 摘要内容，扩大关键词覆盖）
+	var sb strings.Builder
+	for _, key := range []string{"name", "description", "tags", "category", "_l0_content"} {
+		if v, ok := meta[key].(string); ok {
+			sb.WriteString(strings.ToLower(v))
+			sb.WriteByte(' ')
+		}
+	}
+	haystack := sb.String()
+	if haystack == "" {
+		return 0
+	}
+
+	var score float64
+	for _, term := range queryTerms {
+		if strings.Contains(haystack, term) {
+			score += 1.0
+			// name 精确匹配加分
+			if name, ok := meta["name"].(string); ok && strings.EqualFold(name, term) {
+				score += 2.0
+			}
+		}
+	}
+	return score
 }
 
 // DeleteSystemEntry removes an entry from a system collection.
@@ -1101,11 +1318,23 @@ func (m *DefaultManager) searchByVector(ctx context.Context, userID, query strin
 		return nil, err
 	}
 
+	// 尝试使用 HNSW 调参搜索（优先），回退到标准搜索。
+	type paramSearcher interface {
+		SearchWithParams(ctx context.Context, collection string, query []float32, topK int, hnswEf int) ([]VectorHit, error)
+	}
+	ps, hasParams := m.vectorIndex.(paramSearcher)
+
 	// 搜索所有记忆类型集合
 	var results []SearchResult
 	for _, mt := range AllMemoryTypes {
 		collection := "mem_" + string(mt)
-		hits, err := m.vectorIndex.Search(ctx, collection, vec, topK)
+		var hits []VectorHit
+		if hasParams {
+			// HNSW ef=0 使用索引默认值；后续可根据 topK 动态调整。
+			hits, err = ps.SearchWithParams(ctx, collection, vec, topK, 0)
+		} else {
+			hits, err = m.vectorIndex.Search(ctx, collection, vec, topK)
+		}
 		if err != nil {
 			continue
 		}
@@ -1345,7 +1574,9 @@ const lastSummaryFileName = ".last_summary"
 // persistLastSummary writes lastSummary to the VFS root (async, non-blocking).
 // Failure is non-fatal — next session just starts without anchored context.
 func (m *DefaultManager) persistLastSummary(summary string) {
+	m.pendingOps.Add(1)
 	safeGo("persist_last_summary", func() {
+		defer m.pendingOps.Done()
 		path := filepath.Join(m.vfs.Root(), lastSummaryFileName)
 		if err := os.WriteFile(path, []byte(summary), 0600); err != nil {
 			slog.Warn("uhms: persist lastSummary failed (non-fatal)", "error", err)

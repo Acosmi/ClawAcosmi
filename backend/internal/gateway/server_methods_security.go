@@ -7,7 +7,7 @@ package gateway
 // 写入操作复用 exec.approvals.set API。
 
 import (
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // SecurityHandlers 返回 security.* 方法处理器映射。
@@ -38,7 +38,7 @@ func handleSecurityGet(ctx *MethodHandlerContext) {
 	// 判断是否为永久授权（full 模式）
 	isPermanentFull := currentLevel == string(infra.ExecSecurityFull)
 
-	// 构建安全级别描述
+	// 构建安全级别描述（L0-L3 四层模型）
 	levels := []map[string]interface{}{
 		{
 			"id":            string(infra.ExecSecurityDeny),
@@ -52,19 +52,28 @@ func handleSecurityGet(ctx *MethodHandlerContext) {
 		{
 			"id":            string(infra.ExecSecurityAllowlist),
 			"label":         "L1 — Allowlist",
-			"labelZh":       "L1 — 允许列表",
-			"description":   "Agent can execute pre-approved commands from the allowlist. Write access controlled by rules.",
-			"descriptionZh": "智能体可以执行允许列表中预批准的命令。写入权限由规则控制。",
+			"labelZh":       "L1 — 工作区受限",
+			"description":   "Agent can execute pre-approved commands from the allowlist. Sandbox enforced, no network.",
+			"descriptionZh": "智能体可以执行允许列表中预批准的命令。强制沙箱，无网络。",
 			"risk":          "medium",
 			"active":        currentLevel == string(infra.ExecSecurityAllowlist),
 		},
 		{
-			"id":            string(infra.ExecSecurityFull),
-			"label":         "L2 — Full Access",
-			"labelZh":       "L2 — 完全访问",
-			"description":   "Agent has full write and execute permissions. Use with caution — permanent authorization requires confirmation.",
-			"descriptionZh": "智能体拥有完全的写入和执行权限。请谨慎使用 — 永久授权需要确认。",
+			"id":            string(infra.ExecSecuritySandboxed),
+			"label":         "L2 — Sandboxed Full",
+			"labelZh":       "L2 — 沙箱全权限",
+			"description":   "Full permissions within sandbox. No network. Optional host directory mounts with approval.",
+			"descriptionZh": "沙箱内全权限执行，无网络。可按审批挂载宿主机目录。",
 			"risk":          "high",
+			"active":        currentLevel == string(infra.ExecSecuritySandboxed),
+		},
+		{
+			"id":            string(infra.ExecSecurityFull),
+			"label":         "L3 — Bare Machine Full",
+			"labelZh":       "L3 — 裸机全权限",
+			"description":   "Unrestricted host access with full network. All tool calls audited. Max TTL 60 min.",
+			"descriptionZh": "宿主机无限制访问，网络全开。所有工具调用记录审计日志。最长 60 分钟。",
+			"risk":          "critical",
 			"active":        currentLevel == string(infra.ExecSecurityFull),
 		},
 	}

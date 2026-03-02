@@ -10,7 +10,7 @@ package gateway
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/tts"
+	"github.com/openacosmi/claw-acismi/internal/tts"
 )
 
 // TtsHandlers 返回 tts.* 方法映射。

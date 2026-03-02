@@ -470,6 +470,7 @@ export function renderProcessingCard(
   assistant?: AssistantIdentity,
 ) {
   const elapsed = Date.now() - startedAt;
+  const elapsedSeconds = Math.floor(elapsed / 1000);
   const elapsedStr = formatElapsed(elapsed);
   const hasContent = stream !== null && stream.trim().length > 0;
 
@@ -477,15 +478,22 @@ export function renderProcessingCard(
     <div class="chat-group assistant">
       ${renderAvatar("assistant", assistant)}
       <div class="chat-group-messages">
-        <div class="chat-processing-card">
-          <div class="chat-processing-card__header">
-            <span class="chat-processing-card__shimmer"></span>
-            <span class="chat-processing-card__label">${t("chat.processing")}</span>
-            <span class="chat-processing-card__time">${elapsedStr}</span>
+        <div class="chat-processing-card ${!hasContent ? 'chat-processing-card--waiting' : ''}">
+          <div class="chat-processing-card__content">
+            <div class="chat-processing-card__icon-wrap">
+              <svg class="chat-processing-card__anim-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
+              </svg>
+            </div>
+            <div class="chat-processing-card__text-wrap">
+              <span class="chat-processing-card__title">任务正在处理中 (${elapsedSeconds}s)</span>
+            </div>
           </div>
-          <div class="chat-processing-card__body">
-            ${hasContent
-      ? renderGroupedMessage(
+          ${hasContent
+      ? html`
+              <div class="chat-processing-card__stream">
+                ${renderGroupedMessage(
         {
           role: "assistant",
           content: [{ type: "text", text: stream! }],
@@ -493,16 +501,11 @@ export function renderProcessingCard(
         },
         { isStreaming: true, showReasoning: false },
         onOpenSidebar,
-      )
-      : html`
-                  <div class="chat-bubble chat-reading-indicator" aria-hidden="true">
-                    <span class="chat-reading-indicator__dots">
-                      <span></span><span></span><span></span>
-                    </span>
-                  </div>
-                `
+      )}
+              </div>
+            `
+      : nothing
     }
-          </div>
         </div>
       </div>
     </div>

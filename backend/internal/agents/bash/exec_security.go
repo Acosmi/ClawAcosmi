@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ========== 安全黑名单 ==========
@@ -120,6 +120,7 @@ type ExecSecurity = infra.ExecSecurity
 const (
 	ExecSecurityDeny      = infra.ExecSecurityDeny
 	ExecSecurityAllowlist = infra.ExecSecurityAllowlist
+	ExecSecuritySandboxed = infra.ExecSecuritySandboxed
 	ExecSecurityFull      = infra.ExecSecurityFull
 )
 
@@ -224,6 +225,8 @@ func NormalizeExecSecurity(value string) ExecSecurity {
 		return ExecSecurityDeny
 	case "allowlist":
 		return ExecSecurityAllowlist
+	case "sandboxed":
+		return ExecSecuritySandboxed
 	case "full":
 		return ExecSecurityFull
 	default:

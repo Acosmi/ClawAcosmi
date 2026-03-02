@@ -15,8 +15,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/log"
-	"github.com/anthropic/open-acosmi/pkg/utils"
+	"github.com/openacosmi/claw-acismi/pkg/log"
+	"github.com/openacosmi/claw-acismi/pkg/utils"
 )
 
 // ToolDisplay 工具展示信息。

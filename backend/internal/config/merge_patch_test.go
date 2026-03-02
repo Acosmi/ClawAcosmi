@@ -55,7 +55,7 @@ func TestApplyMergePatch_NullDeletes(t *testing.T) {
 func TestApplyMergePatch_NestedRecursive(t *testing.T) {
 	base := map[string]interface{}{
 		"gateway": map[string]interface{}{
-			"port": float64(18789),
+			"port": float64(19001),
 			"mode": "local",
 		},
 	}
@@ -67,7 +67,7 @@ func TestApplyMergePatch_NestedRecursive(t *testing.T) {
 	result := ApplyMergePatch(base, patch)
 	m := result.(map[string]interface{})
 	gw := m["gateway"].(map[string]interface{})
-	if gw["port"] != float64(18789) {
+	if gw["port"] != float64(19001) {
 		t.Errorf("gateway.port should be preserved, got %v", gw["port"])
 	}
 	if gw["mode"] != "remote" {

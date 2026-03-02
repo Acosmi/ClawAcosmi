@@ -35,8 +35,10 @@ npm-debug.log*
 tmp/
 temp/
 
-# Argus Build 
-Argus/build/
+# Sub-agent projects (视觉/媒体运营/Coder)
+Acosmo-Code/
+Argus/
+Swabble/
 
 # User requested ignoral
 docs/

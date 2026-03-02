@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,36 +37,70 @@ type CoderConfirmationRequest struct {
 // CoderConfirmBroadcastFunc 广播回调（解耦 runner 与 gateway）。
 type CoderConfirmBroadcastFunc func(event string, payload interface{})
 
+// CoderConfirmRemoteNotifyFunc 远程通知回调（飞书/钉钉等非 Web 渠道）。
+// sessionKey 用于确定目标渠道（如 "feishu:<chatID>"）。
+type CoderConfirmRemoteNotifyFunc func(req CoderConfirmationRequest, sessionKey string)
+
 // CoderConfirmationManager 管理 coder 工具调用确认流。
-// 当 coder 触发可确认工具 (edit/write/bash) 时：
-//  1. 广播 "coder.confirm.requested" 给前端
-//  2. 阻塞等待用户决策（allow/deny）或超时
-//  3. 前端通过 "coder.confirm.resolve" RPC 回调
+// 当 coder 触发可确认工具 (edit/write/bash/argus 高风险操作) 时：
+//  1. 广播 "coder.confirm.requested" 给前端（WebSocket）
+//  2. 推送远程通知到非 Web 渠道（飞书卡片等）
+//  3. 阻塞等待用户决策（allow/deny）或超时
+//  4. 前端通过 "coder.confirm.resolve" RPC 回调，或飞书卡片按钮回调
 //
 // 为 nil 时完全跳过确认（兼容现有行为）。
 type CoderConfirmationManager struct {
-	mu        sync.Mutex
-	pending   map[string]chan string // id → decision ("allow"/"deny")
-	broadcast CoderConfirmBroadcastFunc
-	timeout   time.Duration // 默认 60s
+	mu           sync.Mutex
+	pending      map[string]chan string // id → decision ("allow"/"deny")
+	broadcast    CoderConfirmBroadcastFunc
+	remoteNotify CoderConfirmRemoteNotifyFunc
+	timeout      time.Duration // 默认 5min
+
+	// Phase 7: 合约感知审批路由
+	approvalRouter *ApprovalRouter
+	activeContract *DelegationContract
 }
 
 // NewCoderConfirmationManager 创建确认管理器。
-func NewCoderConfirmationManager(broadcastFn CoderConfirmBroadcastFunc, timeout time.Duration) *CoderConfirmationManager {
+func NewCoderConfirmationManager(broadcastFn CoderConfirmBroadcastFunc, remoteNotifyFn CoderConfirmRemoteNotifyFunc, timeout time.Duration) *CoderConfirmationManager {
 	if timeout <= 0 {
-		timeout = 60 * time.Second
+		timeout = 5 * time.Minute
 	}
 	return &CoderConfirmationManager{
-		pending:   make(map[string]chan string),
-		broadcast: broadcastFn,
-		timeout:   timeout,
+		pending:      make(map[string]chan string),
+		broadcast:    broadcastFn,
+		remoteNotify: remoteNotifyFn,
+		timeout:      timeout,
 	}
 }
 
 // RequestConfirmation 请求用户确认一个 coder 操作。
 // 阻塞直到用户决策、超时或 ctx 取消。
+// sessionKey 标识发起会话（如 "feishu:<chatID>"），用于路由远程通知。
 // 返回 true 表示用户批准，false 表示拒绝/超时/取消。
-func (m *CoderConfirmationManager) RequestConfirmation(ctx context.Context, toolName string, args json.RawMessage) (bool, error) {
+func (m *CoderConfirmationManager) RequestConfirmation(ctx context.Context, toolName string, args json.RawMessage, sessionKey string) (bool, error) {
+	// Phase 7: 合约上下文风险评估——低风险自动放行，高风险路由到用户
+	// 快照：在锁下拷贝指针，避免与 SetActiveContract/ClearActiveContract 竞争
+	m.mu.Lock()
+	router := m.approvalRouter
+	contract := m.activeContract
+	m.mu.Unlock()
+	if router != nil && contract != nil {
+		decision, reason := router.RouteApproval(contract, toolName, args)
+		router.recordAudit(contract.ContractID, toolName, decision, reason)
+		switch decision {
+		case ApprovalAutoApproved:
+			slog.Debug("coder confirmation auto-approved by contract",
+				"tool", toolName, "reason", reason, "contractID", contract.ContractID)
+			return true, nil
+		case ApprovalAutoDenied:
+			slog.Info("coder confirmation auto-denied by contract",
+				"tool", toolName, "reason", reason, "contractID", contract.ContractID)
+			return false, nil
+		}
+		// ApprovalAskUser: 继续现有流程
+	}
+
 	now := time.Now()
 	req := CoderConfirmationRequest{
 		ID:          uuid.New().String(),
@@ -82,14 +117,20 @@ func (m *CoderConfirmationManager) RequestConfirmation(ctx context.Context, tool
 	m.pending[req.ID] = ch
 	m.mu.Unlock()
 
-	// 广播确认请求到前端
+	// 广播确认请求到前端（WebSocket）
 	if m.broadcast != nil {
 		m.broadcast("coder.confirm.requested", req)
+	}
+
+	// 推送远程通知到非 Web 渠道（飞书卡片等）
+	if m.remoteNotify != nil && sessionKey != "" {
+		m.remoteNotify(req, sessionKey)
 	}
 
 	slog.Debug("coder confirmation requested",
 		"id", req.ID,
 		"tool", toolName,
+		"sessionKey", sessionKey,
 	)
 
 	// 等待用户决策、超时或 ctx 取消
@@ -189,8 +230,16 @@ func extractCoderPreview(toolName string, args json.RawMessage) *CoderConfirmPre
 			preview.Content = truncatePreview(v, 500)
 			preview.LineCount = countLines(v)
 		}
-	case "bash":
+	case "bash", "bash (write detected)":
 		if v, ok := parsed["command"].(string); ok {
+			preview.Command = v
+		}
+	default:
+		// Argus 工具（argus_open_url, argus_run_shell 等）：
+		// 提取 target/command 字段作为预览
+		if v, ok := parsed["target"].(string); ok {
+			preview.Command = v
+		} else if v, ok := parsed["command"].(string); ok {
 			preview.Command = v
 		}
 	}
@@ -219,4 +268,186 @@ func countLines(s string) int {
 		}
 	}
 	return count
+}
+
+// ---------- Phase 7: 集中审批路由 ----------
+
+// ApprovalDecision 审批决策类型。
+type ApprovalDecision string
+
+const (
+	ApprovalAutoApproved ApprovalDecision = "auto_approved"
+	ApprovalAskUser      ApprovalDecision = "ask_user"
+	ApprovalAutoDenied   ApprovalDecision = "auto_denied"
+)
+
+// ApprovalAuditEntry 审批审计条目。
+type ApprovalAuditEntry struct {
+	Timestamp  time.Time        `json:"timestamp"`
+	ContractID string           `json:"contract_id,omitempty"`
+	ToolName   string           `json:"tool_name"`
+	Decision   ApprovalDecision `json:"decision"`
+	Reason     string           `json:"reason"`
+}
+
+// ApprovalRouter 合约上下文风险评估路由器。
+// 基于规则评估（非 LLM 调用），零延迟判定。
+type ApprovalRouter struct {
+	mu       sync.Mutex
+	auditLog []ApprovalAuditEntry
+}
+
+// NewApprovalRouter 创建审批路由器。
+func NewApprovalRouter() *ApprovalRouter {
+	return &ApprovalRouter{}
+}
+
+// RouteApproval 根据合约上下文评估工具调用风险，返回审批决策和原因。
+func (r *ApprovalRouter) RouteApproval(contract *DelegationContract, toolName string, args json.RawMessage) (ApprovalDecision, string) {
+	if contract == nil {
+		return ApprovalAskUser, "no active contract"
+	}
+
+	// 解析工具参数
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(args, &parsed); err != nil {
+		return ApprovalAskUser, "failed to parse args"
+	}
+
+	return assessToolRisk(contract, toolName, parsed)
+}
+
+// assessToolRisk 评估工具调用的风险等级。
+// 规则评估，非 LLM 调用（LLM 每次 2-5s 延迟不可接受）。
+func assessToolRisk(contract *DelegationContract, toolName string, parsed map[string]interface{}) (ApprovalDecision, string) {
+	switch toolName {
+	// 只读工具: 低风险，自动放行
+	case "read", "read_file", "grep", "glob", "find", "ls", "list_dir", "search":
+		return ApprovalAutoApproved, "read-only tool"
+
+	// edit: 检查文件路径是否在 scope 内
+	case "edit":
+		filePath, _ := parsed["filePath"].(string)
+		if filePath == "" {
+			filePath, _ = parsed["file_path"].(string)
+		}
+		if filePath != "" && isPathInContractScope(contract, filePath) {
+			return ApprovalAutoApproved, "edit within contract scope"
+		}
+		return ApprovalAskUser, "edit outside contract scope"
+
+	// write: 即使在 scope 内也需要确认（创建新文件风险更高）
+	case "write", "write_file":
+		filePath, _ := parsed["filePath"].(string)
+		if filePath == "" {
+			filePath, _ = parsed["file_path"].(string)
+		}
+		if filePath != "" && isPathInContractScope(contract, filePath) {
+			return ApprovalAskUser, "write within contract scope (requires confirmation)"
+		}
+		return ApprovalAskUser, "write outside contract scope"
+
+	// bash: 检查命令是否在白名单内
+	case "bash", "bash (write detected)":
+		command, _ := parsed["command"].(string)
+		if command == "" {
+			return ApprovalAskUser, "empty command"
+		}
+		if isCommandInAllowedList(contract, command) {
+			return ApprovalAutoApproved, "bash command in allowed list"
+		}
+		return ApprovalAskUser, "bash command not in allowed list"
+
+	// argus_* 工具: 有独立审批系统（actionRiskMap），跳过
+	default:
+		if len(toolName) > 6 && toolName[:6] == "argus_" {
+			return ApprovalAskUser, "argus tool (uses independent approval)"
+		}
+		return ApprovalAskUser, "unknown tool"
+	}
+}
+
+// isPathInContractScope 检查文件路径是否在合约 scope 路径内。
+func isPathInContractScope(contract *DelegationContract, filePath string) bool {
+	if len(contract.Scope) == 0 {
+		return false
+	}
+	scopePaths := make([]string, 0, len(contract.Scope))
+	for _, s := range contract.Scope {
+		scopePaths = append(scopePaths, s.Path)
+	}
+	return isPathUnderAny(filePath, scopePaths)
+}
+
+// isCommandInAllowedList 检查命令是否在合约白名单中。
+// 要求精确的词边界匹配：允许 "cargo test" 不能匹配 "cargo test && rm -rf /"。
+// 允许命令后跟空格+参数（如 "cargo test --release"），但不允许 shell 链接操作符（&&, ||, ;, |）。
+func isCommandInAllowedList(contract *DelegationContract, command string) bool {
+	if len(contract.Constraints.AllowedCommands) == 0 {
+		return false
+	}
+	trimmed := strings.TrimSpace(command)
+	// 拒绝包含 shell 链接操作符的命令（防止 "allowed && malicious"）
+	for _, op := range []string{"&&", "||", ";", "|", "`", "$(", "\n"} {
+		if strings.Contains(trimmed, op) {
+			return false
+		}
+	}
+	for _, allowed := range contract.Constraints.AllowedCommands {
+		if trimmed == allowed {
+			return true
+		}
+		// 允许命令后跟空格+参数（如 allowed="cargo test", command="cargo test --release"）
+		if strings.HasPrefix(trimmed, allowed+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+// recordAudit 记录审批审计条目。
+func (r *ApprovalRouter) recordAudit(contractID, toolName string, decision ApprovalDecision, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.auditLog = append(r.auditLog, ApprovalAuditEntry{
+		Timestamp:  time.Now(),
+		ContractID: contractID,
+		ToolName:   toolName,
+		Decision:   decision,
+		Reason:     reason,
+	})
+}
+
+// FlushAudit 获取并清空审计日志。
+func (r *ApprovalRouter) FlushAudit() []ApprovalAuditEntry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entries := r.auditLog
+	r.auditLog = nil
+	return entries
+}
+
+// SetActiveContract 设置当前活动合约（子 Agent spawn 前调用）。
+func (m *CoderConfirmationManager) SetActiveContract(c *DelegationContract) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.activeContract = c
+	// 按需创建路由器
+	if m.approvalRouter == nil {
+		m.approvalRouter = NewApprovalRouter()
+	}
+}
+
+// ClearActiveContract 清除当前活动合约（子 Agent 完成后调用）。
+func (m *CoderConfirmationManager) ClearActiveContract() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.activeContract = nil
+}
+
+// ApprovalRouter 返回审批路由器（可能为 nil）。
+func (m *CoderConfirmationManager) ApprovalRouterRef() *ApprovalRouter {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.approvalRouter
 }

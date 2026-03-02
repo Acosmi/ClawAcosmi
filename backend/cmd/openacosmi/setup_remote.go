@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
-const defaultGatewayURL = "ws://127.0.0.1:18789"
+const defaultGatewayURL = "ws://127.0.0.1:19001"
 
 // pickHost 从 beacon 中选择最佳主机地址。
 // 对应 TS: pickHost (onboard-remote.ts L10-12)。
@@ -40,7 +40,7 @@ func buildBeaconLabel(beacon *infra.GatewayBonjourBeacon) string {
 		port = beacon.Port
 	}
 	if port == 0 {
-		port = 18789
+		port = 19001
 	}
 	title := beacon.DisplayName
 	if title == "" {
@@ -153,7 +153,7 @@ func PromptRemoteGatewayConfig(
 		host := pickHost(selectedBeacon)
 		port := selectedBeacon.GatewayPort
 		if port == 0 {
-			port = 18789
+			port = 19001
 		}
 		if host != "" {
 			modeOpts := []tui.PromptOption{
@@ -174,8 +174,8 @@ func PromptRemoteGatewayConfig(
 				}
 				prompter.Note(strings.Join([]string{
 					"Start a tunnel before using the CLI:",
-					fmt.Sprintf("ssh -N -L 18789:127.0.0.1:18789 <user>@%s%s", host, sshPortHint),
-					"Docs: https://docs.openacosmi.ai/gateway/remote",
+					fmt.Sprintf("ssh -N -L 19001:127.0.0.1:19001 <user>@%s%s", host, sshPortHint),
+					"Docs: docs/skills/gateway/remote/SKILL.md",
 				}, "\n"), "SSH tunnel")
 			}
 		}

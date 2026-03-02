@@ -14,15 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/memory/uhms"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
 )
 
 // SkillDistributeResult 技能分级结果。
 type SkillDistributeResult struct {
-	Indexed  int           `json:"indexed"`
-	Skipped  int           `json:"skipped"`
-	Errors   []string      `json:"errors,omitempty"`
-	Duration time.Duration `json:"duration"`
+	Indexed        int           `json:"indexed"`         // VFS 新写入数
+	Skipped        int           `json:"skipped"`         // VFS 增量跳过数（content_hash 未变）
+	SearchUpserted int           `json:"search_upserted"` // 搜索引擎 upsert 成功数
+	Errors         []string      `json:"errors,omitempty"`
+	Duration       time.Duration `json:"duration"`
 }
 
 // DistributeSkills 将技能解析为 L0/L1/L2 写入 VFS，并在 Qdrant 中建立索引。
@@ -36,68 +37,82 @@ func DistributeSkills(ctx context.Context, vfs uhms.VFS, vectorIndex uhms.Vector
 			return result, err
 		}
 
-		skipped, err := distributeOneSkill(ctx, vfs, vectorIndex, entry)
+		vfsSkipped, searchUpserted, err := distributeOneSkill(ctx, vfs, vectorIndex, entry)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", entry.Skill.Name, err))
 			slog.Warn("skill_distributor: failed to distribute skill",
 				"name", entry.Skill.Name, "error", err)
 			continue
 		}
-		if skipped {
+		if vfsSkipped {
 			result.Skipped++
 		} else {
 			result.Indexed++
+		}
+		if searchUpserted {
+			result.SearchUpserted++
 		}
 	}
 
 	result.Duration = time.Since(start)
 	slog.Info("skill_distributor: distribute complete",
-		"indexed", result.Indexed, "skipped", result.Skipped,
+		"vfs_written", result.Indexed, "vfs_skipped", result.Skipped,
+		"search_upserted", result.SearchUpserted,
 		"errors", len(result.Errors), "duration", result.Duration)
 	return result, nil
 }
 
 // distributeOneSkill 处理单个技能的 VFS 分级 + Qdrant 索引。
-// 返回 (skipped, error): 如果 content_hash 未变则 skip。
-func distributeOneSkill(ctx context.Context, vfs uhms.VFS, vectorIndex uhms.VectorIndex, entry SkillEntry) (bool, error) {
+// 返回 (vfsSkipped, searchUpserted, error):
+//   - vfsSkipped: content_hash 未变则 VFS 写入 skip
+//   - searchUpserted: Qdrant payload upsert 成功
+//
+// 设计说明: VFS 写入有增量跳过（content_hash），但 Qdrant 索引始终执行。
+// 原因: Qdrant Segment 重启后内存集合为空（build_segment 创建全新 segment），
+// 如果 content_hash 短路也跳过 Qdrant upsert，重启后搜索引擎将永远为空。
+// Qdrant upsert 是 idempotent 操作，重复写入无副作用。
+func distributeOneSkill(ctx context.Context, vfs uhms.VFS, vectorIndex uhms.VectorIndex, entry SkillEntry) (bool, bool, error) {
 	name := entry.Skill.Name
 	category := ResolveSkillCategory(entry)
 	contentHash := computeContentHash(entry.Skill.Content)
+	tags := extractTags(entry.Skill.Content)
 
-	// 增量检查: content_hash 未变则跳过
+	// 增量检查: content_hash 未变则跳过 VFS 写入
+	vfsUpToDate := false
 	if meta, err := vfs.ReadSystemMeta("skills", category, name); err == nil {
 		if existingHash, ok := meta["content_hash"].(string); ok && existingHash == contentHash {
-			return true, nil // skipped
+			vfsUpToDate = true
 		}
 	}
 
-	// 生成 L0/L1/L2
+	// L0 摘要始终生成（Qdrant payload 需要 l0_abstract 字段）
 	l0 := generateSkillL0(entry)
-	l1 := generateSkillL1(entry)
-	l2 := generateSkillL2(entry)
 
-	// 写入 VFS
-	meta := map[string]interface{}{
-		"name":         name,
-		"category":     category,
-		"description":  entry.Skill.Description,
-		"content_hash": contentHash,
-		"distributed":  true,
-		"distributed_at": time.Now().UTC().Format(time.RFC3339),
-		"source_dir":  entry.Skill.Dir,
+	// VFS 写入（增量: content_hash 变化时才写）
+	if !vfsUpToDate {
+		l1 := generateSkillL1(entry)
+		l2 := generateSkillL2(entry)
+
+		meta := map[string]interface{}{
+			"name":           name,
+			"category":       category,
+			"description":    entry.Skill.Description,
+			"content_hash":   contentHash,
+			"distributed":    true,
+			"distributed_at": time.Now().UTC().Format(time.RFC3339),
+			"source_dir":     entry.Skill.Dir,
+		}
+		if tags != "" {
+			meta["tags"] = tags
+		}
+
+		if err := vfs.WriteSystemEntry("skills", category, name, l0, l1, l2, meta); err != nil {
+			return false, false, fmt.Errorf("write VFS: %w", err)
+		}
 	}
 
-	// 从 frontmatter 提取 tags
-	tags := extractTags(entry.Skill.Content)
-	if tags != "" {
-		meta["tags"] = tags
-	}
-
-	if err := vfs.WriteSystemEntry("skills", category, name, l0, l1, l2, meta); err != nil {
-		return false, fmt.Errorf("write VFS: %w", err)
-	}
-
-	// Qdrant 索引 (可选)
+	// Qdrant 索引 — 始终执行（idempotent; Segment 重启后内存集合为空，需要重新填充）
+	searchUpserted := false
 	if vectorIndex != nil {
 		vfsPath := fmt.Sprintf("_system/skills/%s/%s", category, name)
 		payload := map[string]interface{}{
@@ -108,21 +123,28 @@ func distributeOneSkill(ctx context.Context, vfs uhms.VFS, vectorIndex uhms.Vect
 			"vfs_path":     vfsPath,
 			"content_hash": contentHash,
 			"distributed":  true,
+			"l0_abstract":  l0,
 		}
 
-		// 生成确定性 ID
 		id := deterministicSkillID(name)
 
-		// payload-only upsert (零向量)
-		zeroVec := make([]float32, 0)
-		if err := vectorIndex.Upsert(ctx, "sys_skills", id, zeroVec, payload); err != nil {
-			slog.Warn("skill_distributor: qdrant upsert failed (non-fatal)",
-				"name", name, "error", err)
-			// 非致命: VFS 已写入成功，Qdrant 索引失败不阻塞
+		type payloadUpserter interface {
+			UpsertPayload(ctx context.Context, collection, id string, payload map[string]interface{}) error
+		}
+		if pu, ok := vectorIndex.(payloadUpserter); ok {
+			if err := pu.UpsertPayload(ctx, "sys_skills", id, payload); err != nil {
+				slog.Warn("skill_distributor: search engine upsert failed (non-fatal)",
+					"name", name, "error", err)
+			} else {
+				searchUpserted = true
+			}
+		} else {
+			slog.Warn("skill_distributor: vectorIndex does not support UpsertPayload (non-fatal)",
+				"name", name)
 		}
 	}
 
-	return false, nil
+	return vfsUpToDate, searchUpserted, nil
 }
 
 // generateSkillL0 生成技能 L0 摘要 (~100 tokens)。

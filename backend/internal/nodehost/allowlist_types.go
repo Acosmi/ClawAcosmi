@@ -3,7 +3,7 @@ package nodehost
 // allowlist_types.go — 白名单评估相关类型定义
 // 对应 TS: src/infra/exec-approvals.ts 类型部分
 
-import "github.com/anthropic/open-acosmi/internal/infra"
+import "github.com/openacosmi/claw-acismi/internal/infra"
 
 // DefaultSafeBins 默认安全命令列表（只读不写的工具）。
 var DefaultSafeBins = []string{"jq", "grep", "cut", "sort", "uniq", "head", "tail", "tr", "wc"}

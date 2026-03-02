@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/channels/feishu"
-	"github.com/anthropic/open-acosmi/internal/channels/wecom"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/channels/feishu"
+	"github.com/openacosmi/claw-acismi/internal/channels/wecom"
 
 	"github.com/larksuite/oapi-sdk-go/v3/core/httpserverext"
 )

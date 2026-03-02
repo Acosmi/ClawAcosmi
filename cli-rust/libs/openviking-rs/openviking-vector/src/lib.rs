@@ -18,7 +18,10 @@
 pub mod segment_store;
 
 // Re-export commonly needed segment types for FFI layer.
-pub use segment::types::{Distance, Payload};
+pub use segment::types::{
+    Distance, HnswConfig, Payload, QuantizationConfig, SearchParams, VectorStorageDatatype,
+    VectorStorageType,
+};
 
 /// Parse a JSON object string into a [`Payload`].
 ///

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/autoreply/reply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
 )
 
 // SlackMessageHandlerResult 消息处理结果

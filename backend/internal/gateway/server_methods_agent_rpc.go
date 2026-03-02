@@ -17,9 +17,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // AgentRPCHandlers 返回 agent 主 RPC 方法处理器。
@@ -275,6 +275,7 @@ func handleAgentRPC(ctx *MethodHandlerContext) {
 			BodyForCommands:    text,
 			RawBody:            text,
 			CommandBody:        text,
+			SessionID:          resolvedSessionId,
 			SessionKey:         sessionKey,
 			Provider:           channel,
 			Surface:            surface,

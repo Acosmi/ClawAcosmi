@@ -21,7 +21,7 @@ pub const DEFAULT_WORKSPACE: &str = "~/openacosmi";
 /// Default local gateway WebSocket URL.
 ///
 /// Source: `src/commands/onboard-remote.ts` - `DEFAULT_GATEWAY_URL`
-pub const DEFAULT_GATEWAY_URL: &str = "ws://127.0.0.1:18789";
+pub const DEFAULT_GATEWAY_URL: &str = "ws://127.0.0.1:19001";
 
 /// Generate a random hex token (48 hex chars = 24 random bytes).
 ///
@@ -132,7 +132,7 @@ pub async fn probe_gateway_reachable(
     };
 
     let host = parsed.host_str().unwrap_or("127.0.0.1");
-    let port = parsed.port().unwrap_or(18789);
+    let port = parsed.port().unwrap_or(19001);
     let addr = format!("{host}:{port}");
 
     let timeout = std::time::Duration::from_millis(timeout_ms);
@@ -398,9 +398,9 @@ mod tests {
 
     #[test]
     fn control_ui_links_loopback() {
-        let links = resolve_control_ui_links(18789, Some("loopback"), None, None);
-        assert_eq!(links.http_url, "http://127.0.0.1:18789/");
-        assert_eq!(links.ws_url, "ws://127.0.0.1:18789");
+        let links = resolve_control_ui_links(19001, Some("loopback"), None, None);
+        assert_eq!(links.http_url, "http://127.0.0.1:19001/");
+        assert_eq!(links.ws_url, "ws://127.0.0.1:19001");
     }
 
     #[test]
@@ -413,15 +413,15 @@ mod tests {
     #[test]
     fn control_ui_links_custom() {
         let links =
-            resolve_control_ui_links(18789, Some("custom"), Some("192.168.1.100"), None);
-        assert_eq!(links.http_url, "http://192.168.1.100:18789/");
+            resolve_control_ui_links(19001, Some("custom"), Some("192.168.1.100"), None);
+        assert_eq!(links.http_url, "http://192.168.1.100:19001/");
     }
 
     #[test]
     fn control_ui_links_with_base_path() {
-        let links = resolve_control_ui_links(18789, None, None, Some("gateway"));
-        assert_eq!(links.http_url, "http://127.0.0.1:18789/gateway/");
-        assert_eq!(links.ws_url, "ws://127.0.0.1:18789/gateway");
+        let links = resolve_control_ui_links(19001, None, None, Some("gateway"));
+        assert_eq!(links.http_url, "http://127.0.0.1:19001/gateway/");
+        assert_eq!(links.ws_url, "ws://127.0.0.1:19001/gateway");
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn default_gateway_url_value() {
-        assert_eq!(DEFAULT_GATEWAY_URL, "ws://127.0.0.1:18789");
+        assert_eq!(DEFAULT_GATEWAY_URL, "ws://127.0.0.1:19001");
     }
 
     #[test]

@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // WeComPlugin 企业微信频道插件
@@ -43,6 +43,16 @@ func NewWeComPlugin(cfg *types.OpenAcosmiConfig) *WeComPlugin {
 // ID 返回频道标识
 func (p *WeComPlugin) ID() channels.ChannelID {
 	return channels.ChannelWeCom
+}
+
+// UpdateConfig 实现 channels.ConfigUpdater 接口。
+// 热重载时注入新配置，后续 Start() 将使用新凭证（CorpID/Secret/AgentID）重建客户端。
+func (p *WeComPlugin) UpdateConfig(cfg interface{}) {
+	if c, ok := cfg.(*types.OpenAcosmiConfig); ok {
+		p.mu.Lock()
+		p.config = c
+		p.mu.Unlock()
+	}
 }
 
 // Start 启动企业微信频道
@@ -88,27 +98,30 @@ func (p *WeComPlugin) Start(accountID string) error {
 			)
 
 			// 路由到 Agent 管线获取回复（优先多模态）
-			var reply string
+			var dispatchReply *channels.DispatchReply
 			if p.DispatchMultimodalFunc != nil {
 				// 构建 ChannelMessage（包含 msgType，Phase B 可扩展）
 				cm := &channels.ChannelMessage{
 					Text:        content,
 					MessageType: msgType,
 				}
-				reply = p.DispatchMultimodalFunc(
+				dispatchReply = p.DispatchMultimodalFunc(
 					"wecom", capturedAccountID, fromUser, fromUser, cm)
 			} else if p.DispatchFunc != nil {
-				reply = p.DispatchFunc(context.Background(),
+				replyText := p.DispatchFunc(context.Background(),
 					"wecom", capturedAccountID, fromUser, fromUser, content)
+				if replyText != "" {
+					dispatchReply = &channels.DispatchReply{Text: replyText}
+				}
 			} else {
 				slog.Warn("wecom: DispatchFunc not set, message not routed to agent",
 					"account", capturedAccountID)
 			}
 
-			if reply != "" {
+			if dispatchReply != nil && dispatchReply.Text != "" {
 				sender := p.GetSender(capturedAccountID)
 				if sender != nil {
-					if err := sender.SendText(context.Background(), fromUser, reply); err != nil {
+					if err := sender.SendText(context.Background(), fromUser, dispatchReply.Text); err != nil {
 						slog.Error("wecom: failed to send reply",
 							"account", capturedAccountID, "to", fromUser, "error", err)
 					}

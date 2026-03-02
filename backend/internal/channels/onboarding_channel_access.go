@@ -9,7 +9,7 @@ package channels
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
 )
 
 // ---------- 接口定义（镜像 tui.WizardPrompter / tui.PromptOption，避免循环导入） ----------

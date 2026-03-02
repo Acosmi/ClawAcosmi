@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn format_kv_line_gateway_target() {
-        let result = format_kv_line("Gateway target: ws://127.0.0.1:18789");
+        let result = format_kv_line("Gateway target: ws://127.0.0.1:19001");
         assert!(!result.is_empty());
     }
 

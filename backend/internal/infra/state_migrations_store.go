@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/routing"
+	"github.com/openacosmi/claw-acismi/internal/routing"
 
 	"github.com/tailscale/hujson"
 )

@@ -56,6 +56,25 @@ func (s *FeishuSender) SendCard(ctx context.Context, receiveID, idType, cardJSON
 	return nil
 }
 
+// SendCardWithID 发送卡片消息并返回 messageID（用于后续 Patch 更新）。
+func (s *FeishuSender) SendCardWithID(ctx context.Context, receiveID, idType, cardJSON string) (string, error) {
+	msgID, err := s.client.SendCardMessage(ctx, idType, receiveID, cardJSON)
+	if err != nil {
+		return "", err
+	}
+	slog.Debug("feishu card sent (with id)", "receive_id", receiveID, "message_id", msgID)
+	return msgID, nil
+}
+
+// PatchCard 更新已发送的卡片消息内容。
+func (s *FeishuSender) PatchCard(ctx context.Context, messageID, cardJSON string) error {
+	if err := s.client.PatchCardMessage(ctx, messageID, cardJSON); err != nil {
+		return err
+	}
+	slog.Debug("feishu card patched", "message_id", messageID)
+	return nil
+}
+
 // SendImage 发送图片消息
 func (s *FeishuSender) SendImage(ctx context.Context, receiveID, idType, imageKey string) error {
 	msgID, err := s.client.SendImageMessage(ctx, idType, receiveID, imageKey)

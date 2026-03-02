@@ -1,6 +1,6 @@
 // tools/gateway.go — Gateway 工具。
 // TS 参考：src/agents/tools/gateway.ts (48L) + gateway-tool.ts (254L)
-// 协议：WebSocket 长连接（ws://127.0.0.1:18789），对齐 TS callGateway。
+// 协议：WebSocket 长连接，端口通过 config.ResolveGatewayPort 动态解析。
 // 帧格式：RequestFrame → ResponseFrame（根据 id 字段匹配）。
 package tools
 
@@ -14,24 +14,27 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // ---------- Gateway 连接选项 ----------
 
 // GatewayOptions Gateway 连接选项。
 type GatewayOptions struct {
-	// URL WebSocket 地址，默认 ws://127.0.0.1:18789（与 TS 对齐）。
+	// URL WebSocket 地址，通过 config.ResolveGatewayPort 动态解析。
 	URL     string
 	Token   string
 	Timeout time.Duration
 }
 
 // DefaultGatewayOptions 默认 Gateway 选项。
-// 端口 18789 对齐 TS src/agents/tools/gateway.ts: DEFAULT_GATEWAY_URL。
+// 端口通过 config.ResolveGatewayPort 解析（env > config > DefaultGatewayPort）。
 func DefaultGatewayOptions() GatewayOptions {
 	url := os.Getenv("OPENACOSMI_GATEWAY_URL")
 	if url == "" {
-		url = "ws://127.0.0.1:18789"
+		port := config.ResolveGatewayPort(nil)
+		url = fmt.Sprintf("ws://127.0.0.1:%d", port)
 	}
 	return GatewayOptions{
 		URL:     url,
@@ -84,7 +87,8 @@ type wsConnectFrame struct {
 // 对齐 TS callGateway(): 建立 WS 连接 → 握手 → 发送 req 帧 → 等待 res 帧 → 断开。
 func CallGateway(ctx context.Context, opts GatewayOptions, method string, params interface{}) (map[string]interface{}, error) {
 	if opts.URL == "" {
-		opts.URL = "ws://127.0.0.1:18789"
+		port := config.ResolveGatewayPort(nil)
+		opts.URL = fmt.Sprintf("ws://127.0.0.1:%d", port)
 	}
 	if opts.Timeout == 0 {
 		opts.Timeout = 30 * time.Second

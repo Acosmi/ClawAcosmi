@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- InferAuthChoiceFromFlags 测试 ----------
@@ -81,7 +81,7 @@ func TestRunNonInteractive_RemoteWithURL(t *testing.T) {
 
 	err := RunNonInteractiveOnboarding(NonInteractiveOptions{
 		Mode:      "remote",
-		RemoteURL: "https://example.com:18789",
+		RemoteURL: "https://example.com:19001",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -95,7 +95,7 @@ func TestRunNonInteractive_RemoteWithURL(t *testing.T) {
 	if cfg.Gateway == nil || cfg.Gateway.Mode != "remote" {
 		t.Error("gateway mode should be remote")
 	}
-	if cfg.Gateway.Remote == nil || cfg.Gateway.Remote.URL != "https://example.com:18789" {
+	if cfg.Gateway.Remote == nil || cfg.Gateway.Remote.URL != "https://example.com:19001" {
 		t.Error("remote URL should be set")
 	}
 }
@@ -108,8 +108,8 @@ func TestGatewayConfig_DefaultPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.port != 18789 {
-		t.Errorf("expected default port 18789, got %d", result.port)
+	if result.port != 19001 {
+		t.Errorf("expected default port 19001, got %d", result.port)
 	}
 	if result.bind != "loopback" {
 		t.Errorf("expected loopback, got %s", result.bind)
@@ -251,14 +251,14 @@ func TestDaemonInstall_NotRequested(t *testing.T) {
 	// Should not panic
 	InstallGatewayDaemonNonInteractive(NonInteractiveOptions{
 		InstallDaemon: false,
-	}, &nonInteractiveGatewayResult{port: 18789})
+	}, &nonInteractiveGatewayResult{port: 19001})
 }
 
 func TestDaemonInstall_Requested(t *testing.T) {
 	// Should not panic
 	InstallGatewayDaemonNonInteractive(NonInteractiveOptions{
 		InstallDaemon: true,
-	}, &nonInteractiveGatewayResult{port: 18789, bind: "loopback", authMode: "token"})
+	}, &nonInteractiveGatewayResult{port: 19001, bind: "loopback", authMode: "token"})
 }
 
 // ---------- LogNonInteractiveOnboardingJson 测试 ----------

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Skill 技能定义。
@@ -181,15 +181,47 @@ func loadSkillsFromDir(dir string) []SkillEntry {
 		if err != nil {
 			continue
 		}
-		desc := extractDescription(string(content))
+		contentStr := string(content)
+		desc := extractDescription(contentStr)
+
+		// 解析 frontmatter 元数据
+		fm := ParseFrontmatter(contentStr)
+		meta := ResolveOpenAcosmiMetadata(fm)
+		inv := ResolveSkillInvocationPolicy(fm)
+
+		// 直接 frontmatter tools 字段（非 metadata JSON 内）
+		var directTools []string
+		if toolsStr := fm["tools"]; toolsStr != "" {
+			for _, t := range strings.Split(toolsStr, ",") {
+				if s := strings.TrimSpace(t); s != "" {
+					directTools = append(directTools, s)
+				}
+			}
+		}
+		// 合并: 直接 frontmatter 优先，metadata 补充
+		if meta == nil && len(directTools) > 0 {
+			meta = &OpenAcosmiSkillMetadata{Tools: directTools}
+		} else if meta != nil && len(directTools) > 0 && len(meta.Tools) == 0 {
+			meta.Tools = directTools
+		}
+
+		var primaryEnv string
+		if meta != nil {
+			primaryEnv = meta.PrimaryEnv
+		}
+
 		entries = append(entries, SkillEntry{
 			Skill: Skill{
 				Name:        de.Name(),
 				Dir:         filepath.Join(dir, de.Name()),
 				Description: desc,
-				Content:     string(content),
+				Content:     contentStr,
 			},
-			Enabled: true,
+			PrimaryEnv:             primaryEnv,
+			Enabled:                true,
+			Metadata:               meta,
+			Invocation:             &inv,
+			DisableModelInvocation: inv.DisableModelInvocation,
 		})
 	}
 	return entries
@@ -345,6 +377,30 @@ func FormatSkillIndex(resolvedSkills []Skill) string {
 	}
 	sb.WriteString("</available_skills>")
 	return sb.String()
+}
+
+// ResolveToolSkillBindings 从技能列表构建 toolName → 技能描述 映射。
+// 用于将技能指引注入到工具 Description 中，LLM 读工具定义时自动获得使用指南。
+func ResolveToolSkillBindings(entries []SkillEntry) map[string]string {
+	bindings := make(map[string]string)
+	for _, e := range entries {
+		if e.Metadata == nil || len(e.Metadata.Tools) == 0 {
+			continue
+		}
+		desc := e.Skill.Description
+		if len(desc) > 120 {
+			desc = desc[:117] + "..."
+		}
+		if desc == "" {
+			continue
+		}
+		for _, toolName := range e.Metadata.Tools {
+			if _, exists := bindings[toolName]; !exists {
+				bindings[toolName] = desc
+			}
+		}
+	}
+	return bindings
 }
 
 // resolveAllowBundled 解析捆绑技能白名单。

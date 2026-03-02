@@ -54,7 +54,7 @@ pub fn pick_host(beacon: &GatewayBeacon) -> Option<&str> {
 /// Source: `src/commands/onboard-remote.ts` - `buildLabel`
 pub fn build_beacon_label(beacon: &GatewayBeacon) -> String {
     let host = pick_host(beacon);
-    let port = beacon.gateway_port.or(beacon.port).unwrap_or(18789);
+    let port = beacon.gateway_port.or(beacon.port).unwrap_or(19001);
     let title = beacon
         .display_name
         .as_deref()
@@ -116,8 +116,8 @@ pub fn build_ssh_tunnel_instructions(host: &str, ssh_port: Option<u16>) -> Strin
         .unwrap_or_default();
     [
         "Start a tunnel before using the CLI:",
-        &format!("ssh -N -L 18789:127.0.0.1:18789 <user>@{host}{port_arg}"),
-        "Docs: https://docs.openacosmi.ai/gateway/remote",
+        &format!("ssh -N -L 19001:127.0.0.1:19001 <user>@{host}{port_arg}"),
+        "Docs: https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/gateway/remote",
     ]
     .join("\n")
 }
@@ -182,7 +182,7 @@ mod tests {
             host: Some("192.168.1.100".to_string()),
             lan_host: Some("myhost.local".to_string()),
             tailnet_dns: Some("myhost.tailnet.ts.net".to_string()),
-            port: Some(18789),
+            port: Some(19001),
             gateway_port: None,
             ssh_port: None,
         };
@@ -197,7 +197,7 @@ mod tests {
             host: Some("192.168.1.100".to_string()),
             lan_host: Some("myhost.local".to_string()),
             tailnet_dns: None,
-            port: Some(18789),
+            port: Some(19001),
             gateway_port: None,
             ssh_port: None,
         };
@@ -212,7 +212,7 @@ mod tests {
             host: Some("192.168.1.100".to_string()),
             lan_host: None,
             tailnet_dns: None,
-            port: Some(18789),
+            port: Some(19001),
             gateway_port: None,
             ssh_port: None,
         };
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn validate_ws_url_valid() {
-        assert!(validate_ws_url("ws://localhost:18789").is_none());
+        assert!(validate_ws_url("ws://localhost:19001").is_none());
         assert!(validate_ws_url("wss://secure.host").is_none());
     }
 
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn apply_remote_gateway_config_no_token() {
         let cfg = OpenAcosmiConfig::default();
-        let result = apply_remote_gateway_config(cfg, "ws://host:18789", None);
+        let result = apply_remote_gateway_config(cfg, "ws://host:19001", None);
 
         let remote = result
             .gateway

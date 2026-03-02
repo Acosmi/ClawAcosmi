@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/security"
+	"github.com/openacosmi/claw-acismi/internal/security"
 )
 
 var httpClient = security.CreatePinnedHTTPClient(time.Duration(DefaultProviderTimeoutMs) * time.Millisecond)

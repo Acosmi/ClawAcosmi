@@ -52,7 +52,7 @@ export function renderOverview(props: OverviewProps) {
           <div style="margin-top: 6px">
             <a
               class="session-link"
-              href="https://docs.openacosmi.ai/web/dashboard"
+              href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web"
               target="_blank"
               rel="noreferrer"
               title=${t("overview.docsControlUiAuthTitle")}
@@ -68,7 +68,7 @@ export function renderOverview(props: OverviewProps) {
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://docs.openacosmi.ai/web/dashboard"
+            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web"
             target="_blank"
             rel="noreferrer"
             title="Control UI auth docs (opens in new tab)"
@@ -101,7 +101,7 @@ export function renderOverview(props: OverviewProps) {
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://docs.openacosmi.ai/gateway/tailscale"
+            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/gateway/tailscale"
             target="_blank"
             rel="noreferrer"
             title=${t("overview.docsTailscaleTitle")}
@@ -110,7 +110,7 @@ export function renderOverview(props: OverviewProps) {
           <span class="muted"> · </span>
           <a
             class="session-link"
-            href="https://docs.openacosmi.ai/web/control-ui#insecure-http"
+            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web/control-ui"
             target="_blank"
             rel="noreferrer"
             title=${t("overview.docsInsecureHttpTitle")}

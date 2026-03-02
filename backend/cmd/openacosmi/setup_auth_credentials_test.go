@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // newTempAuthStore 创建临时 auth store 用于测试。

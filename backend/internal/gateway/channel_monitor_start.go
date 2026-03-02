@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/channels/discord"
-	slackch "github.com/anthropic/open-acosmi/internal/channels/slack"
-	"github.com/anthropic/open-acosmi/internal/channels/telegram"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/channels/discord"
+	slackch "github.com/openacosmi/claw-acismi/internal/channels/slack"
+	"github.com/openacosmi/claw-acismi/internal/channels/telegram"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // startMonitorChannels 启动 Monitor 模式渠道（Discord/Telegram/Slack）。

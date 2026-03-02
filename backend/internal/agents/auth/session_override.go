@@ -5,7 +5,7 @@ package auth
 //
 // 管理会话级别的 auth profile 覆盖（round-robin + cooldown 联动）。
 
-import "github.com/anthropic/open-acosmi/pkg/types"
+import "github.com/openacosmi/claw-acismi/pkg/types"
 
 // SessionAuthEntry 会话认证条目（由调用方提供）。
 type SessionAuthEntry struct {

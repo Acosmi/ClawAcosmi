@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/anthropic/open-acosmi/internal/channels/bridge"
+	"github.com/openacosmi/claw-acismi/internal/channels/bridge"
 )
 
 // DiscordActionsToolDeps Discord 工具所需的外部依赖。

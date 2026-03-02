@@ -1,69 +1,69 @@
 import { html, nothing } from "lit";
 import type { SecurityLevelInfo } from "../controllers/security.ts";
-import { t } from "../i18n.ts";
+import { getLocale, t } from "../i18n.ts";
 import { icons } from "../icons.ts";
 
 // ---------- 安全设置页面入口 ----------
 
 export interface SecurityViewProps {
-    loading: boolean;
-    error: string | null;
-    currentLevel: string;
-    levels: SecurityLevelInfo[];
-    confirmOpen: boolean;
-    pendingLevel: string | null;
-    confirmText: string;
-    onLevelChange: (level: string) => void;
-    onConfirmOpen: (level: string) => void;
-    onConfirmCancel: () => void;
-    onConfirmTextChange: (text: string) => void;
-    onConfirmSubmit: () => void;
-    onRefresh: () => void;
+  loading: boolean;
+  error: string | null;
+  currentLevel: string;
+  levels: SecurityLevelInfo[];
+  confirmOpen: boolean;
+  pendingLevel: string | null;
+  confirmText: string;
+  onLevelChange: (level: string) => void;
+  onConfirmOpen: (level: string) => void;
+  onConfirmCancel: () => void;
+  onConfirmTextChange: (text: string) => void;
+  onConfirmSubmit: () => void;
+  onRefresh: () => void;
 }
 
 const RISK_COLORS: Record<string, string> = {
-    low: "var(--color-ok, #22c55e)",
-    medium: "var(--color-warn, #f59e0b)",
-    high: "var(--color-danger, #ef4444)",
+  low: "var(--color-ok, #22c55e)",
+  medium: "var(--color-warn, #f59e0b)",
+  high: "var(--color-danger, #ef4444)",
 };
 
 const RISK_ICONS: Record<string, string> = {
-    low: "🛡️",
-    medium: "⚡",
-    high: "⚠️",
+  low: "🛡️",
+  medium: "⚡",
+  high: "⚠️",
 };
 
 function renderLevelCard(
-    level: SecurityLevelInfo,
-    isCurrent: boolean,
-    props: SecurityViewProps,
+  level: SecurityLevelInfo,
+  isCurrent: boolean,
+  props: SecurityViewProps,
 ) {
-    const riskColor = RISK_COLORS[level.risk] ?? "var(--text-secondary)";
-    const riskIcon = RISK_ICONS[level.risk] ?? "";
-    const isLoading = props.loading;
+  const riskColor = RISK_COLORS[level.risk] ?? "var(--text-secondary)";
+  const riskIcon = RISK_ICONS[level.risk] ?? "";
+  const isLoading = props.loading;
 
-    return html`
+  return html`
     <button
       class="security-card ${isCurrent ? "security-card--active" : ""}"
       ?disabled=${isLoading}
       @click=${() => {
-            if (isCurrent || isLoading) return;
-            if (level.id === "full") {
-                props.onConfirmOpen(level.id);
-            } else {
-                props.onLevelChange(level.id);
-            }
-        }}
+      if (isCurrent || isLoading) return;
+      if (level.id === "full") {
+        props.onConfirmOpen(level.id);
+      } else {
+        props.onLevelChange(level.id);
+      }
+    }}
       style="--risk-color: ${riskColor}"
     >
       <div class="security-card__header">
         <span class="security-card__icon">${riskIcon}</span>
-        <span class="security-card__label">${level.label}</span>
+        <span class="security-card__label">${getLocale() === "zh" ? level.labelZh : level.label}</span>
         ${isCurrent
-            ? html`<span class="security-card__badge">${t("security.active")}</span>`
-            : nothing}
+      ? html`<span class="security-card__badge">${t("security.active")}</span>`
+      : nothing}
       </div>
-      <div class="security-card__desc">${level.description}</div>
+      <div class="security-card__desc">${getLocale() === "zh" ? level.descriptionZh : level.description}</div>
       <div class="security-card__risk">
         <span
           class="security-card__risk-dot"
@@ -76,17 +76,17 @@ function renderLevelCard(
 }
 
 function renderConfirmDialog(props: SecurityViewProps) {
-    if (!props.confirmOpen) return nothing;
+  if (!props.confirmOpen) return nothing;
 
-    const isValid =
-        props.confirmText.trim().toUpperCase() === "CONFIRM";
+  const isValid =
+    props.confirmText.trim().toUpperCase() === "CONFIRM";
 
-    return html`
+  return html`
     <div class="security-confirm-overlay" @click=${(e: Event) => {
-            if ((e.target as HTMLElement).classList.contains("security-confirm-overlay")) {
-                props.onConfirmCancel();
-            }
-        }}>
+      if ((e.target as HTMLElement).classList.contains("security-confirm-overlay")) {
+        props.onConfirmCancel();
+      }
+    }}>
       <div class="security-confirm-dialog" role="alertdialog">
         <div class="security-confirm-header">
           <span class="security-confirm-icon">⚠️</span>
@@ -108,12 +108,12 @@ function renderConfirmDialog(props: SecurityViewProps) {
               placeholder="CONFIRM"
               .value=${props.confirmText}
               @input=${(e: Event) =>
-            props.onConfirmTextChange((e.target as HTMLInputElement).value)}
+      props.onConfirmTextChange((e.target as HTMLInputElement).value)}
               @keydown=${(e: KeyboardEvent) => {
-            if (e.key === "Enter" && isValid) {
-                props.onConfirmSubmit();
-            }
-        }}
+      if (e.key === "Enter" && isValid) {
+        props.onConfirmSubmit();
+      }
+    }}
             />
           </div>
         </div>
@@ -138,16 +138,16 @@ function renderConfirmDialog(props: SecurityViewProps) {
 }
 
 export function renderSecurity(props: SecurityViewProps) {
-    return html`
+  return html`
     <div class="security-page">
       ${props.currentLevel === "full"
-            ? html`
+      ? html`
             <div class="security-warning-banner">
               <span class="security-warning-banner__icon">⚠️</span>
               <span>${t("security.fullWarning")}</span>
             </div>
           `
-            : nothing}
+      : nothing}
 
       <div class="security-section">
         <div class="security-section__header">
@@ -166,13 +166,13 @@ export function renderSecurity(props: SecurityViewProps) {
         <p class="security-section__desc">${t("security.levels.desc")}</p>
 
         ${props.error
-            ? html`<div class="security-error">${props.error}</div>`
-            : nothing}
+      ? html`<div class="security-error">${props.error}</div>`
+      : nothing}
 
         <div class="security-cards">
           ${props.levels.map((level) =>
-                renderLevelCard(level, level.id === props.currentLevel, props),
-            )}
+        renderLevelCard(level, level.id === props.currentLevel, props),
+      )}
         </div>
       </div>
 

@@ -8,7 +8,7 @@ package main
 //   2. Minimax 官方 OpenAI 兼容 API (applyMinimaxHostedProviderConfig)
 //   3. Minimax Anthropic 兼容 API (applyMinimaxApiProviderConfig)
 
-import "github.com/anthropic/open-acosmi/pkg/types"
+import "github.com/openacosmi/claw-acismi/pkg/types"
 
 // ---------- Mode 1: LM Studio 本地部署 ----------
 

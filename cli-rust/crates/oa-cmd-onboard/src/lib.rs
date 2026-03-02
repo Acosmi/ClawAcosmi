@@ -47,7 +47,7 @@ pub async fn execute(opts: OnboardOptions) -> Result<()> {
     {
         anyhow::bail!(
             "Non-interactive onboarding requires explicit risk acknowledgement.\n\
-             Read: https://docs.openacosmi.ai/security\n\
+             Read: https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/general/security\n\
              Re-run with: openacosmi onboard --non-interactive --accept-risk ..."
         );
     }
@@ -82,7 +82,7 @@ pub async fn execute(opts: OnboardOptions) -> Result<()> {
             "Windows detected -- OpenAcosmi runs great on WSL2!\n\
              Native Windows might be trickier.\n\
              Quick setup: wsl --install (one command, one reboot)\n\
-             Guide: https://docs.openacosmi.ai/windows"
+             Guide: https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/platforms/windows"
         );
     }
 

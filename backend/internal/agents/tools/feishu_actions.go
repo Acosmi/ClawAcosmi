@@ -6,7 +6,7 @@ package tools
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/internal/channels/bridge"
+	"github.com/openacosmi/claw-acismi/internal/channels/bridge"
 )
 
 // FeishuActionsToolDeps 飞书工具所需的外部依赖。

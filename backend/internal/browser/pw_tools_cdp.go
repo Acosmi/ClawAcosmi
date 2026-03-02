@@ -60,9 +60,22 @@ func (t *CDPPlaywrightTools) Click(ctx context.Context, opts PWClickOpts) error 
 	defer cancel()
 
 	return WithCdpSocket(ctx, t.resolveTargetWsURL(opts.PWTargetOpts), func(send CdpSendFn) error {
-		x, y, err := t.getElementCenter(send, ref)
-		if err != nil {
-			return ToAIFriendlyError(err, ref)
+		// Phase 3.1: Playwright 式 actionability 预检 — 确保元素可交互。
+		objectID, resolveErr := t.resolveRefToObjectID(send, ref)
+		var x, y float64
+		if resolveErr == nil {
+			cx, cy, actionErr := EnsureActionable(send, objectID, timeout)
+			if actionErr != nil {
+				return ToAIFriendlyError(fmt.Errorf("click %q: %w", ref, actionErr), ref)
+			}
+			x, y = cx, cy
+		} else {
+			// 降级: 无法 resolve objectID 时使用原始 getElementCenter
+			var err2 error
+			x, y, err2 = t.getElementCenter(send, ref)
+			if err2 != nil {
+				return ToAIFriendlyError(err2, ref)
+			}
 		}
 
 		button := "left"
@@ -316,12 +329,16 @@ func (t *CDPPlaywrightTools) GetCachedRefs() RoleRefMap {
 	return t.cachedSnapshotRefs
 }
 
-// Screenshot captures a screenshot as PNG bytes via CDP.
+// Screenshot captures a screenshot via CDP.
+// Phase 2: JPEG q75 + optimizeForSpeed — base64 体积比 PNG 缩减 3-5x。
+// 行业对标: Anthropic CU 推荐 XGA JPEG，CDP 原生支持 format+quality 参数。
 func (t *CDPPlaywrightTools) Screenshot(ctx context.Context, opts PWTargetOpts) ([]byte, error) {
 	var screenshot []byte
 	err := WithCdpSocket(ctx, t.resolveTargetWsURL(opts), func(send CdpSendFn) error {
 		raw, err := send("Page.captureScreenshot", map[string]any{
-			"format": "png",
+			"format":           "jpeg",
+			"quality":          75,
+			"optimizeForSpeed": true,
 		})
 		if err != nil {
 			return fmt.Errorf("capture screenshot: %w", err)

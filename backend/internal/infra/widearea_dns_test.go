@@ -45,7 +45,7 @@ func TestResolveWideAreaDiscoveryDomain(t *testing.T) {
 func TestRenderWideAreaGatewayZoneText(t *testing.T) {
 	txt := RenderWideAreaGatewayZoneText(WideAreaGatewayZoneOpts{
 		Domain:        "openacosmi.internal.",
-		GatewayPort:   18789,
+		GatewayPort:   19001,
 		DisplayName:   "Mac Studio (OpenAcosmi)",
 		TailnetIPv4:   "100.123.224.76",
 		TailnetIPv6:   "fd7a:115c:a1e0::8801:e04c",
@@ -60,9 +60,9 @@ func TestRenderWideAreaGatewayZoneText(t *testing.T) {
 		"studio-london IN A 100.123.224.76",
 		"studio-london IN AAAA fd7a:115c:a1e0::8801:e04c",
 		"_openacosmi-gw._tcp IN PTR studio-london._openacosmi-gw._tcp",
-		"studio-london._openacosmi-gw._tcp IN SRV 0 0 18789 studio-london",
+		"studio-london._openacosmi-gw._tcp IN SRV 0 0 19001 studio-london",
 		"displayName=Mac Studio (OpenAcosmi)",
-		"gatewayPort=18789",
+		"gatewayPort=19001",
 		"sshPort=22",
 		"cliPath=/opt/homebrew/bin/openacosmi",
 	}
@@ -77,7 +77,7 @@ func TestRenderWideAreaGatewayZoneText(t *testing.T) {
 func TestRenderWithTailnetDNS(t *testing.T) {
 	txt := RenderWideAreaGatewayZoneText(WideAreaGatewayZoneOpts{
 		Domain:        "openacosmi.internal.",
-		GatewayPort:   18789,
+		GatewayPort:   19001,
 		DisplayName:   "Mac Studio (OpenAcosmi)",
 		TailnetIPv4:   "100.123.224.76",
 		TailnetDNS:    "peters-mac-studio-1.sheep-coho.ts.net",
@@ -151,7 +151,7 @@ func TestWriteWideAreaGatewayZone(t *testing.T) {
 
 	result, err := WriteWideAreaGatewayZone(WideAreaGatewayZoneOpts{
 		Domain:      "test.local",
-		GatewayPort: 18789,
+		GatewayPort: 19001,
 		DisplayName: "Test",
 		TailnetIPv4: "100.1.2.3",
 	})
@@ -181,7 +181,7 @@ func TestWriteWideAreaGatewayZone(t *testing.T) {
 	// 第二次写入 — 应返回 changed=false（内容未变）
 	result2, err := WriteWideAreaGatewayZone(WideAreaGatewayZoneOpts{
 		Domain:      "test.local",
-		GatewayPort: 18789,
+		GatewayPort: 19001,
 		DisplayName: "Test",
 		TailnetIPv4: "100.1.2.3",
 	})

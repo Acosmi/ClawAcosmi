@@ -11,7 +11,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // RuleMatchResult 规则匹配结果。
@@ -34,6 +34,14 @@ type RuleMatchResult struct {
 func EvaluateCommand(command string, rules []infra.CommandRule) RuleMatchResult {
 	if len(rules) == 0 || command == "" {
 		return RuleMatchResult{Matched: false}
+	}
+
+	// Shell wrapper 预检: 提取 bash -c / sh -c / eval 内的实际命令并递归评估
+	if innerCmd := extractShellWrapperCommand(command); innerCmd != "" {
+		innerResult := EvaluateCommand(innerCmd, rules)
+		if innerResult.Matched {
+			return innerResult
+		}
 	}
 
 	var bestMatch *infra.CommandRule
@@ -113,8 +121,11 @@ func matchPattern(command, pattern string) bool {
 	}
 
 	// 以模式开头匹配（如 "rm -rf /" 匹配 "rm -rf /tmp/foo"）
+	// Word boundary: 确保模式后紧跟空格或结尾，防止 "shutdown" 误杀 "shutdownGuard"
 	if strings.HasPrefix(cmdLower, patLower) {
-		return true
+		if len(cmdLower) == len(patLower) || cmdLower[len(patLower)] == ' ' {
+			return true
+		}
 	}
 
 	return false
@@ -189,4 +200,38 @@ func actionWeight(action infra.CommandRuleAction) int {
 	default:
 		return 3
 	}
+}
+
+// extractShellWrapperCommand 从 shell wrapper 命令中提取内部实际命令。
+// 处理 "bash -c 'rm -rf /'"、"sh -c 'shutdown'"、"eval 'rm *'" 等绕过模式。
+// 返回内部命令字符串，无匹配返回空字符串。
+func extractShellWrapperCommand(command string) string {
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
+
+	// bash -c / sh -c / zsh -c 模式
+	for _, shell := range []string{"bash -c ", "sh -c ", "zsh -c ", "/bin/bash -c ", "/bin/sh -c "} {
+		if strings.HasPrefix(cmdLower, shell) {
+			inner := strings.TrimSpace(command[len(shell):])
+			return unquote(inner)
+		}
+	}
+
+	// eval 模式
+	if strings.HasPrefix(cmdLower, "eval ") {
+		inner := strings.TrimSpace(command[5:])
+		return unquote(inner)
+	}
+
+	return ""
+}
+
+// unquote 去除字符串首尾引号（单引号或双引号）。
+func unquote(s string) string {
+	if len(s) < 2 {
+		return s
+	}
+	if (s[0] == '\'' && s[len(s)-1] == '\'') || (s[0] == '"' && s[len(s)-1] == '"') {
+		return s[1 : len(s)-1]
+	}
+	return s
 }

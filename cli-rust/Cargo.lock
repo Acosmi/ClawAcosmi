@@ -1313,26 +1313,43 @@ dependencies = [
  "clap",
  "clap_complete",
  "oa-cli-shared",
+ "oa-cmd-acp",
  "oa-cmd-agent",
  "oa-cmd-agents",
+ "oa-cmd-approvals",
  "oa-cmd-auth",
+ "oa-cmd-browser",
  "oa-cmd-channels",
  "oa-cmd-coder",
  "oa-cmd-config",
  "oa-cmd-configure",
  "oa-cmd-cron",
  "oa-cmd-daemon",
+ "oa-cmd-devices",
+ "oa-cmd-directory",
+ "oa-cmd-dns",
  "oa-cmd-doctor",
  "oa-cmd-gateway",
  "oa-cmd-health",
+ "oa-cmd-hooks",
  "oa-cmd-logs",
  "oa-cmd-memory",
  "oa-cmd-models",
+ "oa-cmd-node",
  "oa-cmd-onboard",
+ "oa-cmd-pairing",
+ "oa-cmd-plugins",
  "oa-cmd-sandbox",
+ "oa-cmd-security",
  "oa-cmd-sessions",
+ "oa-cmd-skills",
  "oa-cmd-status",
  "oa-cmd-supporting",
+ "oa-cmd-system",
+ "oa-cmd-tui",
+ "oa-cmd-update",
+ "oa-cmd-voicecall",
+ "oa-cmd-webhooks",
  "oa-coder",
  "oa-config",
  "oa-infra",
@@ -1366,6 +1383,14 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-acp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "tracing",
 ]
 
@@ -1413,6 +1438,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-approvals"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "oa-cmd-auth"
 version = "0.1.0"
 dependencies = [
@@ -1433,6 +1471,20 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "oa-cmd-browser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oa-cli-shared",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-terminal",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1539,6 +1591,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-devices"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-directory"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-dns"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-gateway-rpc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "oa-cmd-doctor"
 version = "0.1.0"
 dependencies = [
@@ -1610,6 +1695,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-hooks"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oa-cli-shared",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-terminal",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "oa-cmd-logs"
 version = "0.1.0"
 dependencies = [
@@ -1665,6 +1764,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "oa-cmd-onboard"
 version = "0.1.0"
 dependencies = [
@@ -1691,6 +1803,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-pairing"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-plugins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oa-cli-shared",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-terminal",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "oa-cmd-sandbox"
 version = "0.1.0"
 dependencies = [
@@ -1712,6 +1851,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-security"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oa-cli-shared",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-terminal",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "oa-cmd-sessions"
 version = "0.1.0"
 dependencies = [
@@ -1727,6 +1880,20 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "oa-cmd-skills"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oa-cli-shared",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-terminal",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1776,6 +1943,56 @@ dependencies = [
  "tracing",
  "uuid",
  "which",
+]
+
+[[package]]
+name = "oa-cmd-system"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-infra",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-update"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oa-config",
+ "oa-gateway-rpc",
+ "oa-types",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-voicecall"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tracing",
+]
+
+[[package]]
+name = "oa-cmd-webhooks"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tracing",
 ]
 
 [[package]]

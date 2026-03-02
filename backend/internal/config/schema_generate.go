@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // generateConfigSchema 生成 OpenAcosmiConfig 的 JSON Schema。

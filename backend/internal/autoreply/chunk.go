@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/anthropic/open-acosmi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
 )
 
 // TS 对照: auto-reply/chunk.ts (501L) — 完整围栏感知版。

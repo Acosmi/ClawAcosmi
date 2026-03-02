@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // iMessage 账户解析 — 继承自 src/imessage/accounts.ts (91L)

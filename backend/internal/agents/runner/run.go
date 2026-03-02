@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/helpers"
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/agents/workspace"
+	"github.com/openacosmi/claw-acismi/internal/agents/helpers"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/agents/workspace"
 )
 
 const (
@@ -121,6 +121,14 @@ func RunEmbeddedPiAgent(ctx context.Context, params RunEmbeddedPiAgentParams, de
 		}
 	}
 
+	// 5b. 通知子智能体频道：任务已接收
+	if params.OnCoderEvent != nil {
+		params.OnCoderEvent("task_received", map[string]interface{}{
+			"prompt": params.Prompt,
+			"model":  modelID,
+		})
+	}
+
 	// 6. 主重试循环
 	usageAcc := NewUsageAccumulator()
 	autoCompactionCount := 0
@@ -153,7 +161,12 @@ func RunEmbeddedPiAgent(ctx context.Context, params RunEmbeddedPiAgentParams, de
 			OnPermissionDenied: params.OnPermissionDenied,
 			WaitForApproval:    params.WaitForApproval,
 			SecurityLevelFunc:  params.SecurityLevelFunc,
+			MountRequestsFunc:  params.MountRequestsFunc,
 			DelegationContract: params.DelegationContract,
+			PromptMode:         params.PromptMode,
+			OnToolEvent:        params.OnToolEvent,
+			AgentChannel:       params.AgentChannel,
+			AgentType:          params.AgentType,
 		})
 		if err != nil {
 			return nil, err
@@ -264,7 +277,23 @@ func RunEmbeddedPiAgent(ctx context.Context, params RunEmbeddedPiAgentParams, de
 			_ = deps.AuthStore.MarkUsed(lastProfileID, agentDir)
 		}
 
-		// 6f. 构建结果
+		// 6f. 通知子智能体频道：轮次完成
+		if params.OnCoderEvent != nil {
+			var replyText string
+			for i := len(attempt.AssistantTexts) - 1; i >= 0; i-- {
+				if attempt.AssistantTexts[i] != "" {
+					replyText = attempt.AssistantTexts[i]
+					break
+				}
+			}
+			if replyText != "" {
+				params.OnCoderEvent("turn_complete", map[string]interface{}{
+					"text": replyText,
+				})
+			}
+		}
+
+		// 6g. 构建结果
 		normUsage := usageAcc.ToNormalizedUsage()
 		var agentUsage *EmbeddedPiAgentUsage
 		if normUsage != nil {
@@ -512,6 +541,16 @@ func buildPayloads(attempt *AttemptResult) []RunPayload {
 		if t != "" {
 			payloads = append(payloads, RunPayload{Text: t})
 		}
+	}
+	// 将最后一张图片附加到第一个 payload（最近产出的工具结果，最可能是用户要的图片）
+	if len(attempt.MediaBlocks) > 0 && len(payloads) > 0 {
+		last := attempt.MediaBlocks[len(attempt.MediaBlocks)-1]
+		payloads[0].MediaBase64 = last.Base64
+		payloads[0].MediaMimeType = last.MimeType
+		slog.Info("buildPayloads: media attached to payload",
+			"mimeType", last.MimeType,
+			"base64Len", len(last.Base64),
+		)
 	}
 	return payloads
 }

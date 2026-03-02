@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // NodeHandlers 返回 node.* 方法映射。

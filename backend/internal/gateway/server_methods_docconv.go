@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // DocConvHandlers 返回文档转换 RPC 方法处理器。

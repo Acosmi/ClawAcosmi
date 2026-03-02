@@ -6,7 +6,7 @@ package main
 // 26 个 provider config 变换函数，统一使用 helper 模式减少重复。
 
 import (
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 内部 helper ----------

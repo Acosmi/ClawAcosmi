@@ -83,6 +83,35 @@ func TestBuildReloadPlan_Unknown(t *testing.T) {
 	}
 }
 
+// TestBuildReloadPlan_Channels 验证 channels.* 变更通过动态注册的规则触发 RestartChannels，
+// 而不是 RestartGateway（B3 修复回归测试）。
+func TestBuildReloadPlan_Channels(t *testing.T) {
+	// channels.feishu.* 没有动态规则时，回退为 RestartGateway（旧行为，B3 bug 所在）
+	planOld := BuildReloadPlan([]string{"channels.feishu.appId"}, nil)
+	if !planOld.RestartGateway {
+		t.Error("without channel rules, channels change should trigger RestartGateway (old fallback)")
+	}
+
+	// 注册动态规则后，触发 RestartChannels 而非 RestartGateway（B3 修复目标状态）
+	channelRulesMu.Lock()
+	channelRules = nil
+	channelRulesMu.Unlock()
+	RegisterChannelReloadRules("feishu", "restart-channel:feishu")
+
+	planNew := BuildReloadPlan([]string{"channels.feishu.appId"}, getChannelRules())
+	if planNew.RestartGateway {
+		t.Error("with channel rule registered, channels change should NOT trigger RestartGateway")
+	}
+	if _, ok := planNew.RestartChannels["feishu"]; !ok {
+		t.Error("channels.feishu change should populate RestartChannels[feishu]")
+	}
+
+	// 清理全局状态
+	channelRulesMu.Lock()
+	channelRules = nil
+	channelRulesMu.Unlock()
+}
+
 func TestConfigWatcher_Debounce(t *testing.T) {
 	var count atomic.Int32
 	w := NewConfigWatcher(50, func() {

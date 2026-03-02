@@ -25,6 +25,7 @@ type ExecSecurity string
 const (
 	ExecSecurityDeny      ExecSecurity = "deny"
 	ExecSecurityAllowlist ExecSecurity = "allowlist"
+	ExecSecuritySandboxed ExecSecurity = "sandboxed" // L2: 沙箱全权限（无网络）
 	ExecSecurityFull      ExecSecurity = "full"
 )
 
@@ -69,13 +70,21 @@ type CommandRule struct {
 	CreatedAt   *int64            `json:"createdAt,omitempty"`
 }
 
+// LevelOrder 返回安全级别的排序值（L0=0, L1=1, L2=2, L3=3）。
+func LevelOrder(s ExecSecurity) int {
+	return levelOrderMap[s]
+}
+
+var levelOrderMap = map[ExecSecurity]int{
+	ExecSecurityDeny:      0,
+	ExecSecurityAllowlist: 1,
+	ExecSecuritySandboxed: 2,
+	ExecSecurityFull:      3,
+}
+
 // MinSecurity 取安全级别的最低值。
 func MinSecurity(a, b ExecSecurity) ExecSecurity {
-	order := map[ExecSecurity]int{
-		ExecSecurityDeny:      0,
-		ExecSecurityAllowlist: 1,
-		ExecSecurityFull:      2,
-	}
+	order := levelOrderMap
 	if order[a] <= order[b] {
 		return a
 	}
@@ -130,7 +139,7 @@ type ExecApprovalsSocket struct {
 // 定义在 infra 包避免与 gateway 包循环依赖。
 type PersistedEscalationRequest struct {
 	ID             string `json:"id"`
-	RequestedLevel string `json:"requestedLevel"` // "allowlist" | "full"
+	RequestedLevel string `json:"requestedLevel"` // "allowlist" | "sandboxed" | "full"
 	Reason         string `json:"reason"`
 	RunID          string `json:"runId,omitempty"`
 	SessionID      string `json:"sessionId,omitempty"`
@@ -140,11 +149,11 @@ type PersistedEscalationRequest struct {
 
 // ExecApprovalsFile 审批配置文件结构。
 type ExecApprovalsFile struct {
-	Version           int                          `json:"version"`
-	Socket            *ExecApprovalsSocket         `json:"socket,omitempty"`
-	Defaults          *ExecApprovalsDefaults       `json:"defaults,omitempty"`
+	Version           int                            `json:"version"`
+	Socket            *ExecApprovalsSocket           `json:"socket,omitempty"`
+	Defaults          *ExecApprovalsDefaults         `json:"defaults,omitempty"`
 	Agents            map[string]*ExecApprovalsAgent `json:"agents,omitempty"`
-	PendingEscalation *PersistedEscalationRequest  `json:"pendingEscalation,omitempty"`
+	PendingEscalation *PersistedEscalationRequest    `json:"pendingEscalation,omitempty"`
 }
 
 // ExecApprovalsSnapshot 配置快照（含 hash 用于 OCC）。

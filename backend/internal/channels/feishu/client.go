@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
@@ -18,6 +20,10 @@ type FeishuClient struct {
 	AppID     string
 	AppSecret string
 	Domain    string // "feishu" 或 "lark"
+	// token cache（由 resource.go getTenantAccessToken 使用）
+	tokenMu     sync.Mutex
+	cachedToken string
+	tokenExpiry time.Time
 }
 
 // NewFeishuClient 创建飞书 SDK 客户端
@@ -76,6 +82,24 @@ func (c *FeishuClient) SendAudioMessage(ctx context.Context, receiveIDType, rece
 func (c *FeishuClient) SendFileMessage(ctx context.Context, receiveIDType, receiveID, fileKey string) (string, error) {
 	contentBytes, _ := json.Marshal(map[string]string{"file_key": fileKey})
 	return c.sendMessage(ctx, receiveIDType, receiveID, "file", string(contentBytes))
+}
+
+// PatchCardMessage 更新已发送的卡片消息内容（Patch API）。
+// 要求卡片 config 包含 "update_multi": true。
+func (c *FeishuClient) PatchCardMessage(ctx context.Context, messageID, cardJSON string) error {
+	req := larkim.NewPatchMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewPatchMessageReqBodyBuilder().Content(cardJSON).Build()).
+		Build()
+
+	resp, err := c.SDK.Im.Message.Patch(ctx, req)
+	if err != nil {
+		return fmt.Errorf("feishu patch message: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("feishu patch message failed: code=%d, msg=%s", resp.Code, resp.Msg)
+	}
+	return nil
 }
 
 // sendMessage 底层消息发送

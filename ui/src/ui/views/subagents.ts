@@ -14,6 +14,7 @@ export type SubAgentsProps = {
     onSetGoal: (agentId: string, goal: string) => void;
     onSetModel: (agentId: string, model: string) => void;
     onRefresh: () => void;
+    onStartOpenCoderWizard?: () => void;
 };
 
 const VLA_MODELS = [
@@ -55,17 +56,20 @@ export function renderSubAgents(props: SubAgentsProps) {
 function renderSubAgentCard(agent: SubAgentEntry, props: SubAgentsProps) {
     const busy = props.busyKey === agent.id;
     const statusClass =
-        agent.status === "running"
+        agent.status === "running" || agent.status === "available"
             ? "chip-ok"
-            : agent.status === "error"
+            : agent.status === "error" || agent.status === "degraded"
                 ? "chip-danger"
-                : "chip-muted";
+                : agent.status === "starting"
+                    ? "chip-warn"
+                    : "chip-muted"; // stopped
     const statusLabel =
-        agent.status === "running"
-            ? t("subagents.status.running")
-            : agent.status === "error"
-                ? t("subagents.status.error")
-                : t("subagents.status.stopped");
+        agent.status === "running" ? t("subagents.status.running")
+        : agent.status === "available" ? t("subagents.status.available")
+        : agent.status === "degraded" ? t("subagents.status.degraded")
+        : agent.status === "starting" ? t("subagents.status.starting")
+        : agent.status === "error" ? t("subagents.status.error")
+        : t("subagents.status.stopped");
 
     return html`
     <div class="subagent-card">
@@ -152,8 +156,57 @@ function renderSubAgentCard(agent: SubAgentEntry, props: SubAgentsProps) {
           `
             : nothing}
 
+      ${agent.id === "oa-coder"
+            ? renderOpenCoderControls(agent, props)
+            : nothing}
+
       ${agent.error
             ? html`<div class="callout danger" style="margin-top: 8px;">${agent.error}</div>`
+            : nothing}
+    </div>
+  `;
+}
+
+function renderOpenCoderControls(agent: SubAgentEntry, props: SubAgentsProps) {
+    const configured = agent.configured ?? false;
+    const configChipClass = configured ? "chip-ok" : "chip-muted";
+    const configLabel = configured
+        ? t("subagents.openCoder.configured")
+        : t("subagents.openCoder.notConfigured");
+
+    // 未配置时显示"跟随主配置"，不暴露上游供应商品牌
+    const displayProvider = configured
+        ? (agent.provider || "—")
+        : t("subagents.openCoder.followsMain");
+    const displayModel = configured
+        ? (agent.model || "—")
+        : t("subagents.openCoder.followsMain");
+
+    return html`
+    <div class="subagent-controls" style="gap: 10px;">
+      <div class="row" style="gap: 12px; flex-wrap: wrap; align-items: center;">
+        <div class="row" style="gap: 6px; align-items: center;">
+          <span class="muted" style="font-size: 12px;">${t("subagents.openCoder.provider")}</span>
+          <span class="chip chip-muted">${displayProvider}</span>
+        </div>
+        <div class="row" style="gap: 6px; align-items: center;">
+          <span class="muted" style="font-size: 12px;">${t("subagents.openCoder.model")}</span>
+          <span class="chip chip-muted">${displayModel}</span>
+        </div>
+        <span class="chip ${configChipClass}">${configLabel}</span>
+      </div>
+      ${props.onStartOpenCoderWizard
+            ? html`
+        <button
+          class="btn primary"
+          style="align-self: flex-start; margin-top: 4px;"
+          @click=${() => props.onStartOpenCoderWizard!()}
+        >
+          ${configured
+                ? t("subagents.openCoder.reconfigure")
+                : t("subagents.openCoder.setup")}
+        </button>
+      `
             : nothing}
     </div>
   `;

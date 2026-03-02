@@ -7,13 +7,15 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/channels/feishu"
-	"github.com/anthropic/open-acosmi/internal/media"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/channels/feishu"
+	"github.com/openacosmi/claw-acismi/internal/media"
 )
 
 // MultimodalPreprocessor 多模态消息预处理器。
@@ -23,12 +25,19 @@ type MultimodalPreprocessor struct {
 	STTProvider media.STTProvider
 	// DocConverter 文档转换 Provider（可选）
 	DocConverter media.DocConverter
+	// ImageDescriber 图片理解 Fallback Provider（可选，Phase E）
+	// 当主模型不支持多模态时，调用此 Provider 生成图片文字描述
+	ImageDescriber media.ImageDescriber
 }
 
 // PreprocessResult 预处理结果
 type PreprocessResult struct {
 	// Text 增强后的文本（原文本 + 附件描述）
 	Text string
+	// ImageBase64 第一张图片的 base64 编码（用于前端显示）
+	ImageBase64 string
+	// ImageMimeType 图片 MIME 类型
+	ImageMimeType string
 }
 
 // ProcessFeishuMessage 预处理飞书多模态消息。
@@ -72,89 +81,126 @@ func (p *MultimodalPreprocessor) ProcessFeishuMessage(
 		attachments = attachments[:maxAttachments]
 	}
 
-	for _, att := range attachments {
-		switch att.Category {
-		case "image":
-			data, err := client.DownloadImage(ctx, msg.MessageID, att.FileKey)
-			if err != nil {
-				slog.Error("multimodal: failed to download image",
-					"message_id", msg.MessageID,
-					"file_key", att.FileKey,
-					"error", err,
-				)
-				textParts = append(textParts, "[图片下载失败]")
-				continue
-			}
-			mediaType := att.MimeType
-			if mediaType == "" {
-				mediaType = detectImageMediaType(data)
-			}
-			textParts = append(textParts,
-				fmt.Sprintf("[图片: %s, 大小: %s]", mediaType, humanReadableSize(int64(len(data)))))
-
-		case "audio":
-			data, err := client.DownloadFile(ctx, msg.MessageID, att.FileKey)
-			if err != nil {
-				slog.Error("multimodal: failed to download audio",
-					"message_id", msg.MessageID,
-					"file_key", att.FileKey,
-					"error", err,
-				)
-				textParts = append(textParts, "[语音下载失败]")
-				continue
-			}
-			if p.STTProvider != nil {
-				mimeType := att.MimeType
-				if mimeType == "" {
-					mimeType = "audio/opus"
+	// 并发处理附件（索引数组保持顺序）
+	type attachResult struct {
+		text          string
+		imageBase64   string
+		imageMimeType string
+	}
+	results := make([]attachResult, len(attachments))
+	var wg sync.WaitGroup
+	for i, att := range attachments {
+		wg.Add(1)
+		go func(idx int, a channels.ChannelAttachment) {
+			defer wg.Done()
+			switch a.Category {
+			case "image":
+				data, err := client.DownloadImage(ctx, msg.MessageID, a.FileKey)
+				if err != nil {
+					slog.Error("multimodal: failed to download image",
+						"message_id", msg.MessageID,
+						"file_key", a.FileKey,
+						"error", err,
+					)
+					results[idx].text = "[图片下载失败]"
+					return
 				}
-				transcript, sttErr := p.STTProvider.Transcribe(ctx, data, mimeType)
-				if sttErr != nil {
-					slog.Error("multimodal: STT transcription failed",
-						"file_key", att.FileKey, "error", sttErr)
-					textParts = append(textParts, "[语音转录失败]")
+				mediaType := a.MimeType
+				if mediaType == "" {
+					mediaType = detectImageMediaType(data)
+				}
+				// Phase E: 若配置了 ImageDescriber，调用视觉 API 生成文字描述
+				if p.ImageDescriber != nil {
+					desc, descErr := p.ImageDescriber.Describe(ctx, data, mediaType)
+					if descErr != nil {
+						slog.Warn("multimodal: image describe failed, fallback to metadata",
+							"provider", p.ImageDescriber.Name(),
+							"error", descErr,
+						)
+						results[idx].text = fmt.Sprintf("[图片: %s, 大小: %s]", mediaType, humanReadableSize(int64(len(data))))
+					} else {
+						results[idx].text = fmt.Sprintf("[图片描述]: %s", desc)
+					}
 				} else {
-					textParts = append(textParts, fmt.Sprintf("[语音转录]: %s", transcript))
+					results[idx].text = fmt.Sprintf("[图片: %s, 大小: %s]", mediaType, humanReadableSize(int64(len(data))))
 				}
-			} else {
-				textParts = append(textParts, "[语音消息: STT 未配置]")
-			}
+				// 保留 base64 数据，供前端直接显示
+				results[idx].imageBase64 = base64.StdEncoding.EncodeToString(data)
+				results[idx].imageMimeType = mediaType
 
-		case "document":
-			name := att.FileName
-			if name == "" {
-				name = "未命名文件"
-			}
-			data, err := client.DownloadFile(ctx, msg.MessageID, att.FileKey)
-			if err != nil {
-				slog.Error("multimodal: failed to download document",
-					"message_id", msg.MessageID,
-					"file_key", att.FileKey,
-					"error", err,
-				)
-				textParts = append(textParts, fmt.Sprintf("[文件: %s, 下载失败]", name))
-				continue
-			}
-			if p.DocConverter != nil && media.IsSupportedFormat(name) {
-				markdown, convErr := p.DocConverter.Convert(ctx, data, att.MimeType, name)
-				if convErr != nil {
-					slog.Error("multimodal: document conversion failed",
-						"file", name, "error", convErr)
-					textParts = append(textParts, fmt.Sprintf("[文件: %s, 转换失败]", name))
+			case "audio":
+				data, err := client.DownloadFile(ctx, msg.MessageID, a.FileKey)
+				if err != nil {
+					slog.Error("multimodal: failed to download audio",
+						"message_id", msg.MessageID,
+						"file_key", a.FileKey,
+						"error", err,
+					)
+					results[idx].text = "[语音下载失败]"
+					return
+				}
+				if p.STTProvider != nil {
+					mimeType := a.MimeType
+					if mimeType == "" {
+						mimeType = "audio/opus"
+					}
+					transcript, sttErr := p.STTProvider.Transcribe(ctx, data, mimeType)
+					if sttErr != nil {
+						slog.Error("multimodal: STT transcription failed",
+							"file_key", a.FileKey, "error", sttErr)
+						results[idx].text = "[语音转录失败]"
+					} else {
+						results[idx].text = fmt.Sprintf("[语音转录]: %s", transcript)
+					}
 				} else {
-					textParts = append(textParts, fmt.Sprintf("[文件: %s]\n%s", name, markdown))
+					results[idx].text = "[语音消息: STT 未配置]"
 				}
-			} else {
-				textParts = append(textParts,
-					fmt.Sprintf("[文件: %s, 大小: %s]", name, humanReadableSize(att.FileSize)))
+
+			case "document":
+				name := a.FileName
+				if name == "" {
+					name = "未命名文件"
+				}
+				data, err := client.DownloadFile(ctx, msg.MessageID, a.FileKey)
+				if err != nil {
+					slog.Error("multimodal: failed to download document",
+						"message_id", msg.MessageID,
+						"file_key", a.FileKey,
+						"error", err,
+					)
+					results[idx].text = fmt.Sprintf("[文件: %s, 下载失败]", name)
+					return
+				}
+				if p.DocConverter != nil && media.IsSupportedFormat(name) {
+					markdown, convErr := p.DocConverter.Convert(ctx, data, a.MimeType, name)
+					if convErr != nil {
+						slog.Error("multimodal: document conversion failed",
+							"file", name, "error", convErr)
+						results[idx].text = fmt.Sprintf("[文件: %s, 转换失败]", name)
+					} else {
+						results[idx].text = fmt.Sprintf("[文件: %s]\n%s", name, markdown)
+					}
+				} else {
+					results[idx].text = fmt.Sprintf("[文件: %s, 大小: %s]", name, humanReadableSize(a.FileSize))
+				}
+
+			case "video":
+				results[idx].text = "[视频消息: 暂不支持]"
+
+			default:
+				results[idx].text = fmt.Sprintf("[附件: %s, 类型: %s]", a.FileName, a.Category)
 			}
-
-		case "video":
-			textParts = append(textParts, "[视频消息: 暂不支持]")
-
-		default:
-			textParts = append(textParts,
-				fmt.Sprintf("[附件: %s, 类型: %s]", att.FileName, att.Category))
+		}(i, att)
+	}
+	wg.Wait()
+	for _, r := range results {
+		if r.text != "" {
+			textParts = append(textParts, r.text)
+		}
+		// 取第一张图片的 base64 数据
+		if result.ImageBase64 == "" && r.imageBase64 != "" {
+			result.ImageBase64 = r.imageBase64
+			result.ImageMimeType = r.imageMimeType
 		}
 	}
 

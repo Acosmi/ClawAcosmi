@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // WhatsApp 账户解析 — 继承自 src/web/accounts.ts (177L)

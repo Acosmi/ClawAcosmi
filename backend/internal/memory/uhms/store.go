@@ -261,8 +261,10 @@ func (s *Store) ListMemories(userID string, opts ListOptions) ([]Memory, error) 
 	var clauses []string
 	var args []interface{}
 
-	clauses = append(clauses, "user_id = ?")
-	args = append(args, userID)
+	if userID != "" {
+		clauses = append(clauses, "user_id = ?")
+		args = append(args, userID)
+	}
 
 	if opts.MemoryType != "" {
 		clauses = append(clauses, "memory_type = ?")
@@ -284,11 +286,16 @@ func (s *Store) ListMemories(userID string, opts ListOptions) ([]Memory, error) 
 		clauses = append(clauses, "archived_at IS NULL")
 	}
 
+	whereClause := ""
+	if len(clauses) > 0 {
+		whereClause = " WHERE " + strings.Join(clauses, " AND ")
+	}
+
 	query := `SELECT id, user_id, content, memory_type, category,
 		importance_score, decay_factor, retention_policy, access_count,
 		last_accessed_at, archived_at, event_time, ingested_at, vfs_path,
 		embedding_ref, metadata, created_at, updated_at
-		FROM memories WHERE ` + strings.Join(clauses, " AND ") + ` ORDER BY created_at DESC`
+		FROM memories` + whereClause + ` ORDER BY created_at DESC`
 
 	if opts.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", opts.Limit)
@@ -306,8 +313,31 @@ func (s *Store) ListMemories(userID string, opts ListOptions) ([]Memory, error) 
 	return scanMemories(rows)
 }
 
+// escapeFTS5Query converts a raw query into a safe FTS5 MATCH expression.
+// Each whitespace-delimited token is wrapped in double quotes; internal
+// double-quotes are escaped as "". This prevents syntax errors when the
+// query contains CJK characters, slashes, parentheses, or other FTS5
+// operators.
+func escapeFTS5Query(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	tokens := strings.Fields(raw)
+	escaped := make([]string, 0, len(tokens))
+	for _, t := range tokens {
+		t = strings.ReplaceAll(t, `"`, `""`)
+		escaped = append(escaped, `"`+t+`"`)
+	}
+	return strings.Join(escaped, " ")
+}
+
 // SearchByFTS5 performs full-text search using SQLite FTS5.
 func (s *Store) SearchByFTS5(userID, query string, limit int) ([]SearchResult, error) {
+	query = escapeFTS5Query(query)
+	if query == "" {
+		return nil, nil
+	}
 	if limit <= 0 {
 		limit = 20
 	}
@@ -353,7 +383,12 @@ func (s *Store) IncrementAccess(id string) error {
 // CountMemories returns total memory count for a user.
 func (s *Store) CountMemories(userID string) (int64, error) {
 	var count int64
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM memories WHERE user_id = ? AND archived_at IS NULL`, userID).Scan(&count)
+	var err error
+	if userID != "" {
+		err = s.db.QueryRow(`SELECT COUNT(*) FROM memories WHERE user_id = ? AND archived_at IS NULL`, userID).Scan(&count)
+	} else {
+		err = s.db.QueryRow(`SELECT COUNT(*) FROM memories WHERE archived_at IS NULL`).Scan(&count)
+	}
 	return count, err
 }
 
@@ -375,6 +410,7 @@ type AggregateStats struct {
 }
 
 // AggregateStats computes aggregated statistics for a user's memories.
+// When userID is empty, statistics cover all users.
 func (s *Store) AggregateStats(userID string) (*AggregateStats, error) {
 	stats := &AggregateStats{
 		ByType:      make(map[string]int64),
@@ -382,9 +418,17 @@ func (s *Store) AggregateStats(userID string) (*AggregateStats, error) {
 		ByRetention: make(map[string]int64),
 	}
 
+	// 构建 user_id 过滤条件
+	userFilter := "archived_at IS NULL"
+	var userArgs []interface{}
+	if userID != "" {
+		userFilter = "user_id = ? AND archived_at IS NULL"
+		userArgs = []interface{}{userID}
+	}
+
 	// GROUP BY memory_type
 	rows, err := s.db.Query(`SELECT memory_type, COUNT(*) FROM memories
-		WHERE user_id = ? AND archived_at IS NULL GROUP BY memory_type`, userID)
+		WHERE `+userFilter+` GROUP BY memory_type`, userArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("uhms/store: aggregate by type: %w", err)
 	}
@@ -403,7 +447,7 @@ func (s *Store) AggregateStats(userID string) (*AggregateStats, error) {
 
 	// GROUP BY category
 	catRows, err := s.db.Query(`SELECT category, COUNT(*) FROM memories
-		WHERE user_id = ? AND archived_at IS NULL GROUP BY category`, userID)
+		WHERE `+userFilter+` GROUP BY category`, userArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("uhms/store: aggregate by category: %w", err)
 	}
@@ -433,7 +477,7 @@ func (s *Store) AggregateStats(userID string) (*AggregateStats, error) {
 		COALESCE(AVG(importance_score), 0),
 		COALESCE(MIN(strftime('%s', created_at)), 0),
 		COALESCE(MAX(strftime('%s', created_at)), 0)
-		FROM memories WHERE user_id = ? AND archived_at IS NULL`, userID).Scan(
+		FROM memories WHERE `+userFilter, userArgs...).Scan(
 		&retPermanent,
 		&retStandard,
 		&retOther,

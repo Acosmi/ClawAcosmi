@@ -11,6 +11,11 @@ type FeishuAccountConfig struct {
 	Domain    string `json:"domain,omitempty"` // "feishu" | "lark"（国际版）
 	Enabled   *bool  `json:"enabled,omitempty"`
 
+	// 审批通知专用群 ID（可选）。
+	// 配置后，所有审批卡片（Escalation/CoderConfirmation）会发送到该群，
+	// 解决 Web UI 发起的审批请求无法送达飞书的问题。
+	ApprovalChatID string `json:"approvalChatId,omitempty"`
+
 	// 通用频道字段
 	GroupPolicy    GroupPolicy                       `json:"groupPolicy,omitempty"`
 	Heartbeat      *ChannelHeartbeatVisibilityConfig `json:"heartbeat,omitempty"`

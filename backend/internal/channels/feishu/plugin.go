@@ -18,8 +18,8 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // FeishuPlugin 飞书频道插件
@@ -63,6 +63,16 @@ func NewFeishuPlugin(cfg *types.OpenAcosmiConfig) *FeishuPlugin {
 // ID 返回频道标识
 func (p *FeishuPlugin) ID() channels.ChannelID {
 	return channels.ChannelFeishu
+}
+
+// UpdateConfig 实现 channels.ConfigUpdater 接口。
+// 热重载时注入新配置，后续 Start() 将使用新凭证（AppID/AppSecret）建立 WebSocket 连接。
+func (p *FeishuPlugin) UpdateConfig(cfg interface{}) {
+	if c, ok := cfg.(*types.OpenAcosmiConfig); ok {
+		p.mu.Lock()
+		p.config = c
+		p.mu.Unlock()
+	}
 }
 
 // GetClient 返回指定账号的飞书客户端（可能为 nil）。
@@ -139,35 +149,103 @@ func (p *FeishuPlugin) Start(accountID string) error {
 				"text", text,
 			)
 
-			// 路由到 Agent 管线获取回复（优先多模态）
-			var reply string
+			idType := ReceiveIDTypeChatID
+
+			// ① 立即发送"处理中"卡片
+			taskPreview := truncateText(text, 80)
+			processingCardJSON := BuildProcessingCard(taskPreview)
+			processingMsgID, cardErr := sender.SendCardWithID(context.Background(), chatID, idType, processingCardJSON)
+			if cardErr != nil {
+				slog.Warn("feishu: failed to send processing card, will fall back to text reply",
+					"account", capturedAccountID, "chat_id", chatID, "error", cardErr)
+			}
+
+			// ② 路由到 Agent 管线获取回复（阻塞，优先多模态）
+			var dispatchReply *channels.DispatchReply
 			if p.DispatchMultimodalFunc != nil {
 				cm := ExtractMultimodalMessage(msg)
-				reply = p.DispatchMultimodalFunc(
+				dispatchReply = p.DispatchMultimodalFunc(
 					"feishu", capturedAccountID, chatID, userOpenID, cm)
 			} else if p.DispatchFunc != nil {
-				reply = p.DispatchFunc(context.Background(),
+				replyText := p.DispatchFunc(context.Background(),
 					"feishu", capturedAccountID, chatID, userOpenID, text)
+				if replyText != "" {
+					dispatchReply = &channels.DispatchReply{Text: replyText}
+				}
 			} else {
 				slog.Warn("feishu: DispatchFunc not set, message not routed to agent",
 					"account", capturedAccountID)
 			}
 
-			if reply != "" {
-				// 发送回复
-				idType := ReceiveIDTypeChatID
-				if err := sender.SendText(context.Background(), chatID, idType, reply); err != nil {
-					slog.Error("feishu: failed to send reply",
-						"account", capturedAccountID,
-						"chat_id", chatID,
-						"error", err,
-					)
-				} else {
-					slog.Info("feishu: reply sent",
-						"account", capturedAccountID,
-						"chat_id", chatID,
-						"reply_len", len(reply),
-					)
+			// ③ Agent 完成：原地更新卡片为结果 / 降级为文本
+			if dispatchReply != nil {
+				var embeddedImageKeys []string
+
+				// 处理媒体回复：图片类型上传后嵌入结果卡片，其他类型独立发送
+				if len(dispatchReply.MediaData) > 0 && client != nil {
+					mediaCategory := detectMediaCategory(dispatchReply.MediaMimeType, dispatchReply.MediaData)
+					if mediaCategory == "image" {
+						// 图片：上传拿 image_key，后续嵌入结果卡片
+						imageKey, uploadErr := client.UploadImage(context.Background(), dispatchReply.MediaData, "message")
+						if uploadErr != nil {
+							slog.Warn("feishu: upload image for card failed, sending as separate message",
+								"account", capturedAccountID, "chat_id", chatID, "error", uploadErr)
+							// 降级：独立消息发送
+							_ = p.sendMediaData(context.Background(), client, sender, chatID, idType,
+								dispatchReply.MediaData, dispatchReply.MediaMimeType)
+						} else {
+							embeddedImageKeys = append(embeddedImageKeys, imageKey)
+						}
+					} else {
+						// 非图片（音频/文件）：独立消息发送
+						mediaErr := p.sendMediaData(context.Background(), client, sender, chatID, idType,
+							dispatchReply.MediaData, dispatchReply.MediaMimeType)
+						if mediaErr != nil {
+							slog.Warn("feishu: auto-reply media send failed",
+								"account", capturedAccountID, "chat_id", chatID, "error", mediaErr)
+						}
+					}
+				}
+
+				// 文本+图片回复：优先 Patch 卡片，失败则降级 SendText
+				if dispatchReply.Text != "" || len(embeddedImageKeys) > 0 {
+					if processingMsgID != "" {
+						resultCardJSON := BuildResultCard(dispatchReply.Text, embeddedImageKeys...)
+						if patchErr := sender.PatchCard(context.Background(), processingMsgID, resultCardJSON); patchErr != nil {
+							slog.Warn("feishu: patch result card failed, falling back to text",
+								"account", capturedAccountID, "message_id", processingMsgID, "error", patchErr)
+							if dispatchReply.Text != "" {
+								_ = sender.SendText(context.Background(), chatID, idType, dispatchReply.Text)
+							}
+							// 图片降级为独立消息
+							for _, key := range embeddedImageKeys {
+								_ = sender.SendImage(context.Background(), chatID, idType, key)
+							}
+						} else {
+							slog.Info("feishu: result card patched",
+								"account", capturedAccountID, "chat_id", chatID,
+								"message_id", processingMsgID, "reply_len", len(dispatchReply.Text),
+								"images", len(embeddedImageKeys))
+						}
+					} else {
+						// 处理中卡片未发成功，直接文本+图片回复
+						if dispatchReply.Text != "" {
+							if err := sender.SendText(context.Background(), chatID, idType, dispatchReply.Text); err != nil {
+								slog.Error("feishu: failed to send reply",
+									"account", capturedAccountID, "chat_id", chatID, "error", err)
+							}
+						}
+						for _, key := range embeddedImageKeys {
+							_ = sender.SendImage(context.Background(), chatID, idType, key)
+						}
+					}
+				}
+			} else if processingMsgID != "" {
+				// ④ Agent 无回复：更新卡片为错误状态
+				errCardJSON := BuildErrorCard("Agent 未返回结果")
+				if patchErr := sender.PatchCard(context.Background(), processingMsgID, errCardJSON); patchErr != nil {
+					slog.Warn("feishu: patch error card failed",
+						"account", capturedAccountID, "message_id", processingMsgID, "error", patchErr)
 				}
 			}
 		})
@@ -218,6 +296,12 @@ func (p *FeishuPlugin) Stop(accountID string) error {
 		accountID = channels.DefaultAccountID
 	}
 
+	// 取消 WebSocket 上下文，停止后台 goroutine
+	if cancel, ok := p.wsCancel[accountID]; ok {
+		cancel()
+		delete(p.wsCancel, accountID)
+	}
+	delete(p.wsClients, accountID)
 	delete(p.clients, accountID)
 	delete(p.senders, accountID)
 	delete(p.dispatchers, accountID)
@@ -482,6 +566,15 @@ func validateMediaURL(rawURL string) error {
 		}
 	}
 	return nil
+}
+
+// truncateText 按 rune 截断文本，超长则追加 "..."。
+func truncateText(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes]) + "..."
 }
 
 // readLimited 读取 body 但限制最大字节数。超限则返回错误而非静默截断。

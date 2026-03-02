@@ -85,3 +85,13 @@ pub trait SandboxRunner: Send + Sync {
 pub fn select_runner(config: &SandboxConfig) -> Result<Box<dyn SandboxRunner>, SandboxError> {
     platform::select_runner(config)
 }
+
+/// Apply sandbox constraints to the current process (self-sandboxing).
+///
+/// Irreversible. Used by the persistent Worker to sandbox itself when started
+/// directly by the Go bridge (bypassing the launcher's `pre_exec` path).
+///
+/// See [`platform::apply_sandbox_to_self`] for details.
+pub fn apply_sandbox_to_self(config: &SandboxConfig) -> Result<(), SandboxError> {
+    platform::apply_sandbox_to_self(config)
+}

@@ -13,7 +13,7 @@ import type { GatewayBrowserClient } from "../gateway.ts";
 
 export type EscalationRequest = {
     id: string;
-    requestedLevel: string; // "allowlist" | "full"
+    requestedLevel: string; // "allowlist" | "sandboxed" | "full"
     reason: string;
     runId?: string;
     sessionId?: string;
@@ -70,7 +70,7 @@ export function parseEscalationRequested(payload: unknown): EscalationRequest | 
     };
 }
 
-export function parseEscalationResolved(payload: unknown): { id: string; approved: boolean; level: string; reason?: string } | null {
+export function parseEscalationResolved(payload: unknown): { id: string; approved: boolean; level: string; reason?: string; expiresAt?: string } | null {
     if (typeof payload !== "object" || payload === null) return null;
     const p = payload as Record<string, unknown>;
     const id = typeof p.id === "string" ? p.id : "";
@@ -80,6 +80,9 @@ export function parseEscalationResolved(payload: unknown): { id: string; approve
         approved: p.approved === true,
         level: typeof p.level === "string" ? p.level : "deny",
         reason: typeof p.reason === "string" ? p.reason : undefined,
+        expiresAt: typeof p.expiresAt === "number"
+            ? new Date(p.expiresAt).toISOString()
+            : typeof p.expiresAt === "string" ? p.expiresAt : undefined,
     };
 }
 
@@ -114,7 +117,7 @@ export function handleEscalationResolved(state: EscalationState, payload: unknow
         popupVisible: false,
         request: null,
         activeGrant: resolved.approved
-            ? { id: resolved.id, level: resolved.level, grantedAt: new Date().toISOString(), expiresAt: "", runId: undefined, sessionId: undefined }
+            ? { id: resolved.id, level: resolved.level, grantedAt: new Date().toISOString(), expiresAt: resolved.expiresAt ?? "", runId: undefined, sessionId: undefined }
             : null,
         error: null,
     };

@@ -27,7 +27,7 @@ type MemoryStore interface {
 type VFS interface {
 	// --- User Memory Operations ---
 	WriteMemory(userID string, m *Memory, l0, l1, l2 string) error
-	WriteArchive(userID, sessionKey, l0, l1 string) (string, error)
+	WriteArchive(userID, sessionKey, l0, l1, l2 string) (string, error)
 	DeleteMemory(userID, memoryType, category, memoryID string) error
 
 	ReadL0(userID, memoryType, category, memoryID string) (string, error)

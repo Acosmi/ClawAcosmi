@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/cron"
+	"github.com/openacosmi/claw-acismi/internal/cron"
 )
 
 // CronHandlers 返回 cron.* + wake 方法映射。

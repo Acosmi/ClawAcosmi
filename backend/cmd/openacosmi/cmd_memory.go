@@ -15,7 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anthropic/open-acosmi/internal/cli"
+	"github.com/openacosmi/claw-acismi/internal/cli"
 )
 
 func newMemoryCmd() *cobra.Command {

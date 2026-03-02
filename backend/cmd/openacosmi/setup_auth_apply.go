@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ApplyAuthChoice 主路由 — 按 authChoice 分发到对应 handler。

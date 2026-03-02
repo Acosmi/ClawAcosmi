@@ -18,7 +18,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
 )
 
 // AIBrowseAction represents a single browser action to execute.
@@ -234,4 +234,14 @@ func (l *AIBrowseLoop) act(ctx context.Context, target PWTargetOpts, action *AIB
 	default:
 		return fmt.Errorf("unknown action type: %s", action.Type)
 	}
+}
+
+// FuncAIPlanner wraps a function as an AIPlanner implementation.
+// This allows the gateway to inject an LLM-based planner via closure
+// without the browser package depending on llmclient/runner.
+type FuncAIPlanner func(ctx context.Context, goal string, state AIBrowseState) (*AIBrowseAction, error)
+
+// Plan implements AIPlanner.
+func (f FuncAIPlanner) Plan(ctx context.Context, goal string, state AIBrowseState) (*AIBrowseAction, error) {
+	return f(ctx, goal, state)
 }

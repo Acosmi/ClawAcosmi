@@ -3,7 +3,7 @@ package gateway
 import (
 	"fmt"
 
-	"github.com/anthropic/open-acosmi/internal/session"
+	"github.com/openacosmi/claw-acismi/internal/session"
 )
 
 // TS 对照: utils/delivery-context.ts (141L)

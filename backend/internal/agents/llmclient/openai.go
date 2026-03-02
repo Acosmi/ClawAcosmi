@@ -116,6 +116,25 @@ type openaiTool struct {
 
 func strPtr(s string) *string { return &s }
 
+// openaiToolResultText 提取 tool_result 的文本内容（OpenAI 不支持 image tool results）。
+func openaiToolResultText(b ContentBlock) string {
+	if b.ResultText != "" {
+		return b.ResultText
+	}
+	if len(b.ResultBlocks) > 0 {
+		var parts []string
+		for _, rb := range b.ResultBlocks {
+			if rb.Type == "text" && rb.Text != "" {
+				parts = append(parts, rb.Text)
+			} else if rb.Type == "image" {
+				parts = append(parts, "[image attached]")
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return ""
+}
+
 func toOpenAIMessages(systemPrompt string, msgs []ChatMessage) []openaiMessage {
 	out := make([]openaiMessage, 0, len(msgs)+1)
 	if systemPrompt != "" {
@@ -166,7 +185,7 @@ func toOpenAIMessages(systemPrompt string, msgs []ChatMessage) []openaiMessage {
 				if b.Type == "tool_result" {
 					out = append(out, openaiMessage{
 						Role:       "tool",
-						Content:    strPtr(b.ResultText),
+						Content:    strPtr(openaiToolResultText(b)),
 						ToolCallID: b.ToolUseID,
 					})
 				}

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 工作区工具 ----------

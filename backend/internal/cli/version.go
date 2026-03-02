@@ -10,9 +10,9 @@ import (
 )
 
 // 版本信息 — 通过 -ldflags 在构建时注入
-// go build -ldflags "-X github.com/anthropic/open-acosmi/internal/cli.Version=1.0.0
+// go build -ldflags "-X github.com/openacosmi/claw-acismi/internal/cli.Version=1.0.0
 //
-//	-X github.com/anthropic/open-acosmi/internal/cli.CommitHash=abc1234"
+//	-X github.com/openacosmi/claw-acismi/internal/cli.CommitHash=abc1234"
 var (
 	// Version 当前版本号（构建时注入）
 	Version = "dev"

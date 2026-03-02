@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
 )
 
 // DriverKind identifies the browser automation backend.

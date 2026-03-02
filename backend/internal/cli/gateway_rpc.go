@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // 对应 TS src/cli/gateway-rpc.ts — Gateway WebSocket RPC 封装

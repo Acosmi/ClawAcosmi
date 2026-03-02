@@ -9,7 +9,7 @@ package runner
 // ============================================================================
 
 import (
-	"github.com/anthropic/open-acosmi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
 )
 
 // toolCallTypes 工具调用块类型集合。

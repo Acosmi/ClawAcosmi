@@ -14,7 +14,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/argus"
+	"github.com/openacosmi/claw-acismi/internal/argus"
 )
 
 // ArgusHandlers 返回 argus.* 静态方法映射。

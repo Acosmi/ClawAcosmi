@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // DefaultCliQueueTimeout 队列锁获取的默认超时（5 分钟）。

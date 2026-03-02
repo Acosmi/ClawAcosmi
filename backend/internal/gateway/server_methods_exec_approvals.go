@@ -9,7 +9,7 @@ package gateway
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ExecApprovalsHandlers 返回 exec.approvals.* 方法处理器映射。

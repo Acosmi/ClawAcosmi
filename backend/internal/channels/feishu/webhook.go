@@ -47,6 +47,11 @@ func NewEventDispatcher(verifyToken, encryptKey string, onMessage MessageHandler
 		return nil
 	})
 
+	// 注册 im.message.message_read_v1 空处理器 — 抑制 SDK 未注册事件的日志噪声
+	handler.OnP2MessageReadV1(func(ctx context.Context, event *larkim.P2MessageReadV1) error {
+		return nil
+	})
+
 	return handler
 }
 

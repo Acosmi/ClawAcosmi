@@ -25,7 +25,7 @@ const LEGACY_STATE_DIRNAMES: &[&str] = &[".clawdbot", ".moltbot", ".moldbot"];
 const LEGACY_CONFIG_FILENAMES: &[&str] = &["clawdbot.json", "moltbot.json", "moldbot.json"];
 
 /// Default gateway HTTP port.
-pub const DEFAULT_GATEWAY_PORT: u16 = 18789;
+pub const DEFAULT_GATEWAY_PORT: u16 = 19001;
 
 /// OAuth credentials filename.
 const OAUTH_FILENAME: &str = "oauth.json";
@@ -278,7 +278,7 @@ pub fn resolve_oauth_path(state_dir: &Path) -> PathBuf {
 /// Precedence:
 /// 1. `OPENACOSMI_GATEWAY_PORT` environment variable
 /// 2. `cfg.gateway.port` from config
-/// 3. [`DEFAULT_GATEWAY_PORT`] (18789)
+/// 3. [`DEFAULT_GATEWAY_PORT`] (19001)
 pub fn resolve_gateway_port(cfg: Option<&OpenAcosmiConfig>) -> u16 {
     // Check env var
     if let Ok(raw) = env::var("OPENACOSMI_GATEWAY_PORT") {
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn default_gateway_port_value() {
-        assert_eq!(DEFAULT_GATEWAY_PORT, 18789);
+        assert_eq!(DEFAULT_GATEWAY_PORT, 19001);
     }
 
     #[test]

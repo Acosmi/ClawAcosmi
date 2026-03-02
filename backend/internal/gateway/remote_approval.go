@@ -79,6 +79,15 @@ type FeishuProviderConfig struct {
 	AppSecret string `json:"appSecret"`
 	ChatID    string `json:"chatId,omitempty"` // 目标群聊 ID
 	UserID    string `json:"userId,omitempty"` // 目标用户 open_id
+	// ApprovalChatID: 审批通知专用群聊 ID（固定审批群 fallback）。
+	// 当 ChatID/UserID/LastKnown/Originator 均为空时（如 Web UI 发起的审批），
+	// 使用此群 ID 作为最终 fallback，确保审批卡片始终有送达目标。
+	ApprovalChatID string `json:"approvalChatId,omitempty"`
+	// LastKnownChatID/LastKnownUserID: 运行时从飞书消息事件自动学习并持久化。
+	// 当静态 ChatID/UserID 为空且 OriginatorChatID/UserID 也为空时，
+	// 使用这些值作为 fallback 目标，确保重启后审批通知仍可送达。
+	LastKnownChatID string `json:"lastKnownChatId,omitempty"`
+	LastKnownUserID string `json:"lastKnownUserId,omitempty"`
 }
 
 // DingTalkProviderConfig 钉钉 Provider 配置。
@@ -135,13 +144,13 @@ func NewRemoteApprovalNotifier(broadcaster *Broadcaster) *RemoteApprovalNotifier
 
 // InjectChannelFeishuConfig 从频道配置自动补充飞书审批凭据。
 // 当 remote-approval-config.json 未配置飞书时，复用频道插件的 AppID/AppSecret。
-// ChatID/UserID 由运行时 ApprovalCardRequest 动态传入，无需静态配置。
+// approvalChatID: 审批通知专用群 ID（可选，为空则依赖 LastKnown 或 Originator）。
 // 由 server.go 在频道插件初始化后调用。
-func (n *RemoteApprovalNotifier) InjectChannelFeishuConfig(appID, appSecret string) {
+func (n *RemoteApprovalNotifier) InjectChannelFeishuConfig(appID, appSecret, approvalChatID string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	// 如果已有专用飞书审批配置且已启用，不覆盖
+	// 如果已有专用飞书审批配置且已启用，不覆盖（保留已持久化的 LastKnown 字段）
 	if n.config.Feishu != nil && n.config.Feishu.Enabled && n.config.Feishu.AppID != "" {
 		n.logger.Debug("飞书审批已有专用配置，跳过频道凭据注入")
 		return
@@ -151,13 +160,71 @@ func (n *RemoteApprovalNotifier) InjectChannelFeishuConfig(appID, appSecret stri
 		"appId", appID[:min(4, len(appID))]+"***",
 	)
 
+	// 保留可能已持久化的 LastKnown 值和已有的 ApprovalChatID
+	var lastChatID, lastUserID, existingApprovalChatID string
+	if n.config.Feishu != nil {
+		lastChatID = n.config.Feishu.LastKnownChatID
+		lastUserID = n.config.Feishu.LastKnownUserID
+		existingApprovalChatID = n.config.Feishu.ApprovalChatID
+	}
+	// 新注入的 approvalChatID 优先，其次保留已有值
+	if approvalChatID == "" {
+		approvalChatID = existingApprovalChatID
+	}
+
 	n.config.Feishu = &FeishuProviderConfig{
-		Enabled:   true,
-		AppID:     appID,
-		AppSecret: appSecret,
+		Enabled:         true,
+		AppID:           appID,
+		AppSecret:       appSecret,
+		ApprovalChatID:  approvalChatID,
+		LastKnownChatID: lastChatID,
+		LastKnownUserID: lastUserID,
 	}
 	n.config.Enabled = true
 	n.rebuildProviders()
+}
+
+// UpdateLastKnownFeishuTarget 当收到飞书消息事件时调用，
+// 持久化最近的 chatID/userID 到配置文件，确保重启后审批通知仍可送达。
+// 幂等：只在值发生变化时写入磁盘。
+func (n *RemoteApprovalNotifier) UpdateLastKnownFeishuTarget(chatID, userID string) {
+	if chatID == "" && userID == "" {
+		return
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.config.Feishu == nil {
+		return
+	}
+
+	// 检查是否有变化
+	changed := false
+	if chatID != "" && n.config.Feishu.LastKnownChatID != chatID {
+		n.config.Feishu.LastKnownChatID = chatID
+		changed = true
+	}
+	if userID != "" && n.config.Feishu.LastKnownUserID != userID {
+		n.config.Feishu.LastKnownUserID = userID
+		changed = true
+	}
+
+	if !changed {
+		return
+	}
+
+	n.logger.Info("持久化飞书审批目标",
+		"lastKnownChatId", chatID,
+		"lastKnownUserId", userID,
+	)
+
+	// 重建 provider（让新的 LastKnown 值在 broadcastCard 中生效）
+	n.rebuildProviders()
+
+	if err := n.saveConfigLocked(); err != nil {
+		n.logger.Error("持久化飞书审批目标失败", "error", err)
+	}
 }
 
 // NotifyAll 向所有已启用的 Provider 发送审批通知。
@@ -257,6 +324,92 @@ func (n *RemoteApprovalNotifier) NotifyResult(result ApprovalResultNotification)
 				)
 			}
 		}(rn, p.Name())
+	}
+}
+
+// ---------- CoderConfirmation 远程通知 ----------
+
+// CoderConfirmCardRequest 操作确认卡片请求参数。
+type CoderConfirmCardRequest struct {
+	ConfirmID        string `json:"confirmId"`
+	ToolName         string `json:"toolName"`
+	Preview          string `json:"preview"`                    // 命令/文件预览文本
+	SessionKey       string `json:"sessionKey"`                 // 来源会话标识
+	OriginatorChatID string `json:"originatorChatId,omitempty"` // 飞书 chat_id
+	OriginatorUserID string `json:"originatorUserId,omitempty"` // D5-F1: 飞书 open_id，用于私聊推送审批卡片
+	TTLMinutes       int    `json:"ttlMinutes"`                 // 超时分钟数
+}
+
+// CoderConfirmNotifier 可选接口——Provider 实现后可推送操作确认卡片。
+type CoderConfirmNotifier interface {
+	SendCoderConfirmRequest(ctx context.Context, req CoderConfirmCardRequest) error
+	SendCoderConfirmResult(ctx context.Context, id string, approved bool) error
+}
+
+// NotifyCoderConfirm 向所有已启用的 Provider 发送操作确认通知。
+// 使用 type assertion 检测 Provider 是否支持操作确认。
+func (n *RemoteApprovalNotifier) NotifyCoderConfirm(req CoderConfirmCardRequest) {
+	n.mu.RLock()
+	if !n.config.Enabled || len(n.providers) == 0 {
+		n.mu.RUnlock()
+		return
+	}
+	providers := make([]RemoteApprovalProvider, len(n.providers))
+	copy(providers, n.providers)
+	n.mu.RUnlock()
+
+	for _, p := range providers {
+		cn, ok := p.(CoderConfirmNotifier)
+		if !ok {
+			continue
+		}
+		go func(notifier CoderConfirmNotifier, name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := notifier.SendCoderConfirmRequest(ctx, req); err != nil {
+				n.logger.Error("操作确认通知发送失败",
+					"provider", name,
+					"confirmId", req.ConfirmID,
+					"error", err,
+				)
+			} else {
+				n.logger.Info("操作确认通知已发送",
+					"provider", name,
+					"confirmId", req.ConfirmID,
+					"tool", req.ToolName,
+				)
+			}
+		}(cn, p.Name())
+	}
+}
+
+// NotifyCoderConfirmResult 向所有已启用的 Provider 推送操作确认结果。
+func (n *RemoteApprovalNotifier) NotifyCoderConfirmResult(id string, approved bool) {
+	n.mu.RLock()
+	if !n.config.Enabled || len(n.providers) == 0 {
+		n.mu.RUnlock()
+		return
+	}
+	providers := make([]RemoteApprovalProvider, len(n.providers))
+	copy(providers, n.providers)
+	n.mu.RUnlock()
+
+	for _, p := range providers {
+		cn, ok := p.(CoderConfirmNotifier)
+		if !ok {
+			continue
+		}
+		go func(notifier CoderConfirmNotifier, name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := notifier.SendCoderConfirmResult(ctx, id, approved); err != nil {
+				n.logger.Error("操作确认结果通知失败",
+					"provider", name,
+					"confirmId", id,
+					"error", err,
+				)
+			}
+		}(cn, p.Name())
 	}
 }
 

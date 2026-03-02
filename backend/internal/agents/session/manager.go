@@ -40,8 +40,16 @@ type TranscriptEntry struct {
 
 // ContentBlock 消息内容块。
 type ContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *ImageSource `json:"source,omitempty"`
+}
+
+// ImageSource 图片数据来源（与 llmclient.ImageSource 对齐）。
+type ImageSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/png", "image/jpeg", etc.
+	Data      string `json:"data"`       // base64 编码数据
 }
 
 // TranscriptHeader JSONL 文件的 header 行。

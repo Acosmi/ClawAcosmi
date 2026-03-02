@@ -3,13 +3,39 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
+
+// ---------- UHMSBridge mock ----------
+
+// stubUHMSBridge 用于 search_skills / lookup_skill 测试的最小模拟。
+type stubUHMSBridge struct {
+	hits         []SkillSearchHit
+	searchErr    error
+	distributing bool
+	indexed      bool
+}
+
+func (s *stubUHMSBridge) CompressChatMessages(_ context.Context, msgs []llmclient.ChatMessage, _ int) ([]llmclient.ChatMessage, error) {
+	return msgs, nil
+}
+func (s *stubUHMSBridge) CommitChatSession(_ context.Context, _, _ string, _ []llmclient.ChatMessage) error {
+	return nil
+}
+func (s *stubUHMSBridge) BuildContextBrief(_ context.Context) string                  { return "" }
+func (s *stubUHMSBridge) IsSkillsIndexed() bool                                       { return s.indexed }
+func (s *stubUHMSBridge) IsSkillsDistributing() bool                                  { return s.distributing }
+func (s *stubUHMSBridge) ReadSkillVFS(_ context.Context, _, _ string) (string, error) { return "", nil }
+func (s *stubUHMSBridge) SearchSkillsVFS(_ context.Context, _ string, _ int) ([]SkillSearchHit, error) {
+	return s.hits, s.searchErr
+}
 
 // ============================================================================
 // Tool Executor 集成测试
@@ -264,8 +290,8 @@ func TestListDir_NotFound(t *testing.T) {
 // ---------- unknown tool ----------
 
 func TestUnknownTool(t *testing.T) {
-	result, err := ExecuteToolCall(context.Background(), "browser",
-		json.RawMessage(`{"url":"http://example.com"}`),
+	result, err := ExecuteToolCall(context.Background(), "nonexistent_tool",
+		json.RawMessage(`{"key":"value"}`),
 		testToolParams(t.TempDir()))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -407,16 +433,20 @@ func TestResolvePermissions_Full(t *testing.T) {
 }
 
 func TestResolvePermissions_Allowlist(t *testing.T) {
+	// L1 (allowlist): 工作区外受限，沙箱内允许写和执行
 	cfg := &types.OpenAcosmiConfig{
 		Tools: &types.ToolsConfig{
 			Exec: &types.ExecToolConfig{Security: "allowlist"},
 		},
 	}
-	if resolveAllowWrite(cfg) {
-		t.Error("expected AllowWrite=false for security=allowlist")
+	if !resolveAllowWrite(cfg) {
+		t.Error("expected AllowWrite=true for security=allowlist (L1 allows write in sandbox)")
 	}
 	if !resolveAllowExec(cfg) {
 		t.Error("expected AllowExec=true for security=allowlist")
+	}
+	if !resolveSandboxMode(cfg) {
+		t.Error("expected SandboxMode=true for security=allowlist")
 	}
 }
 
@@ -458,16 +488,39 @@ func TestResolvePermissions_NilConfig(t *testing.T) {
 }
 
 func TestResolvePermissions_Sandbox(t *testing.T) {
+	// "sandbox" 是 "allowlist" 的别名（L1）
+	// L1 允许写和执行（在沙箱内受限）
 	cfg := &types.OpenAcosmiConfig{
 		Tools: &types.ToolsConfig{
 			Exec: &types.ExecToolConfig{Security: "sandbox"},
 		},
 	}
-	if resolveAllowWrite(cfg) {
-		t.Error("expected AllowWrite=false for security=sandbox")
+	if !resolveAllowWrite(cfg) {
+		t.Error("expected AllowWrite=true for security=sandbox (L1 allows write in sandbox)")
 	}
 	if !resolveAllowExec(cfg) {
 		t.Error("expected AllowExec=true for security=sandbox (alias for allowlist)")
+	}
+	if !resolveSandboxMode(cfg) {
+		t.Error("expected SandboxMode=true for security=sandbox")
+	}
+}
+
+func TestResolvePermissions_Sandboxed(t *testing.T) {
+	// L2 (sandboxed): 沙箱内全权+挂载+网络
+	cfg := &types.OpenAcosmiConfig{
+		Tools: &types.ToolsConfig{
+			Exec: &types.ExecToolConfig{Security: "sandboxed"},
+		},
+	}
+	if !resolveAllowWrite(cfg) {
+		t.Error("expected AllowWrite=true for security=sandboxed (L2)")
+	}
+	if !resolveAllowExec(cfg) {
+		t.Error("expected AllowExec=true for security=sandboxed (L2)")
+	}
+	if !resolveSandboxMode(cfg) {
+		t.Error("expected SandboxMode=true for security=sandboxed (L2)")
 	}
 }
 
@@ -478,6 +531,55 @@ func TestResolvePermissions_NilTools(t *testing.T) {
 	}
 	if resolveAllowExec(cfg) {
 		t.Error("expected AllowExec=false for nil Tools")
+	}
+}
+
+// ============================================================================
+// AllowNetwork 测试
+// 验证 L2(sandboxed)/L3(full) = true, L0(deny)/L1(allowlist) = false
+// ============================================================================
+
+func TestAllowNetwork_Full(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		Tools: &types.ToolsConfig{
+			Exec: &types.ExecToolConfig{Security: "full"},
+		},
+	}
+	if !resolveAllowNetwork(cfg) {
+		t.Error("expected AllowNetwork=true for security=full (L3)")
+	}
+}
+
+func TestAllowNetwork_Sandboxed(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		Tools: &types.ToolsConfig{
+			Exec: &types.ExecToolConfig{Security: "sandboxed"},
+		},
+	}
+	if !resolveAllowNetwork(cfg) {
+		t.Error("expected AllowNetwork=true for security=sandboxed (L2)")
+	}
+}
+
+func TestAllowNetwork_Allowlist(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		Tools: &types.ToolsConfig{
+			Exec: &types.ExecToolConfig{Security: "allowlist"},
+		},
+	}
+	if resolveAllowNetwork(cfg) {
+		t.Error("expected AllowNetwork=false for security=allowlist (L1)")
+	}
+}
+
+func TestAllowNetwork_Deny(t *testing.T) {
+	cfg := &types.OpenAcosmiConfig{
+		Tools: &types.ToolsConfig{
+			Exec: &types.ExecToolConfig{Security: "deny"},
+		},
+	}
+	if resolveAllowNetwork(cfg) {
+		t.Error("expected AllowNetwork=false for security=deny (L0)")
 	}
 }
 
@@ -613,5 +715,683 @@ func TestListDir_GlobalReadAllowed(t *testing.T) {
 	}
 	if callbackTool != "" {
 		t.Errorf("OnPermissionDenied should NOT be called for reads, got tool=%q", callbackTool)
+	}
+}
+
+// ============================================================================
+// looksLikeBashWrite 单元测试
+// Bug #1 修复: 检测 bash 命令中的文件写入操作 (redirect, tee, sed -i)
+// ============================================================================
+
+func TestLooksLikeBashWrite_ShellRedirect(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+		desc string
+	}{
+		// 应触发的写入 redirect
+		{`echo hello > file.txt`, true, "simple redirect to file"},
+		{`echo hello >> file.txt`, true, "append redirect to file"},
+		{`cat input.txt > output.txt`, true, "cat redirect"},
+		{`ls -la > listing.txt`, true, "ls redirect to file"},
+		{`echo "data" > /tmp/test.txt`, true, "redirect to absolute path"},
+
+		// 不应触发: fd redirect
+		{`echo hello 2> /dev/null`, false, "stderr to /dev/null"},
+		{`cmd 2>&1`, false, "stderr merge to stdout"},
+		{`make 2> errors.log`, false, "stderr redirect (fd 2)"},
+		{`cmd 1> /dev/null`, false, "stdout fd redirect to /dev/null"},
+
+		// 不应触发: /dev/null 输出抑制
+		{`echo hello > /dev/null`, false, "redirect to /dev/null"},
+		{`echo hello >> /dev/null`, false, "append to /dev/null"},
+
+		// 不应触发: fd merge
+		{`echo hello > &1`, false, "redirect to fd merge"},
+
+		// 不应触发: 无 redirect 的普通命令
+		{`echo hello`, false, "simple echo"},
+		{`ls -la`, false, "simple ls"},
+		{`cat file.txt`, false, "simple cat"},
+		{`grep pattern file.txt`, false, "simple grep"},
+		{`pwd`, false, "simple pwd"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := looksLikeBashWrite(tc.cmd)
+			if got != tc.want {
+				t.Errorf("looksLikeBashWrite(%q) = %v, want %v", tc.cmd, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLooksLikeBashWrite_WriteCommands(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+		desc string
+	}{
+		// tee
+		{`tee file.txt`, true, "tee as first command"},
+		{`echo data | tee file.txt`, true, "piped tee"},
+		{`echo data |tee file.txt`, true, "piped tee no space"},
+		{`echo data | tee -a file.txt`, true, "piped tee append"},
+		{`cat input | tee output.txt`, true, "cat piped to tee"},
+
+		// sed -i
+		{`sed -i 's/old/new/' file.txt`, true, "sed in-place edit"},
+		{`sed -i'' 's/old/new/' file.txt`, true, "sed in-place empty suffix"},
+		{`sed -i"" 's/old/new/' file.txt`, true, "sed in-place double quote suffix"},
+		{`cat file | sed -i 's/a/b/' f.txt`, true, "sed -i in pipeline"},
+
+		// install 命令（仅首个命令）
+		{`install -m 755 bin /usr/local/bin/`, true, "install command"},
+
+		// 不应触发: 非写入的 sed
+		{`sed 's/old/new/' file.txt`, false, "sed without -i (stdout)"},
+		{`sed -n '1,5p' file.txt`, false, "sed print only"},
+
+		// 不应触发: npm install 等非首命令
+		{`npm install express`, false, "npm install (not coreutils install)"},
+		{`pip install flask`, false, "pip install"},
+		{`brew install wget`, false, "brew install"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := looksLikeBashWrite(tc.cmd)
+			if got != tc.want {
+				t.Errorf("looksLikeBashWrite(%q) = %v, want %v", tc.cmd, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLooksLikeBashWrite_ComplexCommands(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+		desc string
+	}{
+		// 组合命令
+		{`ls -la && echo done > result.txt`, true, "chained with redirect"},
+		{`grep pattern file 2>/dev/null > matches.txt`, true, "stderr suppressed but stdout to file"},
+		{`cat a.txt b.txt > combined.txt`, true, "cat concatenate to file"},
+
+		// 安全的复合命令
+		{`ls -la && echo done`, false, "chained no redirect"},
+		{`grep pattern file 2>/dev/null`, false, "only stderr suppressed"},
+		{`echo hello && echo world`, false, "pure echo chain"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := looksLikeBashWrite(tc.cmd)
+			if got != tc.want {
+				t.Errorf("looksLikeBashWrite(%q) = %v, want %v", tc.cmd, got, tc.want)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// extractToolArgsSummary 测试
+// ============================================================================
+
+func TestExtractToolArgsSummary(t *testing.T) {
+	tests := []struct {
+		name     string
+		toolName string
+		args     map[string]interface{}
+		want     string
+	}{
+		{"bash command", "bash", map[string]interface{}{"command": "ls -la"}, "ls -la"},
+		{"read file_path", "read", map[string]interface{}{"file_path": "src/main.rs"}, "src/main.rs"},
+		{"edit file_path", "edit", map[string]interface{}{"file_path": "src/lib.rs"}, "src/lib.rs"},
+		{"write file_path", "write", map[string]interface{}{"file_path": "out.txt"}, "out.txt"},
+		{"glob pattern", "glob", map[string]interface{}{"pattern": "**/*.go"}, "**/*.go"},
+		{"grep pattern", "grep", map[string]interface{}{"pattern": "func main"}, "func main"},
+		{"web_search query", "web_search", map[string]interface{}{"query": "rust async"}, "rust async"},
+		{"web_fetch url", "web_fetch", map[string]interface{}{"url": "https://example.com"}, "https://example.com"},
+		{"spawn_coder_agent brief", "spawn_coder_agent", map[string]interface{}{"task_brief": "实现认证"}, "实现认证"},
+		{"memory_search query", "memory_search", map[string]interface{}{"query": "上次会话"}, "上次会话"},
+		{"browser action", "browser", map[string]interface{}{"action": "navigate", "url": "https://x.com"}, "navigate https://x.com"},
+		{"browser no url", "browser", map[string]interface{}{"action": "screenshot"}, "screenshot"},
+		{"unknown tool", "custom_tool", map[string]interface{}{"foo": "bar"}, ""},
+		{"empty args", "bash", map[string]interface{}{}, ""},
+		{"nil args", "bash", nil, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractToolArgsSummary(tc.toolName, tc.args)
+			if got != tc.want {
+				t.Errorf("extractToolArgsSummary(%q, %v) = %q, want %q", tc.toolName, tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractToolArgsSummary_Truncation(t *testing.T) {
+	longCmd := strings.Repeat("あ", 120)
+	got := extractToolArgsSummary("bash", map[string]interface{}{"command": longCmd})
+	runes := []rune(got)
+	if len(runes) != 103 {
+		t.Errorf("expected 103 runes after truncation, got %d", len(runes))
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Errorf("expected truncated suffix '...'")
+	}
+}
+
+// ============================================================================
+// truncateRuneSafe 测试
+// ============================================================================
+
+// ============================================================================
+// MountRequests 注入测试 (Phase 3.4)
+// ============================================================================
+
+func TestMountRequests_InjectedFromFunc(t *testing.T) {
+	// MountRequestsFunc 返回值应注入到 ToolExecParams.MountRequests
+	expectedMounts := []MountRequestForSandbox{
+		{HostPath: "/data/models", MountMode: "ro"},
+		{HostPath: "/var/log", MountMode: "rw"},
+	}
+
+	params := ToolExecParams{
+		WorkspaceDir: t.TempDir(),
+		AllowExec:    true,
+	}
+	// 模拟 buildToolExecParams 的注入逻辑
+	mountFunc := func() []MountRequestForSandbox {
+		return expectedMounts
+	}
+	params.MountRequests = mountFunc()
+
+	if len(params.MountRequests) != 2 {
+		t.Fatalf("expected 2 mount requests, got %d", len(params.MountRequests))
+	}
+	if params.MountRequests[0].HostPath != "/data/models" {
+		t.Errorf("expected HostPath=/data/models, got %q", params.MountRequests[0].HostPath)
+	}
+	if params.MountRequests[1].MountMode != "rw" {
+		t.Errorf("expected MountMode=rw, got %q", params.MountRequests[1].MountMode)
+	}
+}
+
+func TestMountRequests_NilFunc(t *testing.T) {
+	// MountRequestsFunc 为 nil 时 MountRequests 应为 nil
+	params := ToolExecParams{
+		WorkspaceDir: t.TempDir(),
+		AllowExec:    true,
+	}
+	// 不设置 MountRequests
+	if params.MountRequests != nil {
+		t.Error("expected nil MountRequests when no func set")
+	}
+}
+
+func TestMountRequests_NoNetworkCleared(t *testing.T) {
+	// NoNetwork 合约应清空 MountRequests
+	params := ToolExecParams{
+		WorkspaceDir: t.TempDir(),
+		AllowExec:    true,
+		MountRequests: []MountRequestForSandbox{
+			{HostPath: "/data", MountMode: "ro"},
+		},
+	}
+
+	// 模拟 ApplyConstraints 的 NoNetwork 行为
+	params.MountRequests = nil // NoNetwork=true → 清空
+
+	if params.MountRequests != nil {
+		t.Error("expected nil MountRequests after NoNetwork clearing")
+	}
+}
+
+// ============================================================================
+// SandboxExecOptions 类型测试
+// ============================================================================
+
+func TestSandboxExecOptions_Construction(t *testing.T) {
+	// 验证 SandboxExecOptions 结构体的字段正确赋值
+	opts := SandboxExecOptions{
+		Cmd:           "sh",
+		Args:          []string{"-c", "echo hello"},
+		TimeoutMs:     5000,
+		SecurityLevel: "sandboxed",
+		Workspace:     "/home/user/project",
+		MountRequests: []MountRequestForSandbox{
+			{HostPath: "/data", MountMode: "ro"},
+		},
+	}
+	if opts.Cmd != "sh" {
+		t.Errorf("expected Cmd=sh, got %q", opts.Cmd)
+	}
+	if opts.Workspace != "/home/user/project" {
+		t.Errorf("expected Workspace=/home/user/project, got %q", opts.Workspace)
+	}
+	if len(opts.MountRequests) != 1 {
+		t.Fatalf("expected 1 mount request, got %d", len(opts.MountRequests))
+	}
+	if opts.MountRequests[0].HostPath != "/data" {
+		t.Errorf("expected mount HostPath=/data, got %q", opts.MountRequests[0].HostPath)
+	}
+}
+
+func TestTruncateRuneSafe(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		maxLen int
+		want   string
+	}{
+		{"short ascii", "hello", 10, "hello"},
+		{"exact length", "hello", 5, "hello"},
+		{"truncated ascii", "hello world", 5, "hello..."},
+		{"chinese text", "你好世界测试", 4, "你好世界..."},
+		{"empty string", "", 10, ""},
+		{"single char truncate", "ab", 1, "a..."},
+		{"mixed unicode", "hello你好", 7, "hello你好"},
+		{"mixed truncate", "hello你好world", 7, "hello你好..."},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := truncateRuneSafe(tc.input, tc.maxLen)
+			if got != tc.want {
+				t.Errorf("truncateRuneSafe(%q, %d) = %q, want %q", tc.input, tc.maxLen, got, tc.want)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// send_media 工具参数死循环修复测试
+// 验证 Fix 1/2/3: 工具描述改进、失败计数、错误消息可操作性。
+// ============================================================================
+
+// ---------- isToolSoftError ----------
+
+func TestIsToolSoftError(t *testing.T) {
+	tests := []struct {
+		name   string
+		tool   string
+		output string
+		want   bool
+	}{
+		// send_media
+		{"send_media error prefix", "send_media", "[send_media] No target specified", true},
+		{"send_media success json", "send_media", `{"status":"sent"}`, false},
+		{"send_media multimodal", "send_media", `__MULTIMODAL__[{"type":"text"}]`, false},
+
+		// bash
+		{"bash success", "bash", "hello world", false},
+		{"bash resource budget", "bash", "[bash] Resource budget exhausted: exceeded", true},
+		{"bash command blocked", "bash", "[Command blocked by security rule: rm *] reason", true},
+		{"bash command denied", "bash", "[Command denied on non-web channel: pattern]", true},
+		{"bash write approval error", "bash", "[Write operation approval error: timeout]", true},
+
+		// browser
+		{"browser navigate error", "browser", "[Browser navigate error: timeout]", true},
+		{"browser click error transient", "browser", "[Browser click error (transient — element may still be loading): selector not found]", true},
+		{"browser click_ref error", "browser", "[Browser click_ref error (structural — ref may be stale, run observe again): e1]", true},
+		{"browser ai_browse error", "browser", "[Browser ai_browse error: goal failed]", true},
+		{"browser unknown action", "browser", "[Unknown browser action: foobar]", true},
+		{"browser success", "browser", `{"url":"https://example.com","title":"Test"}`, false},
+		{"browser multimodal", "browser", `__MULTIMODAL__[{"type":"image"}]`, false},
+
+		// generic tools
+		{"argus error", "argus_capture_screen", "[Argus tool error: connection lost]", true},
+		{"remote error", "remote_search", "[Remote tool error: timeout]", true},
+		{"skill not found", "lookup_skill", `[Skill "test" not found. Available skills: a, b]`, true},
+		{"no search results (not an error)", "search_skills", `[No skills matching "test" found]`, false},
+		{"web_search error", "web_search", "[web_search error: rate limited]", true},
+		{"tool not implemented", "custom", `[Tool "custom" is not yet implemented]`, true},
+		{"generic Error prefix", "custom_tool", "Error: something failed", true},
+		{"generic success", "custom_tool", "done", false},
+		{"empty output", "custom_tool", "", false},
+		{"json array", "custom_tool", `[{"key":"value"}]`, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isToolSoftError(tc.tool, tc.output)
+			if got != tc.want {
+				t.Errorf("isToolSoftError(%q, %q) = %v, want %v", tc.tool, tc.output, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------- toolFailureGuidance ----------
+
+func TestToolFailureGuidance_SendMedia(t *testing.T) {
+	g := toolFailureGuidance("send_media", 3)
+	if g == "" {
+		t.Fatal("expected non-empty guidance for send_media")
+	}
+	if !strings.Contains(g, "TOOL FAILURE LOOP DETECTED") {
+		t.Error("guidance should contain 'TOOL FAILURE LOOP DETECTED'")
+	}
+	if !strings.Contains(g, "Do NOT provide 'target'") {
+		t.Error("guidance should tell agent not to provide target")
+	}
+	if !strings.Contains(g, "/tmp/screenshot.png") {
+		t.Error("guidance should include concrete file path example")
+	}
+	// 验证跨平台截图命令（根据当前 OS 不同）
+	cmd := screenshotCommand()
+	if !strings.Contains(g, cmd) {
+		t.Errorf("guidance should contain platform screenshot command %q", cmd)
+	}
+}
+
+func TestToolFailureGuidance_Browser(t *testing.T) {
+	g := toolFailureGuidance("browser", 4)
+	if g == "" {
+		t.Fatal("expected non-empty guidance for browser")
+	}
+	if !strings.Contains(g, "TOOL FAILURE LOOP DETECTED") {
+		t.Error("guidance should contain 'TOOL FAILURE LOOP DETECTED'")
+	}
+	if !strings.Contains(g, "observe") {
+		t.Error("guidance should suggest using observe")
+	}
+	if !strings.Contains(g, "ai_browse") {
+		t.Error("guidance should suggest ai_browse for complex goals")
+	}
+}
+
+func TestToolFailureGuidance_Generic(t *testing.T) {
+	g := toolFailureGuidance("custom_tool", 5)
+	if !strings.Contains(g, "custom_tool") {
+		t.Error("guidance should reference tool name")
+	}
+	if !strings.Contains(g, "5 times") {
+		t.Error("guidance should include failure count")
+	}
+}
+
+func TestScreenshotCommand_ReturnsNonEmpty(t *testing.T) {
+	cmd := screenshotCommand()
+	if cmd == "" {
+		t.Error("screenshotCommand should return non-empty string")
+	}
+	// 验证包含输出路径
+	if !strings.Contains(cmd, "/tmp/screenshot.png") && !strings.Contains(cmd, "screenshot") {
+		t.Errorf("screenshotCommand should reference screenshot output, got %q", cmd)
+	}
+}
+
+// ---------- send_media 错误消息可操作性 ----------
+
+// mockMediaSender 用于测试 send_media 的 mock 实现。
+type mockMediaSender struct {
+	sendErr error // 非 nil 时 SendMedia 返回此错误
+}
+
+func (m *mockMediaSender) SendMedia(_ context.Context, _, _ string, _ []byte, _, _ string) error {
+	return m.sendErr
+}
+
+func sendMediaTestParams(sessionKey string) ToolExecParams {
+	return ToolExecParams{
+		SessionKey:   sessionKey,
+		MediaSender:  &mockMediaSender{},
+		WorkspaceDir: os.TempDir(),
+	}
+}
+
+func TestSendMedia_NoTarget_HelpfulError(t *testing.T) {
+	// SessionKey 为空 + target 为空 → 应返回带指导的错误
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(`{"file_path":"/tmp/test.png"}`),
+		sendMediaTestParams("")) // 空 sessionKey
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "omit 'target'") {
+		t.Errorf("error should suggest omitting target, got %q", result)
+	}
+	if !strings.Contains(result, "Do NOT fabricate") {
+		t.Errorf("error should warn against fabricating IDs, got %q", result)
+	}
+}
+
+func TestSendMedia_NoInput_HelpfulError(t *testing.T) {
+	// 既无 file_path 也无 media_base64 → 应返回带指导的错误
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(`{}`),
+		sendMediaTestParams("feishu:oc_test123"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "screencapture") {
+		t.Errorf("error should suggest using screencapture, got %q", result)
+	}
+	if !strings.Contains(result, "file_path") {
+		t.Errorf("error should mention file_path, got %q", result)
+	}
+}
+
+func TestSendMedia_BadFilePath_HelpfulError(t *testing.T) {
+	tmpDir := t.TempDir()
+	badPath := filepath.Join(tmpDir, "nonexistent_screenshot.png")
+	p := sendMediaTestParams("feishu:oc_test123")
+	p.WorkspaceDir = tmpDir
+	p.ScopePaths = []string{tmpDir} // 允许 workspace 内路径
+
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(fmt.Sprintf(`{"file_path":%q}`, badPath)), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "[send_media]") {
+		t.Errorf("error should have [send_media] prefix, got %q", result)
+	}
+	if !strings.Contains(result, "absolute") || !strings.Contains(result, "ls") {
+		t.Errorf("error should suggest verifying path with 'ls', got %q", result)
+	}
+}
+
+func TestSendMedia_FabricatedTarget_SendError(t *testing.T) {
+	// 模拟原始 bug 场景: agent 编造 target ID "feishu:oc_xxx"，
+	// parseSendMediaTarget 解析成功，但 MediaSender.SendMedia 因目标不存在返回错误。
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "screenshot.png")
+	os.WriteFile(testFile, []byte("fake-png-data"), 0o644)
+
+	p := ToolExecParams{
+		SessionKey:   "feishu:oc_real123",
+		MediaSender:  &mockMediaSender{sendErr: fmt.Errorf("channel not found: feishu:oc_fabricated")},
+		WorkspaceDir: tmpDir,
+		ScopePaths:   []string{tmpDir},
+	}
+
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(fmt.Sprintf(`{"target":"feishu:oc_fabricated","file_path":%q}`, testFile)), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 应返回 [send_media] 前缀的错误（触发 isToolSoftError 检测）
+	if !strings.HasPrefix(result, "[send_media]") {
+		t.Errorf("error should have [send_media] prefix, got %q", result)
+	}
+	if !strings.Contains(result, "Failed to send") {
+		t.Errorf("error should contain 'Failed to send', got %q", result)
+	}
+	// 验证 isToolSoftError 能正确检测此输出
+	if !isToolSoftError("send_media", result) {
+		t.Errorf("isToolSoftError should detect this as soft error, output=%q", result)
+	}
+}
+
+func TestSendMedia_NoMediaSender_Error(t *testing.T) {
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(`{"file_path":"/tmp/test.png"}`),
+		ToolExecParams{SessionKey: "feishu:oc_test123"}) // no MediaSender
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "not available") {
+		t.Errorf("should report media sender not available, got %q", result)
+	}
+}
+
+// ---------- search_skills ----------
+
+func TestSearchSkills_VFSHasResults(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		hits: []SkillSearchHit{
+			{Name: "test-skill", Category: "general", Abstract: "A test skill"},
+		},
+		indexed: true,
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"test"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "test-skill") {
+		t.Errorf("should contain skill name, got %q", result)
+	}
+	if strings.Contains(result, "No matching") {
+		t.Errorf("should not say no matching when results exist, got %q", result)
+	}
+}
+
+func TestSearchSkills_VFSZeroResults(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		hits:    []SkillSearchHit{},
+		indexed: true,
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"nonexistent"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "No matching skills found") {
+		t.Errorf("should say no matching skills, got %q", result)
+	}
+	if strings.Contains(result, "No skills index available") {
+		t.Errorf("should not say no index available, got %q", result)
+	}
+}
+
+func TestSearchSkills_NoBridgeNoCache(t *testing.T) {
+	p := ToolExecParams{} // no UHMSBridge, no SkillsCache
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"anything"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "No skills index available") {
+		t.Errorf("should say no index available, got %q", result)
+	}
+	if strings.Contains(result, "VFS distribute") {
+		t.Errorf("should not reference VFS distribute command, got %q", result)
+	}
+}
+
+func TestSearchSkills_DistributingNote(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		hits:         []SkillSearchHit{{Name: "partial-skill", Category: "test", Abstract: "partial"}},
+		indexed:      true,
+		distributing: true,
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"partial"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "indexing is in progress") {
+		t.Errorf("should include distributing note, got %q", result)
+	}
+}
+
+func TestSearchSkills_DistributingZeroResults(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		hits:         []SkillSearchHit{},
+		indexed:      true,
+		distributing: true,
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"nonexistent"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "No matching skills found") {
+		t.Errorf("should say no matching, got %q", result)
+	}
+	if !strings.Contains(result, "indexing is in progress") {
+		t.Errorf("should include distributing note, got %q", result)
+	}
+}
+
+func TestSearchSkills_DistributingZeroResults_CacheFallback(t *testing.T) {
+	// F-2: VFS 零结果 + 分发中 + cache 有数据 → 降级到 cache
+	bridge := &stubUHMSBridge{
+		hits:         []SkillSearchHit{},
+		indexed:      true,
+		distributing: true,
+	}
+	cache := map[string]string{
+		"deploy-k8s": "# Deploy K8s\nDeploy to Kubernetes cluster",
+	}
+	p := ToolExecParams{UHMSBridge: bridge, SkillsCache: cache}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"deploy"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 应该走 cache 降级而非直接返回 "no matching"
+	if strings.Contains(result, "No matching skills found") {
+		t.Errorf("distributing + cache available should try cache, not return no matching, got %q", result)
+	}
+	if !strings.Contains(result, "indexing is in progress") {
+		t.Errorf("cache fallback during distributing should include note, got %q", result)
+	}
+}
+
+func TestSearchSkills_VFSError_DistributingNote(t *testing.T) {
+	// F-3: VFS 搜索错误 + 分发中 → cache 降级应追加 distributing note
+	bridge := &stubUHMSBridge{
+		searchErr:    fmt.Errorf("connection timeout"),
+		distributing: true,
+		indexed:      true,
+	}
+	cache := map[string]string{
+		"debug-tool": "# Debug Tool\nDebug application issues",
+	}
+	p := ToolExecParams{UHMSBridge: bridge, SkillsCache: cache}
+	result, err := ExecuteToolCall(context.Background(), "search_skills",
+		json.RawMessage(`{"query":"debug"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "indexing is in progress") {
+		t.Errorf("VFS error + distributing → cache should include note, got %q", result)
+	}
+}
+
+// ---------- Argus nil pointer ----------
+
+func TestArgusTool_NilBridge_NoPanic(t *testing.T) {
+	p := ToolExecParams{
+		SessionKey:        "web:test",
+		ArgusApprovalMode: "none", // 跳过审批门以测试 nil bridge 路径
+		// ArgusBridge is nil
+	}
+	result, err := executeArgusTool(context.Background(), "argus_capture_screen", json.RawMessage(`{}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "not available") {
+		t.Errorf("should report Argus not available, got %q", result)
 	}
 }

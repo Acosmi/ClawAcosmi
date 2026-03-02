@@ -13,9 +13,9 @@ import (
 )
 
 // HTTPEmbeddingProvider implements uhms.EmbeddingProvider via HTTP API.
-// Supports OpenAI, Ollama, Gemini, Voyage, and other OpenAI-compatible endpoints.
+// Supports OpenAI, Ollama, Gemini, Qwen (DashScope), Voyage, and other OpenAI-compatible endpoints.
 type HTTPEmbeddingProvider struct {
-	provider  string // "openai" | "ollama" | "gemini" | "voyage"
+	provider  string // "openai" | "ollama" | "gemini" | "qwen" | "voyage"
 	model     string // e.g. "text-embedding-3-small"
 	baseURL   string
 	apiKey    string
@@ -76,6 +76,8 @@ func (e *HTTPEmbeddingProvider) doEmbed(ctx context.Context, text string) ([]flo
 	switch e.provider {
 	case "ollama":
 		return e.embedOllama(ctx, text)
+	case "gemini":
+		return e.embedGemini(ctx, text)
 	default:
 		return e.embedOpenAI(ctx, text)
 	}
@@ -166,6 +168,64 @@ func (e *HTTPEmbeddingProvider) embedOpenAI(ctx context.Context, text string) ([
 	return vec, nil
 }
 
+// embedGemini calls the Google Gemini /v1beta/models/{model}:embedContent endpoint.
+func (e *HTTPEmbeddingProvider) embedGemini(ctx context.Context, text string) ([]float32, error) {
+	body := map[string]interface{}{
+		"model": "models/" + e.model,
+		"content": map[string]interface{}{
+			"parts": []map[string]string{{"text": text}},
+		},
+	}
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("vectoradapter/embedding: marshal request: %w", err)
+	}
+
+	url := e.baseURL + "/v1beta/models/" + e.model + ":embedContent?key=" + e.apiKey
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return nil, fmt.Errorf("vectoradapter/embedding: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("vectoradapter/embedding: HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	if err != nil {
+		return nil, fmt.Errorf("vectoradapter/embedding: read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("vectoradapter/embedding: HTTP %d: %s", resp.StatusCode, truncateStr(string(respBody), 200))
+	}
+
+	var result struct {
+		Embedding struct {
+			Values []float32 `json:"values"`
+		} `json:"embedding"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("vectoradapter/embedding: parse response: %w", err)
+	}
+	if len(result.Embedding.Values) == 0 {
+		return nil, fmt.Errorf("vectoradapter/embedding: empty embedding in response")
+	}
+
+	vec := result.Embedding.Values
+
+	e.dimOnce.Do(func() {
+		if e.dimension == 0 {
+			e.dimension = len(vec)
+		}
+	})
+
+	return vec, nil
+}
+
 // embedOllama calls the Ollama /api/embeddings endpoint.
 func (e *HTTPEmbeddingProvider) embedOllama(ctx context.Context, text string) ([]float32, error) {
 	body := map[string]interface{}{
@@ -220,6 +280,22 @@ func (e *HTTPEmbeddingProvider) embedOllama(ctx context.Context, text string) ([
 	return vec, nil
 }
 
+// Probe sends a short test embedding request to verify connectivity.
+// Returns nil on success, or an error describing the failure.
+func (e *HTTPEmbeddingProvider) Probe(ctx context.Context) error {
+	_, err := e.doEmbed(ctx, "probe")
+	if err != nil {
+		return fmt.Errorf("vectoradapter/probe[%s]: %w", e.provider, err)
+	}
+	return nil
+}
+
+// Provider returns the provider name.
+func (e *HTTPEmbeddingProvider) Provider() string { return e.provider }
+
+// Model returns the model name.
+func (e *HTTPEmbeddingProvider) Model() string { return e.model }
+
 // inferDimension returns the known embedding dimension for common provider+model pairs.
 func inferDimension(provider, model string) int {
 	known := map[string]int{
@@ -227,6 +303,8 @@ func inferDimension(provider, model string) int {
 		"text-embedding-3-large": 3072,
 		"text-embedding-ada-002": 1536,
 		"text-embedding-004":     768,  // Gemini
+		"text-embedding-v3":      1024, // Qwen (DashScope)
+		"text-embedding-v2":      1536, // Qwen (DashScope)
 		"nomic-embed-text":       768,  // Ollama
 		"mxbai-embed-large":      1024, // Ollama
 		"BAAI/bge-small-zh-v1.5": 512,
@@ -244,6 +322,8 @@ func inferDimension(provider, model string) int {
 		return 768
 	case "gemini":
 		return 768
+	case "qwen":
+		return 1024
 	case "voyage":
 		return 1024
 	default:
@@ -260,6 +340,8 @@ func defaultModelForProvider(provider string) string {
 		return "nomic-embed-text"
 	case "gemini":
 		return "text-embedding-004"
+	case "qwen":
+		return "text-embedding-v3"
 	case "voyage":
 		return "voyage-3"
 	default:
@@ -276,6 +358,8 @@ func defaultBaseURLForProvider(provider string) string {
 		return "http://localhost:11434"
 	case "gemini":
 		return "https://generativelanguage.googleapis.com"
+	case "qwen":
+		return "https://dashscope.aliyuncs.com/compatible-mode"
 	case "voyage":
 		return "https://api.voyageai.com"
 	default:

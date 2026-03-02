@@ -19,9 +19,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/infra"
 	"github.com/google/uuid"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // HandleOpenAIResponses 处理 POST /v1/responses — 完整 OpenResponses 实现。

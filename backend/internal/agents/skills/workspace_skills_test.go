@@ -86,6 +86,108 @@ func TestExtractDescription(t *testing.T) {
 	}
 }
 
+func TestResolveToolSkillBindings(t *testing.T) {
+	entries := []SkillEntry{
+		{
+			Skill:    Skill{Name: "exec", Description: "Exec tool usage, stdin modes, and TTY support"},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"bash"}},
+		},
+		{
+			Skill:    Skill{Name: "skills", Description: "技能系统：加载路径、优先级、门控规则与配置"},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"search_skills", "lookup_skill"}},
+		},
+		{
+			Skill: Skill{Name: "no-tools", Description: "A skill without tool binding"},
+			// no Metadata
+		},
+		{
+			Skill:    Skill{Name: "empty-desc", Description: ""},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"some_tool"}},
+		},
+	}
+
+	bindings := ResolveToolSkillBindings(entries)
+
+	// bash → exec description
+	if got, ok := bindings["bash"]; !ok || got != "Exec tool usage, stdin modes, and TTY support" {
+		t.Errorf("bash binding = %q, ok = %v", got, ok)
+	}
+	// search_skills → skills description
+	if _, ok := bindings["search_skills"]; !ok {
+		t.Error("search_skills binding missing")
+	}
+	// lookup_skill → same skills description
+	if _, ok := bindings["lookup_skill"]; !ok {
+		t.Error("lookup_skill binding missing")
+	}
+	// no-tools should not appear
+	if len(bindings) != 3 {
+		t.Errorf("expected 3 bindings, got %d: %v", len(bindings), bindings)
+	}
+}
+
+func TestResolveToolSkillBindings_TruncatesLongDescription(t *testing.T) {
+	longDesc := "This is a very long description that exceeds one hundred and twenty characters in total length so it should be truncated by the binding logic."
+	entries := []SkillEntry{
+		{
+			Skill:    Skill{Name: "long", Description: longDesc},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"my_tool"}},
+		},
+	}
+	bindings := ResolveToolSkillBindings(entries)
+	got := bindings["my_tool"]
+	if len(got) > 120 {
+		t.Errorf("description not truncated: len=%d", len(got))
+	}
+	if got[len(got)-3:] != "..." {
+		t.Errorf("expected trailing '...', got %q", got[len(got)-5:])
+	}
+}
+
+func TestResolveToolSkillBindings_FirstWins(t *testing.T) {
+	entries := []SkillEntry{
+		{
+			Skill:    Skill{Name: "first", Description: "First skill"},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"bash"}},
+		},
+		{
+			Skill:    Skill{Name: "second", Description: "Second skill"},
+			Metadata: &OpenAcosmiSkillMetadata{Tools: []string{"bash"}},
+		},
+	}
+	bindings := ResolveToolSkillBindings(entries)
+	if bindings["bash"] != "First skill" {
+		t.Errorf("expected first-wins, got %q", bindings["bash"])
+	}
+}
+
+func TestLoadSkillsFromDir_ParsesToolsFromFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+	skillDir := filepath.Join(tmpDir, "my-exec")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nname: my-exec\ndescription: \"Run commands\"\ntools: bash, write_file\n---\n# My Exec\nInstructions."
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := loadSkillsFromDir(tmpDir)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Metadata == nil {
+		t.Fatal("expected Metadata to be set")
+	}
+	if len(e.Metadata.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d: %v", len(e.Metadata.Tools), e.Metadata.Tools)
+	}
+	if e.Metadata.Tools[0] != "bash" || e.Metadata.Tools[1] != "write_file" {
+		t.Errorf("unexpected tools: %v", e.Metadata.Tools)
+	}
+}
+
 func TestBuildWorkspaceSkillSnapshot_PreloadedEntries(t *testing.T) {
 	v := 42
 	snap := BuildWorkspaceSkillSnapshot(BuildSnapshotParams{

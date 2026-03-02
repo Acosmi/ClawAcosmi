@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Signal 消息发送 — 继承自 src/signal/send.ts (282L)

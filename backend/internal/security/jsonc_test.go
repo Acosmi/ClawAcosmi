@@ -22,7 +22,7 @@ func TestParseJSONC_LineComments(t *testing.T) {
 	data := []byte(`{
 		// This is a line comment
 		"gateway": {
-			"port": 18789 // inline comment
+			"port": 19001 // inline comment
 		}
 	}`)
 	var result map[string]interface{}
@@ -33,8 +33,8 @@ func TestParseJSONC_LineComments(t *testing.T) {
 	if !ok {
 		t.Fatal("expected gateway to be a map")
 	}
-	if gw["port"] != float64(18789) {
-		t.Errorf("expected port=18789, got %v", gw["port"])
+	if gw["port"] != float64(19001) {
+		t.Errorf("expected port=19001, got %v", gw["port"])
 	}
 }
 
@@ -106,7 +106,7 @@ func TestParseJSONC_MixedCommentsAndTrailingComma(t *testing.T) {
 	data := []byte(`{
 		// Gateway configuration
 		"gateway": {
-			"port": 18789,
+			"port": 19001,
 			"auth": {
 				/* Use env var for production */
 				"password": "${OPENACOSMI_GATEWAY_PASSWORD}",

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/markdown"
-	"github.com/anthropic/open-acosmi/pkg/polls"
-	"github.com/anthropic/open-acosmi/pkg/types"
-	"github.com/anthropic/open-acosmi/pkg/utils"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/polls"
+	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/utils"
 )
 
 // WhatsApp 出站消息 — 继承自 src/web/outbound.ts (177L)

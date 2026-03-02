@@ -1447,6 +1447,101 @@
   max-width: 600px;
   border: 1px solid var(--border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.chat-processing-card--waiting {
+  background: #1e1e1f;
+  /* Darker background */
+  border-color: #2c2c2f;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.chat-processing-card--waiting .chat-processing-card__title {
+  background: linear-gradient(90deg, #9ca3af 0%, #ffffff 50%, #9ca3af 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer-text 2s linear infinite;
+}
+
+.chat-processing-card--waiting .chat-processing-card__subtitle {
+  color: #9ca3af;
+}
+
+/* Gemini-style Orb Animation container */
+.chat-processing-card--waiting .chat-processing-card__icon-wrap {
+  background: transparent;
+  width: 36px;
+  height: 36px;
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* Base glowing pulse */
+.chat-processing-card--waiting .chat-processing-card__icon-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,
+      transparent 0%,
+      rgba(14, 165, 233, 0.8) 25%,
+      rgba(56, 189, 248, 0.8) 50%,
+      rgba(14, 165, 233, 0.8) 75%,
+      transparent 100%);
+  animation: spin-pulse 2s linear infinite;
+  z-index: 0;
+}
+
+/* Inner masking to hide gradient behind icon */
+.chat-processing-card--waiting .chat-processing-card__icon-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #1e1e1f;
+  z-index: 1;
+}
+
+/* Make SVG render above the mask */
+.chat-processing-card--waiting .chat-processing-card__anim-icon {
+  z-index: 2;
+  stroke: #7dd3fc;
+  animation: orb-pulse 2s ease-in-out infinite;
+}
+
+@keyframes spin-pulse {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orb-pulse {
+
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6));
+  }
+}
+
+@keyframes shimmer-text {
+  to {
+    background-position: 200% center;
+  }
 }
 
 .chat-processing-card__content {
@@ -2727,6 +2822,8 @@
 
 .agent-skills-group summary {
   list-style: none;
+  pointer-events: none;
+  /* Make heading non-clickable since we are removing details */
 }
 
 .agent-skills-header {
@@ -2737,8 +2834,8 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
-  cursor: pointer;
   gap: 8px;
+  margin-bottom: 12px;
 }
 
 .agent-skills-header>span:last-child {
@@ -2753,38 +2850,160 @@
   content: "";
 }
 
-.agent-skills-header::after {
-  content: "▸";
-  font-size: 12px;
-  color: var(--muted);
-  transition: transform var(--duration-fast) ease;
-  margin-left: 8px;
-}
-
-.agent-skills-group[open] .agent-skills-header::after {
-  transform: rotate(90deg);
-}
-
-.agent-skill-row {
-  align-items: flex-start;
-  gap: 18px;
-}
-
-.agent-skill-row .list-meta {
+/* Skills Card Layout */
+.skill-card {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  min-width: auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  transition: box-shadow var(--duration-fast) ease;
+}
+
+.skill-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.skill-card-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  font-size: 24px;
+}
+
+.skill-card-icon svg {
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+}
+
+.skill-card-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-card-desc {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.skill-card-meta {
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+/* Toggle Switch */
+.skill-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.skill-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.skill-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-strong);
+  transition: .4s;
+  border-radius: 20px;
+}
+
+.skill-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input:checked+.skill-toggle-slider {
+  background-color: var(--primary, #007bff);
+}
+
+input:focus+.skill-toggle-slider {
+  box-shadow: 0 0 1px var(--primary, #007bff);
+}
+
+input:checked+.skill-toggle-slider:before {
+  transform: translateX(16px);
+}
+
+input:disabled+.skill-toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.skill-btn-install {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.skill-btn-install:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+}
+
+.skill-btn-install:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .skills-grid {
-  grid-template-columns: 1fr;
-}
-
-@container (min-width: 900px) {
-  .skills-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
 }
 
 @media (max-width: 980px) {

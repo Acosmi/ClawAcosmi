@@ -139,6 +139,13 @@ func handleRemoteApprovalCallback(ctx *MethodHandlerContext) {
 		return
 	}
 
+	// Fix 9: 验证 escalation ID 匹配当前 pending 请求
+	pendingID := mgr.GetPendingID()
+	if pendingID != "" && pendingID != escalationID {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "escalation ID mismatch: expected "+pendingID+", got "+escalationID))
+		return
+	}
+
 	if err := mgr.ResolveEscalation(approved, ttlMinutes); err != nil {
 		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, err.Error()))
 		return

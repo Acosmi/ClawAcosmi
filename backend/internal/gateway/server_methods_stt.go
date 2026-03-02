@@ -9,10 +9,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // STTHandlers 返回 STT RPC 方法处理器。
@@ -47,10 +48,20 @@ type STTProviderInfo struct {
 }
 
 func handleSTTConfigGet(ctx *MethodHandlerContext) {
+	// 探测本地 Ollama 是否运行
+	ollamaHint := "本地 Ollama 语音模型"
+	if ollamaRunning := probeOllama(); ollamaRunning {
+		ollamaHint = "已检测到本地 Ollama 运行中 ✓"
+	} else {
+		ollamaHint = "未检测到 Ollama（localhost:11434）"
+	}
+
 	result := STTConfigGetResult{
 		Providers: []STTProviderInfo{
+			{ID: "qwen", Label: "通义千问 Qwen", Hint: "DashScope API，中文优化，sensevoice-v1"},
 			{ID: "openai", Label: "OpenAI Whisper", Hint: "whisper-1 / gpt-4o-transcribe"},
 			{ID: "groq", Label: "Groq Whisper", Hint: "极速推理，Whisper Large V3"},
+			{ID: "ollama", Label: "本地 Ollama", Hint: ollamaHint},
 			{ID: "azure", Label: "Azure Speech", Hint: "企业级私有部署"},
 			{ID: "local-whisper", Label: "本地 Whisper", Hint: "离线，需安装 whisper.cpp"},
 			{ID: "", Label: "禁用", Hint: "不使用语音转文本"},
@@ -183,8 +194,12 @@ func handleSTTTranscribe(ctx *MethodHandlerContext) {
 
 	audioData, err := base64.StdEncoding.DecodeString(audioBase64)
 	if err != nil {
-		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "invalid base64 audio"))
-		return
+		// Fallback: 尝试不带 padding 的解码（某些浏览器生成无 padding 的 base64）
+		audioData, err = base64.RawStdEncoding.DecodeString(audioBase64)
+		if err != nil {
+			ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "invalid base64 audio"))
+			return
+		}
 	}
 	if len(audioData) > maxAudioSize {
 		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "audio too large (max 25 MB)"))
@@ -230,4 +245,15 @@ func loadSTTConfigFromCtx(ctx *MethodHandlerContext) *types.STTConfig {
 		return nil
 	}
 	return cfg.STT
+}
+
+// probeOllama 探测本地 Ollama 是否运行（GET http://localhost:11434/api/tags，2s 超时）
+func probeOllama() bool {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://localhost:11434/api/tags")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }

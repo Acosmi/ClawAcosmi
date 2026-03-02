@@ -9,13 +9,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/agents/skills"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/pkg/mcpremote"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/agents/skills"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
 )
 
 // ---------- 服务端 WebSocket 处理器 ----------
@@ -56,6 +57,8 @@ type WsServerConfig struct {
 	RemoteMCPBridge *mcpremote.RemoteBridge
 	// 启动时间 (用于计算 uptime)
 	BootedAt time.Time
+	// Phase 5+6: 媒体子系统（可选）
+	MediaSubsystem *media.MediaSubsystem
 }
 
 // HandleWebSocketUpgrade HTTP → WebSocket 升级 + 连接生命周期管理。
@@ -472,10 +475,16 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 			ArgusBridge:            cfg.State.ArgusBridge(),            // Argus 视觉子智能体
 			CronService:            cfg.CronService,
 			CronStorePath:          cfg.CronStorePath,
-			SkillStoreClient:       cfg.SkillStoreClient,        // 技能商店客户端
-			RemoteMCPBridge:        cfg.RemoteMCPBridge,         // P2: MCP 远程工具
-			UHMSManager:            cfg.State.UHMSManager(),     // P3: UHMS 记忆系统
-			CoderConfirmMgr:        cfg.State.CoderConfirmMgr(), // Coder 确认流
+			SkillStoreClient:       cfg.SkillStoreClient,          // 技能商店客户端
+			RemoteMCPBridge:        cfg.RemoteMCPBridge,           // P2: MCP 远程工具
+			UHMSManager:            cfg.State.UHMSManager(),       // P3: UHMS 记忆系统
+			UHMSBootMgr:            cfg.State.UHMSBootMgr(),       // Boot 状态管理
+			CoderConfirmMgr:        cfg.State.CoderConfirmMgr(),   // Coder 确认流
+			PlanConfirmMgr:         cfg.State.PlanConfirmMgr(),    // Phase 1: 方案确认门控
+			ResultApprovalMgr:      cfg.State.ResultApprovalMgr(), // Phase 3: 结果签收门控
+			ContractStore:          cfg.State.ContractStore(),     // Phase 8: 合约持久化
+			State:                  cfg.State,                     // Phase 4: 子智能体求助通道查找
+			MediaSubsystem:         cfg.MediaSubsystem,            // Phase 5+6: 媒体子系统
 		}
 
 		// 创建同步 respond 回调

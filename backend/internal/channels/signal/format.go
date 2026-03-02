@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/anthropic/open-acosmi/pkg/markdown"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Markdown → Signal 文本样式转换 — 继承自 src/signal/format.ts (239L)

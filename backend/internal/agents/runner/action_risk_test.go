@@ -11,17 +11,25 @@ func TestClassifyActionRisk_KnownTools(t *testing.T) {
 		tool     string
 		expected ActionRiskLevel
 	}{
-		{"screenshot", RiskNone},
+		// 感知（RiskNone）
 		{"capture_screen", RiskNone},
-		{"get_elements", RiskNone},
-		{"wait", RiskNone},
+		{"describe_scene", RiskNone},
+		{"locate_element", RiskNone},
+		{"read_text", RiskNone},
+		{"detect_dialog", RiskNone},
+		{"watch_for_change", RiskNone},
+		{"mouse_position", RiskNone},
+		// 低风险
 		{"scroll", RiskLow},
-		{"hover", RiskLow},
+		// 中风险
 		{"click", RiskMedium},
-		{"type", RiskMedium},
-		{"select", RiskMedium},
-		{"navigate", RiskHigh},
-		{"submit", RiskHigh},
+		{"double_click", RiskMedium},
+		{"type_text", RiskMedium},
+		{"press_key", RiskMedium},
+		{"hotkey", RiskMedium},
+		{"macos_shortcut", RiskMedium},
+		// 高风险
+		{"open_url", RiskHigh},
 		{"run_shell", RiskHigh},
 	}
 	for _, tc := range tests {

@@ -1,7 +1,9 @@
 // Copyright (c) 2026 UHMS Team. Licensed under Apache-2.0.
 //! Integration tests for [`SegmentVectorStore`].
 
-use segment::types::Distance;
+use std::sync::atomic::AtomicBool;
+
+use segment::types::{Distance, HnswConfig};
 use serde_json::json;
 use tempfile::TempDir;
 
@@ -18,6 +20,7 @@ fn simple_config(dim: usize) -> CollectionConfig {
         dimension: dim,
         distance: Distance::Cosine,
         sparse_vectors: false,
+        ..Default::default()
     }
 }
 
@@ -95,7 +98,7 @@ fn test_upsert_and_search() {
 
     // Search — query vector close to id1 and id3.
     let hits = store
-        .search("test", &[1.0, 0.0, 0.5, 0.0], None, 2)
+        .search("test", &[1.0, 0.0, 0.5, 0.0], None, 2, None)
         .unwrap();
 
     assert_eq!(hits.len(), 2);
@@ -170,7 +173,7 @@ fn test_upsert_with_payload() {
 
     // Search and verify payload is returned.
     let hits = store
-        .search("payloads", &[0.5, 0.5, 0.0, 0.0], None, 1)
+        .search("payloads", &[0.5, 0.5, 0.0, 0.0], None, 1, None)
         .unwrap();
 
     assert_eq!(hits.len(), 1);
@@ -180,4 +183,112 @@ fn test_upsert_with_payload() {
         Some(&json!("memory content"))
     );
     assert_eq!(hits[0].payload.get("user_id"), Some(&json!("user_123")));
+}
+
+// ── Optimize collection ─────────────────────────────────────────────────
+
+fn hnsw_config(dim: usize) -> CollectionConfig {
+    CollectionConfig {
+        dimension: dim,
+        distance: Distance::Cosine,
+        sparse_vectors: false,
+        hnsw: Some(HnswConfig {
+            m: 16,
+            ef_construct: 100,
+            full_scan_threshold: 10_000,
+            max_indexing_threads: 0,
+            on_disk: None,
+            payload_m: None,
+            inline_storage: None,
+        }),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_optimize_collection() {
+    let (_dir, store) = test_store();
+    let stopped = AtomicBool::new(false);
+
+    // Create an HNSW-configured collection.
+    store.create_collection("opt", &hnsw_config(4)).unwrap();
+
+    // Insert data.
+    let ids: Vec<String> = (1..=10)
+        .map(|i| format!("00000000-0000-0000-0000-{:012}", i))
+        .collect();
+
+    for (i, id) in ids.iter().enumerate() {
+        let mut vec = [0.0f32; 4];
+        vec[i % 4] = 1.0;
+        let payload = make_payload(json!({"idx": i}));
+        store.upsert("opt", id, &vec, Some(&payload)).unwrap();
+    }
+
+    assert_eq!(store.point_count("opt"), Some(10));
+
+    // Search before optimization (Plain index, brute-force).
+    let pre_hits = store
+        .search("opt", &[1.0, 0.0, 0.0, 0.0], None, 5, None)
+        .unwrap();
+    assert!(!pre_hits.is_empty());
+
+    // Optimize: build HNSW index.
+    let optimized = store.optimize_collection("opt", &stopped).unwrap();
+    assert!(optimized, "should have optimized");
+
+    // Point count should be preserved.
+    assert_eq!(store.point_count("opt"), Some(10));
+
+    // Search after optimization should return consistent results.
+    let post_hits = store
+        .search("opt", &[1.0, 0.0, 0.0, 0.0], None, 5, None)
+        .unwrap();
+    assert!(!post_hits.is_empty());
+
+    // The top result should match.
+    assert_eq!(pre_hits[0].id, post_hits[0].id);
+}
+
+#[test]
+fn test_optimize_empty_collection() {
+    let (_dir, store) = test_store();
+    let stopped = AtomicBool::new(false);
+
+    store.create_collection("empty", &hnsw_config(4)).unwrap();
+    assert_eq!(store.point_count("empty"), Some(0));
+
+    // Empty collection should return false (skip).
+    let optimized = store.optimize_collection("empty", &stopped).unwrap();
+    assert!(!optimized, "empty collection should not optimize");
+}
+
+#[test]
+fn test_optimize_plain_collection_skipped() {
+    let (_dir, store) = test_store();
+    let stopped = AtomicBool::new(false);
+
+    // Create a Plain collection (no HNSW config).
+    store.create_collection("plain", &simple_config(4)).unwrap();
+    store
+        .upsert(
+            "plain",
+            "00000000-0000-0000-0000-000000000001",
+            &[1.0, 0.0, 0.0, 0.0],
+            None,
+        )
+        .unwrap();
+
+    // Should skip (no HNSW config).
+    let optimized = store.optimize_collection("plain", &stopped).unwrap();
+    assert!(!optimized, "plain collection should not optimize");
+}
+
+#[test]
+fn test_optimize_nonexistent_collection() {
+    let (_dir, store) = test_store();
+    let stopped = AtomicBool::new(false);
+
+    let optimized = store.optimize_collection("nope", &stopped).unwrap();
+    assert!(!optimized, "nonexistent collection should return false");
 }

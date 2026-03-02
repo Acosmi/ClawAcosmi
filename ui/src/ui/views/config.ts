@@ -1,7 +1,7 @@
 import { html, nothing } from "lit";
 import { t } from "../i18n.ts";
 import type { ConfigUiHints } from "../types.ts";
-import { hintForPath, humanize, schemaType, type JsonSchema } from "./config-form.shared.ts";
+import { hintForPath, humanize, localizeSchemaLabel, schemaType, type JsonSchema } from "./config-form.shared.ts";
 import { analyzeConfigSchema, renderConfigForm, SECTION_META } from "./config-form.ts";
 
 export type ConfigProps = {
@@ -278,6 +278,30 @@ function getSections(): Array<{ key: string; label: string }> {
     { key: "tools", label: t("config.section.tools") },
     { key: "gateway", label: t("config.section.gateway") },
     { key: "wizard", label: t("config.section.wizard") },
+    { key: "approvals", label: t("config.section.approvals") },
+    { key: "audio", label: t("config.section.audio") },
+    { key: "bindings", label: t("config.section.bindings") },
+    { key: "broadcast", label: t("config.section.broadcast") },
+    { key: "browser", label: t("config.section.browser") },
+    { key: "canvasHost", label: t("config.section.canvasHost") },
+    { key: "cron", label: t("config.section.cron") },
+    { key: "diagnostics", label: t("config.section.diagnostics") },
+    { key: "discovery", label: t("config.section.discovery") },
+    { key: "docConv", label: t("config.section.docConv") },
+    { key: "imageUnderstanding", label: t("config.section.imageUnderstanding") },
+    { key: "logging", label: t("config.section.logging") },
+    { key: "markdown", label: t("config.section.markdown") },
+    { key: "memory", label: t("config.section.memory") },
+    { key: "meta", label: t("config.section.meta") },
+    { key: "models", label: t("config.section.models") },
+    { key: "nodeHost", label: t("config.section.nodeHost") },
+    { key: "plugins", label: t("config.section.plugins") },
+    { key: "session", label: t("config.section.session") },
+    { key: "stt", label: t("config.section.stt") },
+    { key: "subAgents", label: t("config.section.subAgents") },
+    { key: "talk", label: t("config.section.talk") },
+    { key: "ui", label: t("config.section.ui") },
+    { key: "web", label: t("config.section.web") },
   ];
 }
 
@@ -322,7 +346,7 @@ function resolveSubsections(params: {
   }
   const entries = Object.entries(schema.properties).map(([subKey, node]) => {
     const hint = hintForPath([key, subKey], uiHints);
-    const label = hint?.label ?? node.title ?? humanize(subKey);
+    const label = localizeSchemaLabel([key, subKey], hint?.label ?? node.title ?? humanize(subKey));
     const description = hint?.help ?? node.description ?? "";
     const order = hint?.order ?? 50;
     return { key: subKey, label, description, order };

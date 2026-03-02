@@ -1,6 +1,6 @@
 package cron
 
-import "github.com/anthropic/open-acosmi/pkg/polls"
+import "github.com/openacosmi/claw-acismi/pkg/polls"
 
 // Poll 输入验证 — 委托到 pkg/polls 共享包。
 // 保留类型别名供 cron 包内部使用，避免修改调用方签名。

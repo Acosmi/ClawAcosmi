@@ -3,7 +3,7 @@ package reply
 import (
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/directive-handling.persist.ts (247L)

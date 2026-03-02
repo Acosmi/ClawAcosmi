@@ -22,7 +22,7 @@ const (
 	// ConfigFilename 配置文件名
 	ConfigFilename = "openacosmi.json"
 	// DefaultGatewayPort 默认网关端口
-	DefaultGatewayPort = 18789
+	DefaultGatewayPort = 19001
 	// OAuthFilename OAuth 凭证文件名
 	OAuthFilename = "oauth.json"
 	// ConfigBackupCount 配置备份数量

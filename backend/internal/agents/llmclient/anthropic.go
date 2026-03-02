@@ -254,7 +254,33 @@ func toAnthropicMessages(msgs []ChatMessage) []anthropicMessage {
 					if b.IsError {
 						block["is_error"] = true
 					}
-					block["content"] = b.ResultText
+					// 多模态 tool_result: ResultBlocks 包含 image + text blocks
+					if len(b.ResultBlocks) > 0 {
+						var contentBlocks []map[string]interface{}
+						for _, rb := range b.ResultBlocks {
+							switch rb.Type {
+							case "text":
+								contentBlocks = append(contentBlocks, map[string]interface{}{
+									"type": "text",
+									"text": rb.Text,
+								})
+							case "image":
+								if rb.Source != nil {
+									contentBlocks = append(contentBlocks, map[string]interface{}{
+										"type": "image",
+										"source": map[string]interface{}{
+											"type":       rb.Source.Type,
+											"media_type": rb.Source.MediaType,
+											"data":       rb.Source.Data,
+										},
+									})
+								}
+							}
+						}
+						block["content"] = contentBlocks
+					} else {
+						block["content"] = b.ResultText
+					}
 				}
 				blocks = append(blocks, block)
 			}

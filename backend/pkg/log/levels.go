@@ -7,7 +7,7 @@ package log
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // AllowedLogLevels 所有合法日志级别（从高优先级到低优先级）

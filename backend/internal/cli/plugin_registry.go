@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/plugins"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/plugins"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // 对应 TS src/cli/plugin-registry.ts — 插件注册表 singleton

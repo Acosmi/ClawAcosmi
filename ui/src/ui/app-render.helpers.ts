@@ -18,6 +18,7 @@ import {
   setLocale,
   t,
 } from "./i18n.ts";
+import { loadMediaConfig } from "./views/media-config.ts";
 
 export function renderTab(state: AppViewState, tab: Tab) {
   const href = pathForTab(tab, state.basePath);
@@ -52,7 +53,7 @@ export function renderChatControls(state: AppViewState) {
   const sessionOptions = resolveSessionOptions(
     state.sessionKey,
     state.sessionsResult,
-    mainSessionKey,
+    mainSessionKey
   );
   const disableThinkingToggle = state.onboarding;
   const disableFocusToggle = state.onboarding;
@@ -92,78 +93,435 @@ export function renderChatControls(state: AppViewState) {
       <circle cx="12" cy="12" r="3"></circle>
     </svg>
   `;
+  const app = state as unknown as OpenAcosmiApp;
+
+  // Calculate available channels and their most recent session
+  const channelSessions = new Map<string, { key: string, name: string }>();
+
+  // Gather available channel prefixes
+  const channelsAvailable = new Set<string>();
+  channelsAvailable.add("user"); // Always ensure user (web) is available
+
+  const currentPrefixMatch = state.sessionKey.match(/^([a-z]+):/);
+  if (currentPrefixMatch && currentPrefixMatch[1] !== "global" && currentPrefixMatch[1] !== "unknown") {
+    channelsAvailable.add(currentPrefixMatch[1]);
+  }
+
+  if (app.channelsSnapshot?.channelAccounts) {
+    for (const [prefix, accounts] of Object.entries(app.channelsSnapshot.channelAccounts)) {
+      if (prefix !== "global" && prefix !== "unknown" && Array.isArray(accounts)) {
+        // Only show Remote Channels if they have at least one valid, configured, or running account
+        const hasValidAccount = accounts.some(a => a.configured || a.running || a.tokenSource || a.botTokenSource || a.connected);
+        if (hasValidAccount) {
+          channelsAvailable.add(prefix);
+        }
+      }
+    }
+  }
+
+  // Populate channelSessions
+  for (const prefix of channelsAvailable) {
+    const memoryKey = state.settings.lastSessionByChannel?.[prefix];
+
+    // Ignore latest list scans for the user web connection context
+    const latestListKey = prefix !== "user"
+      ? state.sessionsResult?.sessions.find(s => s.key.startsWith(`${prefix}:`))?.key
+      : undefined;
+
+    // For web channel ("user"), we should try to return to the main global default session instead of "user:default" phantom session.
+    const defaultKey = prefix === "user"
+      ? ((app.hello?.snapshot as any)?.sessionDefaults?.mainSessionKey || "main")
+      : `${prefix}:default`;
+
+    const targetKey = memoryKey || latestListKey || defaultKey;
+
+    const mapKey = prefix === "user" ? "web" : prefix;
+    const name = prefix === "user"
+      ? "网页频道"
+      : (app.channelsSnapshot?.channelLabels?.[prefix] || prefix);
+
+    channelSessions.set(mapKey, { key: targetKey, name });
+  }
+
+  // 智能体频道：扫描 sessionsResult 中 coder: 前缀的 session
+  if (state.sessionsResult?.sessions) {
+    const coderSession = state.sessionsResult.sessions.find(s => s.key.startsWith("coder:"));
+    if (coderSession) {
+      const memoryKey = state.settings.lastSessionByChannel?.["coder"];
+      const targetKey = memoryKey || coderSession.key;
+      channelSessions.set("coder", { key: targetKey, name: "智能体" });
+    }
+    // 任务频道：扫描 task: 前缀的 session
+    const taskSession = state.sessionsResult.sessions.find(s => s.key.startsWith("task:"));
+    if (taskSession) {
+      const memoryKey = state.settings.lastSessionByChannel?.["task"];
+      const targetKey = memoryKey || taskSession.key;
+      channelSessions.set("task", { key: targetKey, name: "任务" });
+    }
+  }
+  // 当前 session 是 coder/task 时也确保对应频道可见
+  if (state.sessionKey.startsWith("coder:") && !channelSessions.has("coder")) {
+    channelSessions.set("coder", { key: state.sessionKey, name: "智能体" });
+  }
+  if (state.sessionKey.startsWith("task:") && !channelSessions.has("task")) {
+    channelSessions.set("task", { key: state.sessionKey, name: "任务" });
+  }
+
+  const totalUnread = Object.values(app.channelUnreadCounts || {}).reduce((a, b) => a + b, 0);
+
+  const toggleChannelDropdown = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Red dot click-to-jump interception
+    if (app.crossChannelNotificationActive && app.crossChannelNotificationSessionKey) {
+      const targetSession = app.crossChannelNotificationSessionKey;
+      app.clearCrossChannelNotification?.();
+
+      const prefixMatch = targetSession.match(/^([a-z]+):/);
+      const channelKey = (prefixMatch && prefixMatch[1] !== "global" && prefixMatch[1] !== "unknown") ? prefixMatch[1] : "web";
+      if (app.channelUnreadCounts && app.channelUnreadCounts[channelKey]) {
+        const counts = { ...app.channelUnreadCounts };
+        delete counts[channelKey];
+        app.channelUnreadCounts = counts;
+      }
+
+      if (state.sessionKey !== targetSession) {
+        // 预填充逻辑已移入 applySessionSwitch（从 _pendingChannelMsgs 缓存统一消费）
+        applySessionSwitch(targetSession);
+      }
+      return; // Do not open the dropdown
+    }
+
+    app.isChannelDropdownOpen = !app.isChannelDropdownOpen;
+    if (app.isChannelDropdownOpen) {
+      app.isSessionDropdownOpen = false;
+      app.clearCrossChannelNotification?.();
+    }
+  };
+
+  const toggleSessionDropdown = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    app.isSessionDropdownOpen = !app.isSessionDropdownOpen;
+    if (app.isSessionDropdownOpen) app.isChannelDropdownOpen = false;
+  };
+
+  const closeDropdowns = () => {
+    app.isChannelDropdownOpen = false;
+    app.isSessionDropdownOpen = false;
+    document.removeEventListener('click', closeDropdowns);
+  };
+
+  if (app.isChannelDropdownOpen || app.isSessionDropdownOpen) {
+    document.addEventListener('click', closeDropdowns, { once: true });
+  }
+
+  const handleChannelSwitch = (channelKey: string, sessionKey: string) => (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (app.channelUnreadCounts && app.channelUnreadCounts[channelKey]) {
+      const counts = { ...app.channelUnreadCounts };
+      delete counts[channelKey];
+      app.channelUnreadCounts = counts;
+    }
+
+    closeDropdowns();
+
+    if (state.sessionKey !== sessionKey) {
+      applySessionSwitch(sessionKey);
+    }
+  };
+
+  const handleSessionSwitch = (sessionKey: string) => (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeDropdowns();
+    if (state.sessionKey !== sessionKey) {
+      applySessionSwitch(sessionKey);
+    }
+  };
+
+  const applySessionSwitch = (sessionKey: string) => {
+    state.sessionKey = sessionKey;
+    state.chatMessage = "";
+    state.chatStream = null;
+    app.chatStreamStartedAt = null;
+    // chatRunId 保留：任务仍在执行时不清空，让 chat.final 事件能正确识别
+    // 并在修复 A（app-gateway.ts）中触发跨 session 回归。
+    // chatRunId 会在 chat.final/error/aborted 时由 handleChatEvent 清空。
+    app.resetToolStream();
+    app.resetChatScroll();
+    state.applySettings({ ...state.settings, sessionKey: sessionKey, lastActiveSessionKey: sessionKey });
+    void state.loadAssistantIdentity();
+    syncUrlWithSessionKey(state as unknown as Parameters<typeof syncUrlWithSessionKey>[0], sessionKey, true);
+    void loadChatHistory(state as unknown as ChatState);
+    // 预填充：从缓存读取该 session 的入站消息，在 transcript 写入前给用户一个视觉占位。
+    // 所有切换路径（红点/下拉/通知中心）共用此逻辑，不依赖红点 3s 超时。
+    const pendingMsgs = (app as any)._pendingChannelMsgs as Record<string, { text: string; ts: number }> | undefined;
+    if (pendingMsgs?.[sessionKey]) {
+      const pending = pendingMsgs[sessionKey];
+      delete pendingMsgs[sessionKey];
+      state.chatMessages = [{
+        role: "user",
+        content: [{ type: "text", text: pending.text }],
+        timestamp: pending.ts,
+      }] as unknown[];
+      (state as any)._skipEmptyHistory = true;
+      // 根因 B 修复：飞书等远程频道无 delta 流式事件，切换后手动触发思考动画，
+      // 让用户在等待 AI 回复期间有视觉反馈。
+      // chatRunId 以 "remote-" 为前缀，chat.message(role=assistant) 到达时会自动清除。
+      if (!app.chatRunId) {
+        app.chatRunId = `remote-switch-${Date.now()}`;
+        (app as any).chatStream = "";
+        (app as any).chatStreamStartedAt = pending.ts;
+      }
+    }
+  };
+
+  // Determine current active channel and session names
+  let currentChannelName = "网页频道";;
+  for (const [prefix, info] of channelSessions.entries()) {
+    if (state.sessionKey === info.key || state.sessionKey.startsWith(prefix === "web" ? "user:" : `${prefix}:`)) {
+      currentChannelName = info.name;
+      break;
+    }
+  }
+
+  const currentSessionObj = sessionOptions.find(s => s.key === state.sessionKey);
+  const currentSessionName = currentSessionObj?.displayName ?? state.sessionKey;
+
   return html`
+    <style>
+      .split-capsule {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--surface-1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        margin-right: 8px;
+        position: relative;
+        transition: all 0.3s ease;
+      }
+      
+      .split-capsule.is-thinking {
+        /* Apple Intelligence / macOS inspired glass-glow - Deep Tech Blue */
+        position: relative;
+        overflow: hidden;
+        border-color: rgba(56, 189, 248, 0.4);
+        background: var(--surface-2, rgba(30, 41, 59, 0.4));
+        animation: capsule-breathe 2.5s ease-in-out infinite alternate;
+      }
+      
+      .split-capsule.is-thinking::before {
+        content: "";
+        position: absolute;
+        top: 0; bottom: 0; width: 50%;
+        left: -100%;
+        background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.2), transparent);
+        transform: skewX(-20deg);
+        animation: glass-sweep 3s infinite linear;
+        pointer-events: none;
+      }
+      
+      @keyframes capsule-breathe {
+        0% { box-shadow: 0 0 8px rgba(14, 165, 233, 0.15), inset 0 0 4px rgba(14, 165, 233, 0.1); }
+        100% { box-shadow: 0 0 16px rgba(14, 165, 233, 0.5), inset 0 0 10px rgba(14, 165, 233, 0.25); }
+      }
+      
+      @keyframes glass-sweep {
+        0% { left: -100%; }
+        50% { left: 200%; }
+        100% { left: 200%; }
+      }
+      
+      .split-capsule-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--text-base);
+        font-size: 13px;
+        font-weight: 500;
+        transition: background 0.15s ease;
+      }
+      .split-capsule-btn:hover { background: rgba(128,128,128,0.08); }
+      .split-capsule-btn:active { background: rgba(128,128,128,0.15); }
+      .capsule-left {
+        border-right: 1px solid var(--border-color);
+        border-radius: 8px 0 0 8px;
+        position: relative;
+        overflow: hidden;
+        min-width: 120px;
+      }
+      .capsule-right {
+        border-radius: 0 8px 8px 0;
+        width: 160px;
+        overflow: hidden;
+      }
+      .cross-channel-badge {
+        display: flex;
+        align-items: center;
+        background: var(--error-color, #ef4444);
+        border-radius: 12px;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        max-width: 0;
+        opacity: 0;
+        padding: 0;
+        margin-left: 0;
+        overflow: hidden;
+        pointer-events: none;
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        white-space: nowrap;
+      }
+      .cross-channel-badge.show {
+        max-width: 150px;
+        opacity: 1;
+        padding: 2px 8px;
+        margin-left: 4px;
+        box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+      }
+      .mac-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        bottom: auto;
+        background: var(--surface-1);
+        background: color-mix(in srgb, var(--surface-1) 85%, transparent);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        z-index: 99999 !important; /* Forces dropdown above all chat layers */
+        min-width: 200px;
+        max-height: 350px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        padding: 6px;
+        animation: mac-dropdown-fade 0.15s cubic-bezier(0, 0, 0.2, 1);
+      }
+      .mac-dropdown.right-aligned {
+        left: unset;
+        right: 0;
+      }
+      @keyframes mac-dropdown-fade {
+        from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .mac-dropdown-item {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--text-base);
+        font-size: 13px;
+        transition: background-color 0.1s, color 0.1s;
+        text-align: left;
+        line-height: 1.4;
+      }
+      .mac-dropdown-item:hover {
+        background: #3b82f6;
+        color: white !important;
+      }
+      .mac-dropdown-item.active {
+        background: #3b82f6;
+        color: white !important;
+        font-weight: 600;
+        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+      }
+      .mac-dropdown-item.active:hover {
+        background: #2563eb;
+      }
+      .session-name-truncate {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    </style>
+
     <div class="chat-controls">
-      <label class="field chat-controls__session">
-        <select
-          .value=${state.sessionKey}
-          ?disabled=${!state.connected}
-          @change=${(e: Event) => {
-      const next = (e.target as HTMLSelectElement).value;
-      state.sessionKey = next;
-      state.chatMessage = "";
-      state.chatStream = null;
-      (state as unknown as OpenAcosmiApp).chatStreamStartedAt = null;
-      state.chatRunId = null;
-      (state as unknown as OpenAcosmiApp).resetToolStream();
-      (state as unknown as OpenAcosmiApp).resetChatScroll();
-      state.applySettings({
-        ...state.settings,
-        sessionKey: next,
-        lastActiveSessionKey: next,
-      });
-      void state.loadAssistantIdentity();
-      syncUrlWithSessionKey(
-        state as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
-        next,
-        true,
-      );
-      void loadChatHistory(state as unknown as ChatState);
-    }}
-        >
-          ${repeat(
-      sessionOptions,
-      (entry) => entry.key,
-      (entry) =>
-        html`<option value=${entry.key}>
-                ${entry.displayName ?? entry.key}
-              </option>`,
-    )}
-        </select>
-      </label>
-      ${(() => {
-      const channelRe = /^(feishu|slack|whatsapp|nostr|telegram|discord|signal|dingtalk|wecom|imessage|googlechat):/;
-      const isChannel = channelRe.test(state.sessionKey);
-      if (!isChannel || !mainSessionKey) return nothing;
-      return html`
-          <button
-            class="btn btn--sm chat-controls__back-btn"
-            @click=${() => {
-          const next = mainSessionKey;
-          state.sessionKey = next;
-          state.chatMessage = "";
-          state.chatStream = null;
-          (state as unknown as OpenAcosmiApp).chatStreamStartedAt = null;
-          state.chatRunId = null;
-          (state as unknown as OpenAcosmiApp).resetToolStream();
-          (state as unknown as OpenAcosmiApp).resetChatScroll();
-          state.applySettings({
-            ...state.settings,
-            sessionKey: next,
-            lastActiveSessionKey: next,
-          });
-          void state.loadAssistantIdentity();
-          syncUrlWithSessionKey(
-            state as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
-            next,
-            true,
-          );
-          void loadChatHistory(state as unknown as ChatState);
-        }}
-            title=${t("chat.backToWeb")}
-          >${t("chat.backToWeb")}</button>
-        `;
-    })()}
+      <div class="split-capsule ${(state.chatLoading || state.chatRunId || state.chatSending || state.chatStream !== null) ? 'is-thinking' : ''}">
+        <!-- Channel Selector -->
+        <div style="position: relative;">
+          <button class="split-capsule-btn capsule-left" @click=${toggleChannelDropdown} title="切换频道">
+            <span style="color: #ef4444; font-weight: 700; font-size: 12px; flex-shrink: 0;">切换</span>
+            <span style="display: flex; opacity: 0.8; position: relative;">
+              ${icons.smartphone}
+              ${(!app.crossChannelNotificationActive && totalUnread > 0) ? html`
+                <span style="position: absolute; top: -2px; right: -4px; width: 6px; height: 6px; background: #ef4444; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg-body);"></span>
+              ` : nothing}
+            </span>
+            <span>${currentChannelName}</span>
+            <div class="cross-channel-badge ${app.crossChannelNotificationActive ? 'show' : ''}">
+              <span class="statusDot pulse" style="background: white; flex-shrink: 0; margin-right: 4px; width: 6px; height: 6px;"></span>
+              <span>${app.crossChannelNotificationText}</span>
+            </div>
+          </button>
+
+          ${app.isChannelDropdownOpen ? html`
+            <div class="mac-dropdown">
+              <div style="padding: 4px 8px; font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">频道列表</div>
+              ${Array.from(channelSessions.entries()).map(([prefix, info]) => {
+    const unreadCount = app.channelUnreadCounts?.[prefix] || 0;
+    const isActive = state.sessionKey === info.key || state.sessionKey.startsWith(prefix === "web" ? "user:" : `${prefix}:`);
+    return html`
+                  <button class="mac-dropdown-item ${isActive ? 'active' : ''}" @click=${handleChannelSwitch(prefix, info.key)}>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span>${info.name}</span>
+                      ${isActive ? html`<span style="background: #3b82f6; color: white; border-radius: 12px; font-size: 10px; padding: 2px 6px; font-weight: 600; box-shadow: 0 0 0 1px rgba(255,255,255,0.2) inset;">当前</span>` : nothing}
+                    </div>
+                    ${unreadCount > 0 ? html`
+                      <span style="background: #ef4444; color: white; border-radius: 12px; font-size: 11px; padding: 2px 6px; font-weight: bold; margin-left: 8px; box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);">
+                        ${unreadCount}
+                      </span>
+                    ` : nothing}
+                  </button>
+                `;
+  })}
+            </div>
+          ` : nothing}
+        </div>
+
+        <!-- Session Selector -->
+        <div style="position: relative;">
+          <button class="split-capsule-btn capsule-right" @click=${toggleSessionDropdown} title="切换会话" ?disabled=${!state.connected}>
+            <span class="session-name-truncate" style="opacity: 0.8;">${currentSessionName}</span>
+            <span style="font-size: 10px; opacity: 0.6; margin-left: 2px;">▼</span>
+          </button>
+
+          ${app.isSessionDropdownOpen && state.connected ? html`
+            <div class="mac-dropdown right-aligned" style="min-width: 260px;">
+              <div style="padding: 4px 8px; font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">历史会话记录</div>
+              ${sessionOptions.length === 0 ? html`
+                <div style="padding: 8px 12px; font-size: 12px; color: var(--text-dim);">无更多历史记录</div>
+              ` : sessionOptions.map(entry => html`
+                <button class="mac-dropdown-item ${entry.key === state.sessionKey ? 'active' : ''}" @click=${handleSessionSwitch(entry.key)}>
+                  <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                      ${entry.displayName ?? entry.key}
+                    </span>
+                    ${entry.key === state.sessionKey ? html`<span style="background: #3b82f6; color: white; border-radius: 12px; font-size: 10px; padding: 2px 6px; font-weight: 600; flex-shrink: 0; margin-left: 8px;">当前</span>` : nothing}
+                  </div>
+                </button>
+              `)}
+            </div>
+          ` : nothing}
+        </div>
+      </div>
+
       <button
         class="btn btn--sm btn--icon"
         ?disabled=${state.chatLoading || !state.connected}
@@ -190,6 +548,17 @@ export function renderChatControls(state: AppViewState) {
         ${refreshIcon}
       </button>
       <span class="chat-controls__separator">|</span>
+      <button
+        class="btn btn--sm btn--icon"
+        @click=${() => {
+      state.memoryPanel = "media";
+      state.setTab("memory");
+      loadMediaConfig(state);
+    }}
+        title=${t("media.configTitle")}
+      >
+        ${icons.mic}
+      </button>
       <button
         class="btn btn--sm btn--icon"
         @click=${() => {
@@ -262,12 +631,12 @@ function resolveSessionDisplayName(key: string, row?: SessionsListResult["sessio
 function resolveSessionOptions(
   sessionKey: string,
   sessions: SessionsListResult | null,
-  mainSessionKey?: string | null,
+  mainSessionKey?: string | null
 ) {
   const seen = new Set<string>();
   const options: Array<{ key: string; displayName?: string }> = [];
 
-  const resolvedMain = mainSessionKey && sessions?.sessions?.find((s) => s.key === mainSessionKey);
+  const resolvedMain = mainSessionKey ? sessions?.sessions?.find((s) => s.key === mainSessionKey) : undefined;
   const resolvedCurrent = sessions?.sessions?.find((s) => s.key === sessionKey);
 
   // Add main session key first
@@ -275,7 +644,7 @@ function resolveSessionOptions(
     seen.add(mainSessionKey);
     options.push({
       key: mainSessionKey,
-      displayName: resolveSessionDisplayName(mainSessionKey, resolvedMain || undefined),
+      displayName: resolveSessionDisplayName(mainSessionKey, resolvedMain),
     });
   }
 
@@ -288,7 +657,7 @@ function resolveSessionOptions(
     });
   }
 
-  // Add sessions from the result
+  // Add sessions from the result (without cross-channel logic)
   if (sessions?.sessions) {
     for (const s of sessions.sessions) {
       if (!seen.has(s.key)) {

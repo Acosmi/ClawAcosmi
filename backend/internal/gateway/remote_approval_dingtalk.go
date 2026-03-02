@@ -95,9 +95,9 @@ func (p *dingtalkProvider) SendApprovalRequest(ctx context.Context, req Approval
 // buildActionCard 构建钉钉 ActionCard 消息。
 func (p *dingtalkProvider) buildActionCard(req ApprovalCardRequest) map[string]interface{} {
 	levelLabel := map[string]string{
-		"full":      "🔴 L2 — 完全权限",
+		"full":      "🔴 L3 — 完全权限",
+		"sandboxed": "🟠 L2 — 沙盒执行",
 		"allowlist": "🟡 L1 — 受限执行",
-		"sandbox":   "🟡 L1 — 沙盒执行",
 	}[req.RequestedLevel]
 	if levelLabel == "" {
 		levelLabel = req.RequestedLevel

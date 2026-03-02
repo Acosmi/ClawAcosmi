@@ -20,8 +20,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anthropic/open-acosmi/internal/cli"
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/cli"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 func newLogsCmd() *cobra.Command {

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/media"
-	"github.com/anthropic/open-acosmi/pkg/markdown"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // iMessage 消息发送 — 继承自 src/imessage/send.ts (141L)

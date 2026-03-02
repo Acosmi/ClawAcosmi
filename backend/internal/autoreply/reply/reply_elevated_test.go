@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // TS 对照: reply-elevated.ts 单元测试

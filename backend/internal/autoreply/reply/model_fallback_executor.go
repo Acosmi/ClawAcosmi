@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	"github.com/anthropic/open-acosmi/internal/agents/runner"
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/agent-runner-execution.ts L146-465
@@ -26,9 +26,11 @@ type ModelFallbackExecutor struct {
 	RunnerDeps         runner.EmbeddedRunDeps
 	Config             *types.OpenAcosmiConfig
 	AgentDir           string
-	OnPermissionDenied func(tool, detail string)      // 权限拒绝→WebSocket广播
-	WaitForApproval    func(ctx context.Context) bool // 等待提权审批
-	SecurityLevelFunc  func() string                  // 动态安全级别
+	OnPermissionDenied func(tool, detail string)              // 权限拒绝→WebSocket广播
+	WaitForApproval    func(ctx context.Context) bool         // 等待提权审批
+	SecurityLevelFunc  func() string                          // 动态安全级别
+	MountRequestsFunc  func() []runner.MountRequestForSandbox // 动态临时挂载请求（Phase 3.4）
+	OnToolEvent        func(event runner.ToolEvent)           // 结构化工具事件→频道广播
 }
 
 // RunTurn 执行一次 agent 回合（含模型失败切换）。
@@ -111,6 +113,8 @@ func (e *ModelFallbackExecutor) RunTurn(ctx context.Context, params AgentTurnPar
 				OnPermissionDenied:  e.OnPermissionDenied,
 				WaitForApproval:     e.WaitForApproval,
 				SecurityLevelFunc:   e.SecurityLevelFunc,
+				MountRequestsFunc:   e.MountRequestsFunc,
+				OnToolEvent:         e.OnToolEvent,
 			}, e.RunnerDeps)
 		},
 		func(fbProvider, fbModel string, fbErr error, attempt, total int) {
@@ -143,10 +147,12 @@ func convertEmbeddedResult(result *runner.EmbeddedPiRunResult, provider, model s
 	var payloads []autoreply.ReplyPayload
 	for _, p := range result.Payloads {
 		payloads = append(payloads, autoreply.ReplyPayload{
-			Text:      p.Text,
-			MediaURL:  p.MediaURL,
-			MediaURLs: p.MediaURLs,
-			IsError:   p.IsError,
+			Text:          p.Text,
+			MediaURL:      p.MediaURL,
+			MediaURLs:     p.MediaURLs,
+			MediaBase64:   p.MediaBase64,
+			MediaMimeType: p.MediaMimeType,
+			IsError:       p.IsError,
 		})
 	}
 

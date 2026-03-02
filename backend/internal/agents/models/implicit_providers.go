@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 隐式供应商自动发现 ----------

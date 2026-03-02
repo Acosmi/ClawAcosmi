@@ -41,7 +41,25 @@ export async function loadChatHistory(state: ChatState) {
         limit: 200,
       },
     );
-    state.chatMessages = Array.isArray(res.messages) ? res.messages : [];
+    const messages = Array.isArray(res.messages) ? res.messages : [];
+    if ((state as any)._skipEmptyHistory) {
+      (state as any)._skipEmptyHistory = false;
+      if (messages.length === 0) {
+        // transcript 尚未写入，保留预填充的用户消息不清空
+      } else {
+        // 有历史记录：若末尾已是 user 消息（transcript 已写入新消息），直接用 messages；
+        // 否则将预填充的用户消息追加到历史末尾，避免在旧会话切换时新消息不可见（根因 A 修复）
+        const pendingMsg = state.chatMessages[0];
+        const lastMsg = messages[messages.length - 1] as any;
+        if (pendingMsg && lastMsg?.role !== "user") {
+          state.chatMessages = [...messages, pendingMsg];
+        } else {
+          state.chatMessages = messages;
+        }
+      }
+    } else {
+      state.chatMessages = messages;
+    }
     state.chatThinkingLevel = res.thinkingLevel ?? null;
   } catch (err) {
     state.lastError = String(err);
@@ -184,12 +202,22 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
   // See https://github.com/openacosmi/openacosmi/issues/1909
   if (payload.runId && state.chatRunId && payload.runId !== state.chatRunId) {
     if (payload.state === "final") {
+      // Bug #9 fix: immediately append the assistant message to avoid gap
+      // between clearing stream and loadChatHistory completing.
+      if (payload.message) {
+        state.chatMessages = [...state.chatMessages, payload.message];
+      }
       return "final";
     }
     return null;
   }
 
   if (payload.state === "delta") {
+    // Re-bind to the active run ID if we missed it (e.g. cross channel switch)
+    if (payload.runId && !state.chatRunId) {
+      state.chatRunId = payload.runId;
+      state.chatStreamStartedAt = state.chatStreamStartedAt ?? Date.now();
+    }
     const next = extractText(payload.message);
     if (typeof next === "string") {
       const current = state.chatStream ?? "";
@@ -198,6 +226,14 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
       }
     }
   } else if (payload.state === "final") {
+    // Bug #9 fix: immediately append the final assistant message so it's
+    // visible without waiting for loadChatHistory() to complete.
+    // The subsequent loadChatHistory() call (in app-gateway.ts) will replace
+    // chatMessages with the canonical backend transcript, which already
+    // includes this message (transcript is persisted before broadcast).
+    if (payload.message) {
+      state.chatMessages = [...state.chatMessages, payload.message];
+    }
     state.chatStream = null;
     state.chatRunId = null;
     state.chatStreamStartedAt = null;

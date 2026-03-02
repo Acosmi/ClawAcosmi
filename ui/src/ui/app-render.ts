@@ -78,6 +78,8 @@ const debouncedLoadUsage = (state: UsageState) => {
   usageDateDebounceTimeout = window.setTimeout(() => void loadUsage(state), 400);
 };
 import { renderAgents } from "./views/agents.ts";
+import { renderPlugins } from "./views/plugins.ts";
+import { savePluginConfig, loadTools, loadBrowserToolConfig, saveBrowserToolConfig } from "./controllers/plugins.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
 import { showPermissionPopup, hidePermissionPopup } from "./views/permission-popup.ts";
@@ -85,6 +87,11 @@ import { renderConfig } from "./views/config.ts";
 import { renderCron } from "./views/cron.ts";
 import { renderDebug } from "./views/debug.ts";
 import { renderCoderConfirmPrompt } from "./views/coder-confirm.ts";
+import { renderEscalationPopup } from "./views/escalation-popup.ts";
+import { renderPlanConfirmPopup } from "./views/plan-confirmation-popup.ts";
+import { renderResultReviewPopup } from "./views/result-review-popup.ts";
+import { renderSubagentHelpPopup } from "./views/subagent-help-popup.ts";
+import { resolveEscalation, revokeEscalation } from "./controllers/escalation.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderInstances } from "./views/instances.ts";
@@ -100,6 +107,9 @@ import { renderUsage } from "./views/usage.ts";
 import { renderWizard } from "./views/wizard.ts";
 import { renderChannelWizard, openChannelWizard } from "./views/wizard-channel.ts";
 import { renderNotificationCenter } from "./views/notification-center.ts";
+import { renderMediaConfig, loadMediaConfig } from "./views/media-config.ts";
+import { renderMediaDashboard } from "./views/media-dashboard.ts";
+import { loadMediaDashboard } from "./controllers/media-dashboard.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
@@ -157,11 +167,12 @@ export function renderApp(state: AppViewState) {
           </button>
           <div class="brand">
             <div class="brand-logo">
-              <img src=${basePath ? `${basePath}/favicon.svg` : "/favicon.svg"} alt="OpenAcosmi" />
+              <img src=${basePath ? `${basePath}/crab-logo.png` : "/crab-logo.png"} alt="OpenAcosmi" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">${t("topbar.brand")}</div>
-              <div class="brand-sub">${t("topbar.subtitle")}</div>
+              <div class="brand-title">
+                <span style="font-weight: bold; line-height: 28px;">${t("topbar.brandPrimary")}</span><span style="font-weight: 300; line-height: 28px;">${t("topbar.brandSecondary")}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -235,7 +246,7 @@ export function renderApp(state: AppViewState) {
           <div class="nav-group__items">
             <a
               class="nav-item nav-item--external"
-              href="https://docs.openacosmi.ai"
+              href="https://github.com/Acosmi/Claw-Acismi"
               target="_blank"
               rel="noreferrer"
               title="${t("topbar.docsTooltip")}"
@@ -256,6 +267,16 @@ export function renderApp(state: AppViewState) {
             ${state.tab === "memory" && state.memoryPanel === "uhms" ? html`
               <div style="display:flex;gap:8px;align-items:center;">
                 ${renderMemoryTypeCapsules(state.memoryStats)}
+              </div>
+            ` : nothing}
+            ${state.tab === "memory" && state.memoryPanel === "media" ? html`
+              <div style="display:flex;gap:8px;align-items:center;">
+                <span class="pill ${(state.sttWizard as Record<string, unknown> | undefined)?.configured ? "success" : "warning"}" style="font-size:11px;">
+                  🎙 ${(state.sttWizard as Record<string, unknown> | undefined)?.configured ? t("media.stt.configured") : t("media.stt.notConfigured")}
+                </span>
+                <span class="pill ${(state.docConvWizard as Record<string, unknown> | undefined)?.configured ? "success" : "warning"}" style="font-size:11px;">
+                  📄 ${(state.docConvWizard as Record<string, unknown> | undefined)?.configured ? t("media.docconv.configured") : t("media.docconv.notConfigured")}
+                </span>
               </div>
             ` : nothing}
             ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
@@ -344,6 +365,45 @@ export function renderApp(state: AppViewState) {
       : nothing
     }
     ${state.tab === "channels" ? renderChannelWizard(state) : nothing}
+
+        ${state.tab === "plugins"
+      ? renderPlugins({
+        panel: state.pluginsPanel,
+        loading: state.pluginsLoading,
+        plugins: state.pluginsList,
+        error: state.pluginsError,
+        editValues: state.pluginsEditValues,
+        saving: state.pluginsSaving,
+        toolsLoading: state.toolsLoading,
+        tools: state.toolsList,
+        toolsError: state.toolsError,
+        browserConfig: state.browserToolConfig,
+        browserLoading: state.browserToolLoading,
+        browserSaving: state.browserToolSaving,
+        browserError: state.browserToolError,
+        browserEdits: state.browserToolEdits,
+        onEditChange: (pluginId, key, value) => {
+          state.pluginsEditValues = {
+            ...state.pluginsEditValues,
+            [pluginId]: { ...(state.pluginsEditValues[pluginId] ?? {}), [key]: value },
+          };
+        },
+        onSave: (pluginId) => void savePluginConfig(state, pluginId, state.pluginsEditValues[pluginId] ?? {}),
+        onGoToChannels: () => state.setTab("channels"),
+        onPanelChange: (panel) => {
+          state.pluginsPanel = panel;
+          if (panel === "tools") {
+            if (state.toolsList.length === 0) void loadTools(state);
+            if (!state.browserToolConfig) void loadBrowserToolConfig(state);
+          }
+        },
+        onBrowserEditChange: (key, value) => {
+          state.browserToolEdits = { ...state.browserToolEdits, [key]: value };
+        },
+        onBrowserSave: () => void saveBrowserToolConfig(state),
+      })
+      : nothing
+    }
 
         ${state.tab === "instances"
       ? renderInstances({
@@ -1044,7 +1104,17 @@ export function renderApp(state: AppViewState) {
             m.loadSubAgents(state as any),
           );
         },
+        onStartOpenCoderWizard: () => {
+          import("./views/wizard.ts").then((m) =>
+            m.startOpenCoderWizard(state as any),
+          );
+        },
       })
+      : nothing
+    }
+
+        ${state.tab === "media"
+      ? renderMediaDashboard(state)
       : nothing
     }
 
@@ -1139,86 +1209,94 @@ export function renderApp(state: AppViewState) {
           state.memoryPanel = "uhms";
           loadMemoryStatus(state);
           loadMemoryList(state);
+          loadMemoryStats(state);
         }}>${t("memory.tab.uhms")}</button>
+          <button class="agent-tab ${state.memoryPanel === "media" ? "active" : ""}"
+            @click=${() => {
+          state.memoryPanel = "media";
+          loadMediaConfig(state);
+        }}>${t("media.tab.title")}</button>
         </div>
-        ${state.memoryPanel === "sessions"
-          ? renderSessions({
-            loading: state.sessionsLoading,
-            result: state.sessionsResult,
-            error: state.sessionsError,
-            activeMinutes: state.sessionsFilterActive,
-            limit: state.sessionsFilterLimit,
-            includeGlobal: state.sessionsIncludeGlobal,
-            includeUnknown: state.sessionsIncludeUnknown,
-            basePath: state.basePath,
-            onFiltersChange: (next) => {
-              state.sessionsFilterActive = next.activeMinutes;
-              state.sessionsFilterLimit = next.limit;
-              state.sessionsIncludeGlobal = next.includeGlobal;
-              state.sessionsIncludeUnknown = next.includeUnknown;
-            },
-            onRefresh: () => loadSessions(state),
-            onPatch: (key, patch) => patchSession(state, key, patch),
-            onDelete: (key) => deleteSession(state, key),
-          })
-          : renderMemory({
-            loading: state.memoryLoading,
-            status: state.memoryStatus,
-            list: state.memoryList,
-            total: state.memoryTotal,
-            error: state.memoryError,
-            detail: state.memoryDetail,
-            detailLevel: state.memoryDetailLevel,
-            importing: state.memoryImporting,
-            importResult: state.memoryImportResult,
-            page: state.memoryPage,
-            pageSize: state.memoryPageSize,
-            filterType: state.memoryFilterType,
-            filterCategory: state.memoryFilterCategory,
-            onRefresh: () => loadMemoryList(state),
-            onLoadStatus: () => loadMemoryStatus(state),
-            onPageChange: (page) => loadMemoryList(state, { page }),
-            onFilterType: (type) => {
-              state.memoryPage = 0;
-              loadMemoryList(state, { page: 0, type });
-            },
-            onFilterCategory: (category) => {
-              state.memoryPage = 0;
-              loadMemoryList(state, { page: 0, category });
-            },
-            onSelectMemory: (id, level) => loadMemoryDetail(state, id, level),
-            onDeleteMemory: (id) => deleteMemory(state, id),
-            onImportSkills: () => importSkills(state),
-            onDetailLevel: (level) => {
-              if (state.memoryDetail) {
-                loadMemoryDetail(state, state.memoryDetail.id, level);
-              }
-            },
-            onCloseDetail: () => {
-              state.memoryDetail = null;
-            },
-            llmConfig: state.memoryLLMConfig ?? null,
-            llmConfigOpen: state.memoryLLMConfigOpen ?? false,
-            onLLMConfigToggle: () => {
-              state.memoryLLMConfigOpen = !state.memoryLLMConfigOpen;
-              if (state.memoryLLMConfigOpen) {
-                resetLLMDraft(); // re-sync draft from server config on open
-                if (!state.memoryLLMConfig) {
-                  loadMemoryLLMConfig(state);
+        ${state.memoryPanel === "media"
+          ? renderMediaConfig(state)
+          : state.memoryPanel === "sessions"
+            ? renderSessions({
+              loading: state.sessionsLoading,
+              result: state.sessionsResult,
+              error: state.sessionsError,
+              activeMinutes: state.sessionsFilterActive,
+              limit: state.sessionsFilterLimit,
+              includeGlobal: state.sessionsIncludeGlobal,
+              includeUnknown: state.sessionsIncludeUnknown,
+              basePath: state.basePath,
+              onFiltersChange: (next) => {
+                state.sessionsFilterActive = next.activeMinutes;
+                state.sessionsFilterLimit = next.limit;
+                state.sessionsIncludeGlobal = next.includeGlobal;
+                state.sessionsIncludeUnknown = next.includeUnknown;
+              },
+              onRefresh: () => loadSessions(state),
+              onPatch: (key, patch) => patchSession(state, key, patch),
+              onDelete: (key) => deleteSession(state, key),
+            })
+            : renderMemory({
+              loading: state.memoryLoading,
+              status: state.memoryStatus,
+              list: state.memoryList,
+              total: state.memoryTotal,
+              error: state.memoryError,
+              detail: state.memoryDetail,
+              detailLevel: state.memoryDetailLevel,
+              importing: state.memoryImporting,
+              importResult: state.memoryImportResult,
+              page: state.memoryPage,
+              pageSize: state.memoryPageSize,
+              filterType: state.memoryFilterType,
+              filterCategory: state.memoryFilterCategory,
+              onRefresh: () => loadMemoryList(state),
+              onLoadStatus: () => loadMemoryStatus(state),
+              onPageChange: (page) => loadMemoryList(state, { page }),
+              onFilterType: (type) => {
+                state.memoryPage = 0;
+                loadMemoryList(state, { page: 0, type });
+              },
+              onFilterCategory: (category) => {
+                state.memoryPage = 0;
+                loadMemoryList(state, { page: 0, category });
+              },
+              onSelectMemory: (id, level) => loadMemoryDetail(state, id, level),
+              onDeleteMemory: (id) => deleteMemory(state, id),
+              onImportSkills: () => importSkills(state),
+              onDetailLevel: (level) => {
+                if (state.memoryDetail) {
+                  loadMemoryDetail(state, state.memoryDetail.id, level);
                 }
-              }
-            },
-            onLLMConfigSave: (provider, model, baseUrl, apiKey) => {
-              return saveMemoryLLMConfig(state, { provider, model, baseUrl, apiKey });
-            },
-            stats: state.memoryStats ?? null,
-            searchQuery: state.memorySearchQuery,
-            searchResults: state.memorySearchResults ?? null,
-            searching: state.memorySearching,
-            onSearch: (query) => searchMemories(state, query),
-            onClearSearch: () => clearMemorySearch(state),
-            onLoadStats: () => loadMemoryStats(state),
-          })
+              },
+              onCloseDetail: () => {
+                state.memoryDetail = null;
+              },
+              llmConfig: state.memoryLLMConfig ?? null,
+              llmConfigOpen: state.memoryLLMConfigOpen ?? false,
+              onLLMConfigToggle: () => {
+                state.memoryLLMConfigOpen = !state.memoryLLMConfigOpen;
+                if (state.memoryLLMConfigOpen) {
+                  resetLLMDraft(); // re-sync draft from server config on open
+                  if (!state.memoryLLMConfig) {
+                    loadMemoryLLMConfig(state);
+                  }
+                }
+              },
+              onLLMConfigSave: (provider, model, baseUrl, apiKey) => {
+                return saveMemoryLLMConfig(state, { provider, model, baseUrl, apiKey });
+              },
+              stats: state.memoryStats ?? null,
+              searchQuery: state.memorySearchQuery,
+              searchResults: state.memorySearchResults ?? null,
+              searching: state.memorySearching,
+              onSearch: (query) => searchMemories(state, query),
+              onClearSearch: () => clearMemorySearch(state),
+              onLoadStats: () => loadMemoryStats(state),
+            })
         }
       `
       : nothing
@@ -1462,7 +1540,52 @@ export function renderApp(state: AppViewState) {
     }
       </main>
       ${renderExecApprovalPrompt(state)}
+      ${renderEscalationPopup({
+      visible: state.escalationState.popupVisible,
+      request: state.escalationState.request,
+      activeGrant: state.escalationState.activeGrant,
+      loading: state.escalationState.loading,
+      selectedTtl: state.escalationSelectedTtl,
+      onApprove: async (ttlMinutes) => {
+        state.escalationState = { ...state.escalationState, loading: true };
+        try {
+          await resolveEscalation(state.client!, true, ttlMinutes);
+        } catch { /* pending 可能已超时 */ }
+        state.escalationState = { ...state.escalationState, loading: false, popupVisible: false, request: null };
+      },
+      onDeny: async () => {
+        state.escalationState = { ...state.escalationState, loading: true };
+        try {
+          await resolveEscalation(state.client!, false, 0);
+        } catch { /* ignore */ }
+        state.escalationState = { ...state.escalationState, loading: false, popupVisible: false, request: null };
+      },
+      onRevoke: async () => {
+        state.escalationState = { ...state.escalationState, loading: true };
+        try {
+          await revokeEscalation(state.client!);
+        } catch { /* ignore */ }
+        state.escalationState = { ...state.escalationState, loading: false, activeGrant: null };
+      },
+      onTtlChange: (ttl) => { state.escalationSelectedTtl = ttl; },
+      onClose: () => { state.escalationState = { ...state.escalationState, popupVisible: false }; },
+    })}
       ${"" /* TODO(coder-terminal): renderCoderConfirmPrompt(state) 已禁用，待终端式 UI */}
+      ${renderPlanConfirmPopup({
+      queue: state.planConfirmQueue ?? [],
+      onApprove: (id) => state.handlePlanConfirmDecision(id, "approve"),
+      onReject: (id) => state.handlePlanConfirmDecision(id, "reject"),
+      onEdit: (id, editedPlan) => state.handlePlanConfirmDecision(id, "edit", editedPlan),
+    })}
+      ${renderResultReviewPopup({
+      queue: state.resultReviewQueue ?? [],
+      onApprove: (id) => state.handleResultReviewDecision(id, "approve"),
+      onReject: (id, feedback) => state.handleResultReviewDecision(id, "reject", feedback),
+    })}
+      ${renderSubagentHelpPopup({
+      queue: state.subagentHelpQueue ?? [],
+      onRespond: (id, response) => state.handleSubagentHelpRespond(id, response),
+    })}
       ${renderGatewayUrlConfirmation(state)}
       ${renderWizard(state)}
     </div>

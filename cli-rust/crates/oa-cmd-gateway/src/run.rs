@@ -105,7 +105,7 @@ pub async fn gateway_run_command(
     // Resolve the effective port.
     let effective_port = port.unwrap_or_else(|| {
         let from_config = resolve_gateway_port(Some(&config));
-        // If config returned the library default (18789), use our command default instead.
+        // If config returned the library default (19001), use our command default instead.
         if from_config == oa_config::paths::DEFAULT_GATEWAY_PORT {
             DEFAULT_PORT
         } else {

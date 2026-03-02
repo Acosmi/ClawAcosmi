@@ -48,10 +48,10 @@ func TestIsValidIPv4_Helpers(t *testing.T) {
 
 func TestResolveControlUiLinks_Loopback(t *testing.T) {
 	links := ResolveControlUiLinks(ResolveControlUiLinksParams{
-		Port: 18789,
+		Port: 19001,
 		Bind: "loopback",
 	})
-	if !strings.Contains(links.HttpURL, "127.0.0.1:18789") {
+	if !strings.Contains(links.HttpURL, "127.0.0.1:19001") {
 		t.Errorf("expected loopback URL, got %s", links.HttpURL)
 	}
 	if !strings.HasPrefix(links.WsURL, "ws://127.0.0.1") {
@@ -72,7 +72,7 @@ func TestResolveControlUiLinks_Custom(t *testing.T) {
 
 func TestResolveControlUiLinks_BasePath(t *testing.T) {
 	links := ResolveControlUiLinks(ResolveControlUiLinksParams{
-		Port:     18789,
+		Port:     19001,
 		Bind:     "loopback",
 		BasePath: "/ui",
 	})
@@ -101,8 +101,8 @@ func TestNormalizeControlUiBasePath(t *testing.T) {
 }
 
 func TestFormatControlUiSshHint(t *testing.T) {
-	hint := FormatControlUiSshHint(18789, "", "tok123")
-	if !strings.Contains(hint, "18789") {
+	hint := FormatControlUiSshHint(19001, "", "tok123")
+	if !strings.Contains(hint, "19001") {
 		t.Error("expected port in hint")
 	}
 	if !strings.Contains(hint, "tok123") {

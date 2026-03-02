@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 func TestSetupInternalHooks_EmptyWorkspace(t *testing.T) {
@@ -51,7 +51,7 @@ func TestOnboardOptionsComplete(t *testing.T) {
 		OpenAIApiKey:    "sk-xxx",
 		GeminiApiKey:    "AIza-xxx",
 
-		GatewayPort:     18789,
+		GatewayPort:     19001,
 		GatewayBind:     GatewayBindLoopback,
 		GatewayAuth:     GatewayAuthChoiceToken,
 		GatewayToken:    "tok-xxx",
@@ -68,7 +68,7 @@ func TestOnboardOptionsComplete(t *testing.T) {
 		NodeManager:   NodeManagerNpm,
 		JSON:          false,
 
-		RemoteURL:   "ws://127.0.0.1:18789",
+		RemoteURL:   "ws://127.0.0.1:19001",
 		RemoteToken: "",
 	}
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/security"
+	"github.com/openacosmi/claw-acismi/internal/security"
 )
 
 // TS 对照: media/fetch.ts (220L)

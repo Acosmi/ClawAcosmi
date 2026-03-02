@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // 对应 TS src/cli/program/config-guard.ts — 配置校验守卫

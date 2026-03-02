@@ -5,6 +5,13 @@ import type { AppViewState } from "./app-view-state.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { CoderConfirmRequest } from "./controllers/coder-confirmation.ts";
 import { removeCoderConfirm } from "./controllers/coder-confirmation.ts";
+import type { PlanConfirmRequest } from "./controllers/plan-confirmation.ts";
+import { removePlanConfirm } from "./controllers/plan-confirmation.ts";
+import type { ResultReviewRequest } from "./controllers/result-review.ts";
+import { removeResultReview } from "./controllers/result-review.ts";
+import type { SubagentHelpRequest } from "./controllers/subagent-help.ts";
+import { removeSubagentHelp } from "./controllers/subagent-help.ts";
+import { createEscalationState, type EscalationState } from "./controllers/escalation.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
 import type { SkillMessage } from "./controllers/skills.ts";
@@ -180,7 +187,14 @@ export class OpenAcosmiApp extends LitElement {
   @state() execApprovalBusy = false;
   @state() execApprovalError: string | null = null;
   @state() coderConfirmQueue: CoderConfirmRequest[] = [];
+  @state() planConfirmQueue: PlanConfirmRequest[] = [];
+  @state() resultReviewQueue: ResultReviewRequest[] = [];
+  @state() subagentHelpQueue: SubagentHelpRequest[] = [];
   @state() pendingGatewayUrl: string | null = null;
+
+  // Escalation state (permission popup)
+  @state() escalationState: EscalationState = createEscalationState();
+  @state() escalationSelectedTtl = 30;
 
   // Security settings state
   @state() securityLevel = "deny";
@@ -232,8 +246,17 @@ export class OpenAcosmiApp extends LitElement {
     timestamp: number;
     read: boolean;
     type: "error" | "info" | "success";
+    sessionKey?: string;
   }> = [];
   @state() notificationsOpen = false;
+
+  // Custom added: Remote Channel Switcher state
+  @state() channelUnreadCounts: Record<string, number> = {};
+  @state() isChannelDropdownOpen: boolean = false;
+  @state() isSessionDropdownOpen: boolean = false;
+  @state() crossChannelNotificationActive: boolean = false;
+  @state() crossChannelNotificationText: string = "";
+  @state() crossChannelNotificationSessionKey: string | null = null;
 
   @state() presenceLoading = false;
   @state() presenceEntries: PresenceEntry[] = [];
@@ -241,15 +264,22 @@ export class OpenAcosmiApp extends LitElement {
   @state() presenceStatus: string | null = null;
 
   // Custom added: Helper for notifications
-  addNotification(message: string, type: "error" | "info" | "success" = "info") {
-    const fresh = {
+  addNotification(message: string, type: "error" | "info" | "success" = "info", sessionKey?: string) {
+    const fresh: any = {
       id: `notify-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       message,
       timestamp: Date.now(),
       read: false,
-      type
+      type,
+      sessionKey
     };
     this.notifications = [fresh, ...this.notifications].slice(0, 50); // Keep last 50
+  }
+
+  clearCrossChannelNotification() {
+    this.crossChannelNotificationActive = false;
+    this.crossChannelNotificationText = "";
+    this.crossChannelNotificationSessionKey = null;
   }
 
   @state() agentsLoading = false;
@@ -379,7 +409,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
 
-  @state() memoryPanel: "sessions" | "uhms" = "uhms";
+  @state() memoryPanel: "sessions" | "uhms" | "media" = "uhms";
 
   @state() memoryLoading = false;
   @state() memoryList: import("./controllers/memory.js").MemoryItem[] | null = null;
@@ -400,6 +430,37 @@ export class OpenAcosmiApp extends LitElement {
   @state() memorySearchQuery = "";
   @state() memorySearchResults: import("./controllers/memory.js").MemorySearchResult[] | null = null;
   @state() memorySearching = false;
+
+  // Plugins & Tools
+  @state() pluginsPanel: "plugins" | "tools" = "plugins";
+  @state() pluginsLoading = false;
+  @state() pluginsList: import("./types.js").PluginInfo[] = [];
+  @state() pluginsError: string | null = null;
+  @state() pluginsEditValues: Record<string, Record<string, string>> = {};
+  @state() pluginsSaving: string | null = null;
+  @state() toolsLoading = false;
+  @state() toolsList: import("./types.js").ToolItem[] = [];
+  @state() toolsError: string | null = null;
+  @state() browserToolConfig: import("./types.js").BrowserToolConfig | null = null;
+  @state() browserToolLoading = false;
+  @state() browserToolSaving = false;
+  @state() browserToolError: string | null = null;
+  @state() browserToolEdits: Record<string, string | boolean> = {};
+
+  // Media Dashboard
+  @state() mediaTrendingTopics: import("./controllers/media-dashboard.js").TrendingTopic[] = [];
+  @state() mediaTrendingSources: string[] = [];
+  @state() mediaTrendingLoading = false;
+  @state() mediaTrendingSelectedSource = "";
+  @state() mediaDrafts: import("./controllers/media-dashboard.js").DraftEntry[] = [];
+  @state() mediaDraftsLoading = false;
+  @state() mediaDraftsSelectedPlatform = "";
+
+  // Sub-Agents
+  @state() subagentsLoading = false;
+  @state() subagentsList: import("./controllers/subagents.js").SubAgentEntry[] = [];
+  @state() subagentsError: string | null = null;
+  @state() subagentsBusyKey: string | null = null;
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
@@ -643,6 +704,36 @@ export class OpenAcosmiApp extends LitElement {
       this.coderConfirmQueue = removeCoderConfirm(this.coderConfirmQueue, id);
     } catch (err) {
       console.error("coder confirm resolve failed:", err);
+    }
+  }
+
+  async handlePlanConfirmDecision(id: string, action: "approve" | "reject" | "edit", editedPlan?: string) {
+    if (!this.client) return;
+    try {
+      await this.client.request("plan.confirm.resolve", { id, action, editedPlan });
+      this.planConfirmQueue = removePlanConfirm(this.planConfirmQueue, id);
+    } catch (err) {
+      console.error("plan confirm resolve failed:", err);
+    }
+  }
+
+  async handleResultReviewDecision(id: string, action: "approve" | "reject", feedback?: string) {
+    if (!this.client) return;
+    try {
+      await this.client.request("result.approve.resolve", { id, action, feedback });
+      this.resultReviewQueue = removeResultReview(this.resultReviewQueue, id);
+    } catch (err) {
+      console.error("result approve resolve failed:", err);
+    }
+  }
+
+  async handleSubagentHelpRespond(id: string, response: string) {
+    if (!this.client) return;
+    try {
+      await this.client.request("subagent.help.resolve", { id, response });
+      this.subagentHelpQueue = removeSubagentHelp(this.subagentHelpQueue, id);
+    } catch (err) {
+      console.error("subagent help resolve failed:", err);
     }
   }
 

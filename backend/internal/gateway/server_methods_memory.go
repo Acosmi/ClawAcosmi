@@ -14,9 +14,9 @@ package gateway
 import (
 	"context"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/agents/skills"
-	"github.com/anthropic/open-acosmi/internal/memory/uhms"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/agents/skills"
+	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
 )
 
 // MemoryHandlers 返回 memory.* 直接操作方法映射。

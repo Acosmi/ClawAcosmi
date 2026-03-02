@@ -593,7 +593,7 @@ mod tests {
             gateway: Some(oa_types::gateway::GatewayConfig {
                 mode: Some(GatewayMode::Remote),
                 remote: Some(oa_types::gateway::GatewayRemoteConfig {
-                    url: Some("ws://remote:18789".to_string()),
+                    url: Some("ws://remote:19001".to_string()),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -631,7 +631,7 @@ mod tests {
         let target = GatewayStatusTarget {
             id: "test".to_string(),
             kind: TargetKind::LocalLoopback,
-            url: "ws://127.0.0.1:18789".to_string(),
+            url: "ws://127.0.0.1:19001".to_string(),
             active: true,
         };
         let overrides = GatewayProbeAuth {
@@ -647,7 +647,7 @@ mod tests {
         let target = GatewayStatusTarget {
             id: "localLoopback".to_string(),
             kind: TargetKind::LocalLoopback,
-            url: "ws://127.0.0.1:18789".to_string(),
+            url: "ws://127.0.0.1:19001".to_string(),
             active: true,
         };
         let header = render_target_header(&target);
@@ -660,7 +660,7 @@ mod tests {
             target: GatewayStatusTarget {
                 id: "test".to_string(),
                 kind: TargetKind::LocalLoopback,
-                url: "ws://127.0.0.1:18789".to_string(),
+                url: "ws://127.0.0.1:19001".to_string(),
                 active: true,
             },
             ok: true,
@@ -679,7 +679,7 @@ mod tests {
             target: GatewayStatusTarget {
                 id: "test".to_string(),
                 kind: TargetKind::LocalLoopback,
-                url: "ws://127.0.0.1:18789".to_string(),
+                url: "ws://127.0.0.1:19001".to_string(),
                 active: true,
             },
             ok: false,

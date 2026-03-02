@@ -14,9 +14,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/daemon"
-	"github.com/anthropic/open-acosmi/pkg/i18n"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/daemon"
+	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 类型定义 ----------
@@ -137,7 +137,7 @@ func FinalizeOnboardingWizard(opts FinalizeOnboardingOptions) (*FinalizeResult, 
 	noteLines = append(noteLines,
 		"Gateway WS: "+links.WsURL,
 		gatewayStatusLine,
-		"Docs: https://docs.openacosmi.ai/web/control-ui",
+		"Docs: docs/skills/web/control-ui/SKILL.md",
 	)
 	_ = prompter.Note(strings.Join(noteLines, "\n"), i18n.Tp("onboard.controlui.title"))
 
@@ -398,12 +398,12 @@ func showFinalNotes(prompter WizardPrompter, settings GatewayWizardSettings, cfg
 	// Workspace backup
 	_ = prompter.Note(
 		"Back up your agent workspace.\n"+
-			"Docs: https://docs.openacosmi.ai/concepts/agent-workspace",
+			"Docs: docs/skills/concepts/agent-workspace/SKILL.md",
 		"Workspace backup",
 	)
 	// Security
 	_ = prompter.Note(
-		"Running agents on your computer is risky — harden your setup: https://docs.openacosmi.ai/security",
+		"Running agents on your computer is risky — harden your setup. See: docs/skills/general/security/SKILL.md",
 		"Security",
 	)
 	// Web search
@@ -419,20 +419,20 @@ func showFinalNotes(prompter WizardPrompter, settings GatewayWizardSettings, cfg
 	if hasWebSearchKey {
 		_ = prompter.Note(
 			"Web search is enabled, so your agent can look things up online when needed.\n"+
-				"Docs: https://docs.openacosmi.ai/tools/web",
+				"Docs: docs/skills/tools/web/SKILL.md",
 			"Web search (optional)",
 		)
 	} else {
 		_ = prompter.Note(
 			"If you want your agent to search the web, you'll need a Brave Search API key.\n"+
 				"Set it up: openacosmi configure --section web\n"+
-				"Docs: https://docs.openacosmi.ai/tools/web",
+				"Docs: docs/skills/tools/web/SKILL.md",
 			"Web search (optional)",
 		)
 	}
 	// Outro
 	_ = prompter.Note(
-		"What now: https://openacosmi.ai/showcase",
+		"What now: https://github.com/Acosmi/Claw-Acismi",
 		"What now",
 	)
 	_ = prompter.Outro(i18n.Tp("onboard.finalize.outro"))

@@ -4,9 +4,9 @@ package main
 // 对应 TS src/commands/onboard-types.ts (106L) + auth-choice-options.ts (272L)
 
 import (
-	"github.com/anthropic/open-acosmi/internal/agents/auth"
-	"github.com/anthropic/open-acosmi/internal/tui"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/auth"
+	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- AuthChoice 常量 ----------

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anthropic/open-acosmi/internal/mcpclient"
+	"github.com/openacosmi/claw-acismi/internal/mcpclient"
 )
 
 // ---------- IsAvailable 测试 ----------

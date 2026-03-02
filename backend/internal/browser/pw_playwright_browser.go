@@ -10,13 +10,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // PlaywrightBrowserController implements tools.BrowserController using
 // a PlaywrightTools backend (either CDP or Playwright-native).
 type PlaywrightBrowserController struct {
-	tools  PlaywrightTools
-	target PWTargetOpts
+	tools   PlaywrightTools
+	target  PWTargetOpts
+	planner AIPlanner // Phase 4: 可选 AI 规划器，通过 SetAIPlanner 注入
 }
 
 // NewPlaywrightBrowserController creates a BrowserController backed by
@@ -72,19 +74,20 @@ func (c *PlaywrightBrowserController) Type(ctx context.Context, selector, text s
 	})
 }
 
-// Screenshot captures a PNG screenshot and returns (data, mimeType, error).
+// Screenshot captures a JPEG screenshot and returns (data, mimeType, error).
+// Phase 2: 截图格式从 PNG 改为 JPEG q75，体积缩减 3-5x。
 func (c *PlaywrightBrowserController) Screenshot(ctx context.Context) ([]byte, string, error) {
 	data, err := c.tools.Screenshot(ctx, c.target)
 	if err != nil {
 		return nil, "", err
 	}
-	// Screenshot returns base64-encoded PNG from CDP.
+	// Screenshot returns base64-encoded JPEG from CDP.
 	decoded, err := base64.StdEncoding.DecodeString(string(data))
 	if err != nil {
 		// If not base64, return raw bytes.
-		return data, "image/png", nil
+		return data, "image/jpeg", nil
 	}
-	return decoded, "image/png", nil
+	return decoded, "image/jpeg", nil
 }
 
 // Evaluate executes JavaScript and returns the result.
@@ -102,15 +105,50 @@ func (c *PlaywrightBrowserController) Evaluate(ctx context.Context, script strin
 }
 
 // WaitForSelector waits for an element matching the selector to appear.
-// Uses polling via CDP Runtime.evaluate.
+// D4-F1: 轮询 + 超时机制，替代原先一次性 JS 检查。
+// 默认超时 10s，轮询间隔 100ms。ctx 取消时提前退出。
 func (c *PlaywrightBrowserController) WaitForSelector(ctx context.Context, selector string) error {
+	const (
+		pollInterval = 100 * time.Millisecond
+		maxTimeout   = 10 * time.Second
+	)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, maxTimeout)
+	defer cancel()
+
 	cdp := NewCDPClient(c.target.CDPURL, nil)
 	script := fmt.Sprintf(`(function() {
 		var el = document.querySelector(%q);
 		return el !== null;
 	})()`, selector)
-	_, err := cdp.Evaluate(ctx, script)
-	return err
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		raw, err := cdp.Evaluate(timeoutCtx, script)
+		if err != nil {
+			return fmt.Errorf("wait_for selector %q: evaluate failed: %w", selector, err)
+		}
+		// CDP Evaluate 返回 {"result":{"type":"boolean","value":true}}，
+		// 需嵌套 struct 解析（参照 GetURL() L167-175 的正确写法）。
+		// D4-F1-FIX: 修复直接 Unmarshal 为 bool 永远失败的问题。
+		var resp struct {
+			Result struct {
+				Value bool `json:"value"`
+			} `json:"result"`
+		}
+		if json.Unmarshal(raw, &resp) == nil && resp.Result.Value {
+			return nil
+		}
+
+		select {
+		case <-timeoutCtx.Done():
+			return fmt.Errorf("wait_for selector %q: timed out after %s", selector, maxTimeout)
+		case <-ticker.C:
+			// 继续轮询
+		}
+	}
 }
 
 // GoBack navigates back in browser history.
@@ -143,4 +181,64 @@ func (c *PlaywrightBrowserController) GetURL(ctx context.Context) (string, error
 		return "", err
 	}
 	return resp.Result.Value, nil
+}
+
+// ---------- Phase 1: ARIA 快照 + ref 元素交互 ----------
+
+// SnapshotAI returns an ARIA accessibility tree snapshot with ref-annotated
+// interactive elements. Delegates to PlaywrightTools.SnapshotAI().
+func (c *PlaywrightBrowserController) SnapshotAI(ctx context.Context) (map[string]any, error) {
+	return c.tools.SnapshotAI(ctx, PWSnapshotOpts{PWTargetOpts: c.target})
+}
+
+// ClickRef clicks an element by its ARIA ref identifier (e.g. "e1").
+// More robust than CSS selectors — works as long as the ARIA role exists.
+func (c *PlaywrightBrowserController) ClickRef(ctx context.Context, ref string) error {
+	return c.tools.Click(ctx, PWClickOpts{
+		PWTargetOpts: c.target,
+		Ref:          ref,
+	})
+}
+
+// FillRef fills text into an element by its ARIA ref identifier.
+func (c *PlaywrightBrowserController) FillRef(ctx context.Context, ref, text string) error {
+	return c.tools.Fill(ctx, PWFillOpts{
+		PWTargetOpts: c.target,
+		Ref:          ref,
+		Value:        text,
+	})
+}
+
+// ---------- Phase 4: Mariner AI 循环 ----------
+
+// SetAIPlanner 注入 AI 规划器，激活 ai_browse 意图级任务能力。
+// 由 gateway 在创建 BrowserController 时调用。
+func (c *PlaywrightBrowserController) SetAIPlanner(planner AIPlanner) {
+	c.planner = planner
+}
+
+// AIBrowse 执行 Mariner 风格 observe→plan→act 循环。
+// 接受意图级目标（如 "在京东搜索 MacBook Pro"），自动执行多步操作。
+// 返回 JSON 格式的执行结果。
+func (c *PlaywrightBrowserController) AIBrowse(ctx context.Context, goal string) (string, error) {
+	if c.planner == nil {
+		return "", fmt.Errorf("ai_browse is not available: no AI planner configured. " +
+			"Use observe + click_ref/fill_ref for manual step-by-step browsing instead")
+	}
+
+	loop := NewAIBrowseLoop(c.tools, c.planner, AIBrowseLoopConfig{
+		MaxSteps:          20,
+		ScreenshotEnabled: true,
+	})
+
+	result, err := loop.Run(ctx, goal, c.target)
+	if err != nil {
+		return "", fmt.Errorf("ai_browse: %w", err)
+	}
+
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("ai_browse marshal result: %w", err)
+	}
+	return string(resultJSON), nil
 }

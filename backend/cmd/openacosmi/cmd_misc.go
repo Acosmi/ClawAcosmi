@@ -31,6 +31,12 @@ func init() {
 		newCompletionCmd(),
 		newDashboardCmd(),
 		newResetCmd(),
+		newApprovalsCmd(),
+		newConfigCmd(),
+		newDevicesCmd(),
+		newNodeCmd(),
+		newTUICmd(),
+		newVoicecallCmd(),
 	)
 }
 
@@ -127,7 +133,7 @@ func newDocsCmd() *cobra.Command {
 		Use:   "docs",
 		Short: "Open documentation",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cmd.Println("📖 Docs: https://docs.openacosmi.ai")
+			cmd.Println("📖 Docs: https://github.com/Acosmi/Claw-Acismi")
 			return nil
 		},
 	}
@@ -224,5 +230,160 @@ func newResetCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().Bool("confirm", false, "Confirm reset (required)")
+	return cmd
+}
+
+func newApprovalsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "approvals",
+		Short: "Manage exec approvals and allowlists",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "get",
+			Short: "Get current exec approvals",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Println("📋 Approvals get not yet implemented")
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "set",
+			Short: "Set approvals from a file",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Println("📝 Approvals set not yet implemented")
+				return nil
+			},
+		},
+	)
+	return cmd
+}
+
+func newConfigCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Direct config file manipulation (get, set, unset)",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "get <path>",
+			Short: "Get a config value by dot-separated path",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("📋 Config get '%s' not yet implemented\n", args[0])
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "set <path> <value>",
+			Short: "Set a config value",
+			Args:  cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("📝 Config set '%s' = '%s' not yet implemented\n", args[0], args[1])
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "unset <path>",
+			Short: "Remove a config value",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("🗑️ Config unset '%s' not yet implemented\n", args[0])
+				return nil
+			},
+		},
+	)
+	return cmd
+}
+
+func newDevicesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "devices",
+		Short: "Device pairing and token management",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "list",
+			Short: "List paired devices",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Println("📱 Devices list not yet implemented")
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "approve <request-id>",
+			Short: "Approve a pairing request",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("✅ Devices approve '%s' not yet implemented\n", args[0])
+				return nil
+			},
+		},
+	)
+	return cmd
+}
+
+func newNodeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "node",
+		Short: "Headless node host management",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "run",
+			Short: "Run headless node host",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Println("▶️ Node run not yet implemented")
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "status",
+			Short: "Show node status",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Println("📊 Node status not yet implemented")
+				return nil
+			},
+		},
+	)
+	return cmd
+}
+
+func newTUICmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: "Terminal UI connected to the Gateway",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.Println("🖥️ TUI not yet implemented")
+			return nil
+		},
+	}
+}
+
+func newVoicecallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "voicecall",
+		Short: "Voice call plugin commands",
+	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "call <to> <message>",
+			Short: "Initiate a voice call",
+			Args:  cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("📞 Voicecall call to='%s' not yet implemented\n", args[0])
+				return nil
+			},
+		},
+		&cobra.Command{
+			Use:   "status <call-id>",
+			Short: "Show call status",
+			Args:  cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				cmd.Printf("📊 Voicecall status '%s' not yet implemented\n", args[0])
+				return nil
+			},
+		},
+	)
 	return cmd
 }

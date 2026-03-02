@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/pkg/markdown"
-	"github.com/anthropic/open-acosmi/pkg/polls"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/polls"
 )
 
 // Discord 服务器管理 — 继承自 src/discord/send.guild.ts (141L)

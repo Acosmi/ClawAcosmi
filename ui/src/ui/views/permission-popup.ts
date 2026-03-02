@@ -67,8 +67,10 @@ function levelLabel(level: string): string {
             return "L0 " + t("permission.popup.levelDeny");
         case "allowlist":
             return "L1 " + t("permission.popup.levelAllowlist");
+        case "sandboxed":
+            return "L2 " + t("permission.popup.levelSandboxed");
         case "full":
-            return "L2 " + t("permission.popup.levelFull");
+            return "L3 " + t("permission.popup.levelFull");
         default:
             return level;
     }

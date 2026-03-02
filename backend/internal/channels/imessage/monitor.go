@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/channels"
-	"github.com/anthropic/open-acosmi/pkg/markdown"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // iMessage 入站监控 — 继承自 src/imessage/monitor/monitor-provider.ts (750L)

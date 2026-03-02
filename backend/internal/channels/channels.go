@@ -2,6 +2,7 @@ package channels
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -51,6 +52,13 @@ type Plugin interface {
 	Stop(accountID string) error
 }
 
+// ConfigUpdater 可选接口：插件实现后可支持热重载新凭证，无需全量网关重启。
+// 通过类型断言 plugin.(ConfigUpdater) 检查是否支持。
+// cfg 实际类型由各插件自行断言（通常为 *types.OpenAcosmiConfig）。
+type ConfigUpdater interface {
+	UpdateConfig(cfg interface{})
+}
+
 // ---------- 频道管理器 ----------
 
 // Manager 管理频道生命周期。
@@ -82,6 +90,39 @@ func runtimeKey(channelID ChannelID, accountID string) string {
 		accountID = DefaultAccountID
 	}
 	return fmt.Sprintf("%s:%s", channelID, accountID)
+}
+
+// HasPlugin 检查指定频道插件是否已注册。
+// 用于区分首次配置（插件未注册，需全量重启）与热重载（插件已注册，可 stop+start）。
+func (m *Manager) HasPlugin(channelID ChannelID) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.plugins[channelID]
+	return ok
+}
+
+// ReloadChannel 以新配置热重载指定频道：先更新插件配置，再 Stop+Start。
+// 若插件实现了 ConfigUpdater 接口，则先调用 UpdateConfig(newCfg) 注入新凭证；
+// 否则仅执行 Stop+Start（凭证不变，适用于连接断线重连场景）。
+// Stop 失败时记录日志并继续 Start，避免因已停止状态导致重载中断。
+func (m *Manager) ReloadChannel(channelID ChannelID, newCfg interface{}, accountID string) error {
+	if accountID == "" {
+		accountID = DefaultAccountID
+	}
+	m.mu.Lock()
+	plugin, ok := m.plugins[channelID]
+	m.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("ReloadChannel: channel %s not registered", channelID)
+	}
+	if updater, ok := plugin.(ConfigUpdater); ok {
+		updater.UpdateConfig(newCfg)
+	}
+	if err := m.StopChannel(channelID, accountID); err != nil {
+		slog.Warn("ReloadChannel: stop failed, proceeding with start",
+			"channel", channelID, "account", accountID, "error", err)
+	}
+	return m.StartChannel(channelID, accountID)
 }
 
 // StartChannel 启动频道。

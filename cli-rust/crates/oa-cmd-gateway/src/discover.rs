@@ -188,7 +188,7 @@ mod tests {
     fn discovered_gateway_serializes() {
         let gw = DiscoveredGateway {
             name: "test".to_string(),
-            url: "ws://127.0.0.1:18789".to_string(),
+            url: "ws://127.0.0.1:19001".to_string(),
             source: "local".to_string(),
             reachable: true,
             latency_ms: Some(5),
@@ -205,7 +205,7 @@ mod tests {
     fn discovered_gateway_unreachable_serializes() {
         let gw = DiscoveredGateway {
             name: "test".to_string(),
-            url: "ws://10.0.0.1:18789".to_string(),
+            url: "ws://10.0.0.1:19001".to_string(),
             source: "mdns".to_string(),
             reachable: false,
             latency_ms: None,

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/channels/whatsapp"
+	"github.com/openacosmi/claw-acismi/internal/channels/whatsapp"
 )
 
 // 消息目标规范化 — 继承自 src/channels/plugins/normalize/ (6 个频道文件)

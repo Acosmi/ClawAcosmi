@@ -475,7 +475,7 @@ pub async fn connect_gateway(
     opts: GatewayClientOptions,
     event_tx: mpsc::Sender<EventFrame>,
 ) -> Result<(GatewayClient, HelloOk), GatewayClientError> {
-    let url = opts.url.as_deref().unwrap_or("ws://127.0.0.1:18789");
+    let url = opts.url.as_deref().unwrap_or("ws://127.0.0.1:19001");
 
     if opts.tls_fingerprint.is_some() && !url.starts_with("wss://") {
         return Err(GatewayClientError::WebSocket(

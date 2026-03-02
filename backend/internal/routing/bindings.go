@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // normalizeBindingChannelID 归一化 channel ID（小写+trim）。

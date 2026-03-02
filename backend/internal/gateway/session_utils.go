@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/agents/models"
-	scope "github.com/anthropic/open-acosmi/internal/agents/scope"
-	"github.com/anthropic/open-acosmi/internal/session"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/agents/models"
+	scope "github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 常量 ----------
@@ -86,6 +86,16 @@ func ParseGroupKey(key string) *GroupKeyParts {
 		}
 	}
 	return nil
+}
+
+// IsCoderSessionKey 判断是否为子智能体对话频道 key（coder:<contractID>）。
+func IsCoderSessionKey(key string) bool {
+	return strings.HasPrefix(key, "coder:")
+}
+
+// IsTaskSessionKey 判断是否为任务频道 key（task:<taskID>）。
+func IsTaskSessionKey(key string) bool {
+	return strings.HasPrefix(key, "task:")
 }
 
 // IsCronRunSessionKey 判断是否为 cron 运行会话 key。

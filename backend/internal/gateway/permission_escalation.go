@@ -16,30 +16,38 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ---------- 类型定义 ----------
 
+// MountRequest L2 专用：临时挂载请求（工作区默认挂载不在此列）。
+type MountRequest struct {
+	HostPath  string `json:"hostPath"`  // 宿主机绝对路径
+	MountMode string `json:"mountMode"` // "ro" 或 "rw"
+}
+
 // PendingEscalationRequest 等待审批的提权请求。
 type PendingEscalationRequest struct {
-	ID             string    `json:"id"`
-	RequestedLevel string    `json:"requestedLevel"` // "allowlist" | "full"
-	Reason         string    `json:"reason"`
-	RunID          string    `json:"runId,omitempty"`
-	SessionID      string    `json:"sessionId,omitempty"`
-	RequestedAt    time.Time `json:"requestedAt"`
-	TTLMinutes     int       `json:"ttlMinutes"` // 建议的 TTL
+	ID             string         `json:"id"`
+	RequestedLevel string         `json:"requestedLevel"` // "sandboxed" | "full"
+	Reason         string         `json:"reason"`
+	RunID          string         `json:"runId,omitempty"`
+	SessionID      string         `json:"sessionId,omitempty"`
+	RequestedAt    time.Time      `json:"requestedAt"`
+	TTLMinutes     int            `json:"ttlMinutes"`              // 建议的 TTL
+	MountRequests  []MountRequest `json:"mountRequests,omitempty"` // L2 专用
 }
 
 // ActiveEscalationGrant 当前活跃的临时提权。
 type ActiveEscalationGrant struct {
-	ID        string    `json:"id"`
-	Level     string    `json:"level"` // 临时级别：allowlist | full
-	GrantedAt time.Time `json:"grantedAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	RunID     string    `json:"runId,omitempty"`
-	SessionID string    `json:"sessionId,omitempty"`
+	ID            string         `json:"id"`
+	Level         string         `json:"level"` // 临时级别：sandboxed | full
+	GrantedAt     time.Time      `json:"grantedAt"`
+	ExpiresAt     time.Time      `json:"expiresAt"`
+	RunID         string         `json:"runId,omitempty"`
+	SessionID     string         `json:"sessionId,omitempty"`
+	MountRequests []MountRequest `json:"mountRequests,omitempty"` // L2 挂载配置
 }
 
 // EscalationStatus 提权状态快照（供 API 返回）。
@@ -64,17 +72,26 @@ type EscalationManager struct {
 	deescalateTimer *time.Timer
 	approvalTimeout *time.Timer             // Phase 8: 审批超时定时器
 	remoteNotifier  *RemoteApprovalNotifier // P4: 远程审批通知
+	maxAllowedLevel string                  // 默认 "sandboxed"，需显式配置才可设为 "full"
 	log             *slog.Logger
 }
 
 // NewEscalationManager 创建提权管理器。
 func NewEscalationManager(broadcaster *Broadcaster, auditLogger *EscalationAuditLogger, remoteNotifier *RemoteApprovalNotifier) *EscalationManager {
 	return &EscalationManager{
-		broadcaster:    broadcaster,
-		auditLogger:    auditLogger,
-		remoteNotifier: remoteNotifier,
-		log:            slog.Default().With("subsystem", "escalation-mgr"),
+		broadcaster:     broadcaster,
+		auditLogger:     auditLogger,
+		remoteNotifier:  remoteNotifier,
+		maxAllowedLevel: string(infra.ExecSecuritySandboxed), // 默认上限 L2，L3 需显式启用
+		log:             slog.Default().With("subsystem", "escalation-mgr"),
 	}
+}
+
+// SetMaxAllowedLevel 设置权限上限（由配置注入）。
+func (m *EscalationManager) SetMaxAllowedLevel(level string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxAllowedLevel = level
 }
 
 // ---------- 请求提权 ----------
@@ -94,9 +111,22 @@ func (m *EscalationManager) RequestEscalation(id, level, reason, runID, sessionI
 		return fmt.Errorf("already have an active escalation grant (level=%s, expires=%s)", m.active.Level, m.active.ExpiresAt.Format(time.RFC3339))
 	}
 
-	// 验证 level
-	if level != string(infra.ExecSecurityAllowlist) && level != string(infra.ExecSecurityFull) {
-		return fmt.Errorf("invalid escalation level %q, must be \"allowlist\" or \"full\"", level)
+	// 验证 level（支持 L1/L2/L3 提权）
+	if level != string(infra.ExecSecurityAllowlist) &&
+		level != string(infra.ExecSecuritySandboxed) &&
+		level != string(infra.ExecSecurityFull) {
+		return fmt.Errorf("invalid escalation level %q, must be \"allowlist\", \"sandboxed\", or \"full\"", level)
+	}
+
+	// Design Fix 3: base level 已满足请求级别时不创建 pending
+	baseLevel := readBaseSecurityLevel()
+	if infra.LevelOrder(infra.ExecSecurity(baseLevel)) >= infra.LevelOrder(infra.ExecSecurity(level)) {
+		return fmt.Errorf("base level %q already satisfies requested level %q", baseLevel, level)
+	}
+
+	// 权限边界检查：requestedLevel 不得超过 maxAllowedLevel
+	if m.maxAllowedLevel != "" && infra.LevelOrder(infra.ExecSecurity(level)) > infra.LevelOrder(infra.ExecSecurity(m.maxAllowedLevel)) {
+		return fmt.Errorf("requested level %q exceeds max allowed level %q", level, m.maxAllowedLevel)
 	}
 
 	if ttlMinutes <= 0 {
@@ -163,8 +193,8 @@ func (m *EscalationManager) RequestEscalation(id, level, reason, runID, sessionI
 		})
 	}
 
-	// Phase 8: 启动审批超时定时器
-	m.startApprovalTimeoutLocked(time.Duration(ttlMinutes) * time.Minute)
+	// Phase 8: 启动审批超时定时器（默认 10 分钟，与 TTL 解耦）
+	m.startApprovalTimeoutLocked(10 * time.Minute)
 
 	// Phase 4.1: 持久化到磁盘（best-effort，错误仅 warn）
 	m.persistPendingLocked()
@@ -239,14 +269,34 @@ func (m *EscalationManager) ResolveEscalation(approve bool, ttlMinutes int) erro
 		ttlMinutes = 30
 	}
 
+	// 分级 TTL 硬上限（参考 Vault lease 模型 + NVIDIA 安全指南）
+	// L3(full): 60 分钟（裸机权限，风险最高）
+	// L2(sandboxed): 4 小时（有沙箱保护但有网络）
+	// L1(allowlist): 8 小时（受限操作，风险较低）
+	switch req.RequestedLevel {
+	case string(infra.ExecSecurityFull):
+		if ttlMinutes > 60 {
+			ttlMinutes = 60
+		}
+	case string(infra.ExecSecuritySandboxed):
+		if ttlMinutes > 240 {
+			ttlMinutes = 240
+		}
+	case string(infra.ExecSecurityAllowlist):
+		if ttlMinutes > 480 {
+			ttlMinutes = 480
+		}
+	}
+
 	now := time.Now()
 	m.active = &ActiveEscalationGrant{
-		ID:        req.ID,
-		Level:     req.RequestedLevel,
-		GrantedAt: now,
-		ExpiresAt: now.Add(time.Duration(ttlMinutes) * time.Minute),
-		RunID:     req.RunID,
-		SessionID: req.SessionID,
+		ID:            req.ID,
+		Level:         req.RequestedLevel,
+		GrantedAt:     now,
+		ExpiresAt:     now.Add(time.Duration(ttlMinutes) * time.Minute),
+		RunID:         req.RunID,
+		SessionID:     req.SessionID,
+		MountRequests: req.MountRequests,
 	}
 
 	m.log.Info("escalation approved",
@@ -305,7 +355,7 @@ func (m *EscalationManager) startDeescalateTimerLocked(ttl time.Duration) {
 	})
 }
 
-// autoDeescalate TTL 到期或任务完成时自动降权。
+// autoDeescalate TTL 到期时自动降权（从 timer callback 调用，需加锁）。
 func (m *EscalationManager) autoDeescalate(reason string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -314,6 +364,12 @@ func (m *EscalationManager) autoDeescalate(reason string) {
 		return
 	}
 
+	m.deescalateLocked(reason)
+}
+
+// deescalateLocked 执行降权操作（必须在持有 m.mu 时调用）。
+// Fix 4: 提取为共享方法，供 TaskComplete、autoDeescalate、ManualRevoke 共用。
+func (m *EscalationManager) deescalateLocked(reason string) {
 	grant := m.active
 	m.active = nil
 
@@ -322,7 +378,7 @@ func (m *EscalationManager) autoDeescalate(reason string) {
 		m.deescalateTimer = nil
 	}
 
-	m.log.Info("escalation auto-deescalated",
+	m.log.Info("escalation deescalated",
 		"id", grant.ID,
 		"level", grant.Level,
 		"reason", reason,
@@ -356,30 +412,43 @@ func (m *EscalationManager) autoDeescalate(reason string) {
 }
 
 // TaskComplete 任务完成时立即降权（如果 runID 匹配）。
+// Fix 4: 避免 TOCTOU 竞态——在同一把锁内完成检查+降权。
 func (m *EscalationManager) TaskComplete(runID string) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.active == nil || (runID != "" && m.active.RunID != runID) {
-		m.mu.Unlock()
 		return
 	}
-	m.mu.Unlock()
 
-	m.autoDeescalate("task_complete")
+	m.deescalateLocked("task_complete")
 }
 
 // ManualRevoke 用户手动撤销活跃提权。
 func (m *EscalationManager) ManualRevoke() {
-	m.autoDeescalate("manual_revoke")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.active == nil {
+		return
+	}
+	m.deescalateLocked("manual_revoke")
 }
 
 // ---------- 状态查询 ----------
 
 // GetStatus 返回当前提权状态快照。
+// Fix 5+18: 过期 grant 惰性清理，通过 deescalateLocked 确保广播+审计。
 func (m *EscalationManager) GetStatus() EscalationStatus {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	baseLevel := readBaseSecurityLevel()
+
+	// 惰性清理过期 grant（通过 deescalateLocked 确保广播事件 + 审计日志）
+	if m.active != nil && !time.Now().Before(m.active.ExpiresAt) {
+		m.deescalateLocked("lazy_ttl_expired")
+	}
 
 	status := EscalationStatus{
 		BaseLevel: baseLevel,
@@ -402,15 +471,48 @@ func (m *EscalationManager) GetStatus() EscalationStatus {
 }
 
 // GetEffectiveLevel 返回当前有效安全级别（活跃临时提权 > 持久化配置）。
+// Fix 5+18: 过期 grant 惰性清理，通过 deescalateLocked 确保广播+审计。
 func (m *EscalationManager) GetEffectiveLevel() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.active != nil && time.Now().Before(m.active.ExpiresAt) {
-		return m.active.Level
+	if m.active != nil {
+		if time.Now().Before(m.active.ExpiresAt) {
+			return m.active.Level
+		}
+		// 过期，惰性清理（通过 deescalateLocked 确保广播事件 + 审计日志）
+		m.deescalateLocked("lazy_ttl_expired")
 	}
 
 	return readBaseSecurityLevel()
+}
+
+// GetActiveMountRequests 返回活跃 grant 的 MountRequests（Phase 3.4）。
+// 已过期返回 nil（惰性清理）。
+func (m *EscalationManager) GetActiveMountRequests() []MountRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.active == nil {
+		return nil
+	}
+	// 惰性清理过期 grant
+	if !time.Now().Before(m.active.ExpiresAt) {
+		m.deescalateLocked("lazy_ttl_expired")
+		return nil
+	}
+	return m.active.MountRequests
+}
+
+// GetPendingID 返回当前 pending 请求的 ID（用于 callback 验证）。
+// Fix 9: 允许远程审批回调验证 escalation ID 是否匹配。
+func (m *EscalationManager) GetPendingID() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pending != nil {
+		return m.pending.ID
+	}
+	return ""
 }
 
 // Reset 清除所有内存状态（pending + active），停止定时器。用于运行时重置。
@@ -458,7 +560,8 @@ func (m *EscalationManager) startApprovalTimeoutLocked(timeout time.Duration) {
 			"timeout", timeout.String(),
 		)
 		if err := m.ResolveEscalation(false, 0); err != nil {
-			m.log.Warn("审批超时自动拒绝失败", "error", err)
+			// Fix 8: pending 可能已被用户手动处理，降级为 Debug 避免混淆
+			m.log.Debug("审批超时自动拒绝已跳过（可能已被手动处理）", "error", err)
 		}
 	})
 }
@@ -510,14 +613,17 @@ func (m *EscalationManager) RestoreFromDisk() {
 	}
 
 	requestedAt := time.UnixMilli(persisted.RequestedAtMs)
-	expiresAt := requestedAt.Add(time.Duration(persisted.TTLMinutes) * time.Minute)
+	// 使用审批超时（10 分钟）判断过期，而非 grant TTL。
+	// TTLMinutes 是建议的授权时长（如 30 分钟），不是审批等待超时。
+	const maxApprovalWait = 10 * time.Minute
+	approvalDeadline := requestedAt.Add(maxApprovalWait)
 
-	// TTL 过期 → 丢弃并清理磁盘
-	if time.Now().After(expiresAt) {
-		m.log.Info("discarding expired persisted escalation",
+	// 审批等待超时 → 丢弃并清理磁盘
+	if time.Now().After(approvalDeadline) {
+		m.log.Info("discarding expired persisted escalation (approval timeout)",
 			"id", persisted.ID,
 			"requestedAt", requestedAt.Format(time.RFC3339),
-			"expiredAt", expiresAt.Format(time.RFC3339),
+			"approvalDeadline", approvalDeadline.Format(time.RFC3339),
 		)
 		m.clearPersistedPending()
 		return
@@ -541,8 +647,11 @@ func (m *EscalationManager) RestoreFromDisk() {
 		TTLMinutes:     persisted.TTLMinutes,
 	}
 
-	// 用剩余时间重启审批超时定时器
-	remaining := time.Until(expiresAt)
+	// 用剩余审批时间重启定时器
+	remaining := time.Until(approvalDeadline)
+	if remaining <= 0 {
+		remaining = time.Second // 极端边界: 刚好到审批截止时刻
+	}
 	m.startApprovalTimeoutLocked(remaining)
 
 	m.log.Info("restored pending escalation from disk",

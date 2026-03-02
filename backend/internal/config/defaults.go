@@ -14,7 +14,7 @@ import (
 
 	"log"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ModelRef 解析后的模型引用
@@ -83,7 +83,7 @@ const (
 	DefaultTimeoutSeconds         = 300
 	DefaultMediaMaxMb             = 25
 	DefaultTypingIntervalSeconds  = 3
-	DefaultGatewayPortValue       = 18789
+	DefaultGatewayPortValue       = 19001
 	DefaultCompactionReserveFloor = 4000
 	DefaultModelMaxTokens         = 8192
 )

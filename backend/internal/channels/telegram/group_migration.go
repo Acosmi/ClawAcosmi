@@ -3,7 +3,7 @@ package telegram
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Telegram 群组迁移 — 继承自 src/telegram/group-migration.ts (95L)

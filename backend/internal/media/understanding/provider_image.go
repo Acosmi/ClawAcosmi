@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/anthropic/open-acosmi/internal/security"
+	"github.com/openacosmi/claw-acismi/internal/security"
 )
 
 // TS 对照: media-understanding/providers/image.ts (~100L)

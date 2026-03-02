@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // Copilot Token 端点与默认值。

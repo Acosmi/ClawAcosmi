@@ -3,7 +3,7 @@ package reply
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/streaming-directives.ts (129L)
@@ -189,16 +189,15 @@ func extractStreamingMedia(raw string) (text, mediaURL string, mediaURLs []strin
 // 轻量实现：识别 [[reply:ID]]、[[reply:current]] 标签并从文本中剥离。
 func extractStreamingReplyTags(text string) (replyToID, replyToExplicitID string, replyToCurrent, hasReplyTag bool, cleaned string) {
 	cleaned = text
-	const openTag = "[["
-	const closeTag = "]]"
-
 	result := text
+	searchFrom := 0
 	for {
-		openIdx := strings.Index(result, openTag)
-		if openIdx < 0 {
+		idx := strings.Index(result[searchFrom:], "[[")
+		if idx < 0 {
 			break
 		}
-		closeIdx := strings.Index(result[openIdx+2:], closeTag)
+		openIdx := searchFrom + idx
+		closeIdx := strings.Index(result[openIdx+2:], "]]")
 		if closeIdx < 0 {
 			break
 		}
@@ -214,11 +213,22 @@ func extractStreamingReplyTags(text string) (replyToID, replyToExplicitID string
 				replyToID = val
 				replyToExplicitID = val
 			}
-			// 剥离标签
+			result = result[:openIdx] + result[closeIdx+2:]
+		} else if lowerInner == "reply_to_current" {
+			hasReplyTag = true
+			replyToCurrent = true
+			result = result[:openIdx] + result[closeIdx+2:]
+		} else if strings.HasPrefix(lowerInner, "reply_to:") {
+			hasReplyTag = true
+			val := strings.TrimSpace(inner[9:])
+			if val != "" {
+				replyToID = val
+				replyToExplicitID = val
+			}
 			result = result[:openIdx] + result[closeIdx+2:]
 		} else {
-			// 非 reply 标签，跳过
-			break
+			// 非 reply 标签，跳过继续扫描
+			searchFrom = closeIdx + 2
 		}
 	}
 	cleaned = result

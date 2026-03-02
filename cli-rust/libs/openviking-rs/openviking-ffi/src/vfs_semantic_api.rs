@@ -47,6 +47,7 @@ pub unsafe extern "C" fn ovk_vfs_semantic_init(handle: *mut SegmentVectorStore, 
         dimension: dim,
         distance: Distance::Cosine,
         sparse_vectors: false,
+        ..Default::default()
     };
 
     match store.create_collection(VFS_SEMANTIC_COLLECTION, &cfg) {
@@ -182,7 +183,7 @@ pub unsafe extern "C" fn ovk_vfs_semantic_search(
         };
 
         let hits = store
-            .search(VFS_SEMANTIC_COLLECTION, vec_slice, None, limit)
+            .search(VFS_SEMANTIC_COLLECTION, vec_slice, None, limit, None)
             .map_err(|e| {
                 fail(
                     FfiErrorCode::VectorStoreError,

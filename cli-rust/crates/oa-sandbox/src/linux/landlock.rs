@@ -111,7 +111,7 @@ pub fn apply_landlock_rules(config: &SandboxConfig) -> Result<(), SandboxError> 
     // ── Workspace access ──────────────────────────────────────────────────
     let workspace_access = match config.security_level {
         SecurityLevel::L0Deny => AccessFs::from_read(abi),
-        SecurityLevel::L1Sandbox | SecurityLevel::L2Full => AccessFs::from_all(abi),
+        SecurityLevel::L1Allowlist | SecurityLevel::L2Sandboxed => AccessFs::from_all(abi),
     };
     add_path_rule(
         &mut ruleset,

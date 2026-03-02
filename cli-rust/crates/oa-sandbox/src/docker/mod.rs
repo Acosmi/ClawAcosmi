@@ -116,7 +116,7 @@ impl DockerFallbackRunner {
         // ── Workspace mount ──────────────────────────────────────────
         let workspace_mode = match config.security_level {
             SecurityLevel::L0Deny => "ro",
-            SecurityLevel::L1Sandbox | SecurityLevel::L2Full => "rw",
+            SecurityLevel::L1Allowlist | SecurityLevel::L2Sandboxed => "rw",
         };
         args.extend_from_slice(&[
             "-v".to_owned(),
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn docker_args_l1_sandbox() {
         let runner = DockerFallbackRunner::new();
-        let config = make_config("echo", &["hello"], SecurityLevel::L1Sandbox);
+        let config = make_config("echo", &["hello"], SecurityLevel::L1Allowlist);
         let args = runner.build_docker_args(&config);
 
         // L1 should NOT be read-only root
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn docker_args_memory_limit() {
         let runner = DockerFallbackRunner::new();
-        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Sandbox);
+        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Allowlist);
         config.resource_limits.memory_bytes = 256 * 1024 * 1024; // 256MB
         let args = runner.build_docker_args(&config);
 
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn docker_args_env_vars() {
         let runner = DockerFallbackRunner::new();
-        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Sandbox);
+        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Allowlist);
         config.env_vars.insert("FOO".into(), "bar".into());
         let args = runner.build_docker_args(&config);
 
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn docker_args_custom_network() {
         let runner = DockerFallbackRunner::new();
-        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Sandbox);
+        let mut config = make_config("echo", &["hello"], SecurityLevel::L1Allowlist);
         config.network_policy = Some(NetworkPolicy::None);
         let args = runner.build_docker_args(&config);
 
@@ -359,7 +359,7 @@ mod tests {
     #[test]
     fn custom_image() {
         let runner = DockerFallbackRunner::with_image("ubuntu:24.04".into());
-        let config = make_config("echo", &["hello"], SecurityLevel::L1Sandbox);
+        let config = make_config("echo", &["hello"], SecurityLevel::L1Allowlist);
         let args = runner.build_docker_args(&config);
 
         assert!(args.contains(&"ubuntu:24.04".to_owned()));

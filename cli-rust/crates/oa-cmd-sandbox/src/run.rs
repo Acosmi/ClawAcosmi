@@ -23,7 +23,7 @@ use oa_sandbox::output::SandboxOutput;
 /// Options for the `sandbox run` subcommand.
 #[derive(Debug, Clone)]
 pub struct SandboxRunOptions {
-    /// Security level: deny, sandbox, or full.
+    /// Security level: deny (L0), allowlist (L1), or sandboxed (L2).
     pub security: SecurityLevel,
     /// Working directory (mounted into the sandbox).
     pub workspace: PathBuf,
@@ -46,7 +46,7 @@ pub struct SandboxRunOptions {
     /// Max processes (0 = no limit).
     pub pids: u32,
     /// Show execution plan without running.
-    /// Automatically enabled for L2 (full) security level in text mode.
+    /// Automatically enabled for L2 (sandboxed) security level in text mode.
     pub dry_run: bool,
     /// Command to execute.
     pub command: String,
@@ -124,9 +124,9 @@ pub fn sandbox_run_command(opts: &SandboxRunOptions) -> Result<()> {
     let runner = oa_sandbox::select_runner(&config).context("failed to select sandbox backend")?;
 
     // Dry run: show execution plan without running.
-    // Triggered by --dry-run flag or automatically for L2 (full) security level.
+    // Triggered by --dry-run flag or automatically for L2 (sandboxed) security level.
     let is_dry_run =
-        opts.dry_run || (opts.security == SecurityLevel::L2Full && opts.format == OutputFormat::Text);
+        opts.dry_run || (opts.security == SecurityLevel::L2Sandboxed && opts.format == OutputFormat::Text);
     if is_dry_run {
         emit_dry_run_preview(&config, runner.name(), opts.format);
         return Ok(());
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn build_config_basic() {
         let opts = SandboxRunOptions {
-            security: SecurityLevel::L1Sandbox,
+            security: SecurityLevel::L1Allowlist,
             workspace: PathBuf::from("/tmp/workspace"),
             network: None,
             timeout: Some(30),
@@ -373,7 +373,7 @@ mod tests {
             args: vec!["hello".to_owned()],
         };
         let config = build_config(&opts).unwrap();
-        assert_eq!(config.security_level, SecurityLevel::L1Sandbox);
+        assert_eq!(config.security_level, SecurityLevel::L1Allowlist);
         assert_eq!(config.command, "echo");
         assert_eq!(config.env_vars.get("FOO").map(String::as_str), Some("bar"));
         assert_eq!(config.resource_limits.timeout_secs, Some(30));
@@ -383,7 +383,7 @@ mod tests {
     fn l2_text_triggers_auto_dry_run() {
         // L2 + text format should auto-enable dry run
         let opts = SandboxRunOptions {
-            security: SecurityLevel::L2Full,
+            security: SecurityLevel::L2Sandboxed,
             workspace: PathBuf::from("/tmp/workspace"),
             network: None,
             timeout: None,
@@ -399,7 +399,7 @@ mod tests {
             args: vec![],
         };
         let is_dry_run = opts.dry_run
-            || (opts.security == SecurityLevel::L2Full && opts.format == OutputFormat::Text);
+            || (opts.security == SecurityLevel::L2Sandboxed && opts.format == OutputFormat::Text);
         assert!(is_dry_run);
     }
 
@@ -407,7 +407,7 @@ mod tests {
     fn l1_text_no_auto_dry_run() {
         // L1 + text format should NOT auto-enable dry run
         let opts = SandboxRunOptions {
-            security: SecurityLevel::L1Sandbox,
+            security: SecurityLevel::L1Allowlist,
             workspace: PathBuf::from("/tmp/workspace"),
             network: None,
             timeout: None,
@@ -423,7 +423,7 @@ mod tests {
             args: vec![],
         };
         let is_dry_run = opts.dry_run
-            || (opts.security == SecurityLevel::L2Full && opts.format == OutputFormat::Text);
+            || (opts.security == SecurityLevel::L2Sandboxed && opts.format == OutputFormat::Text);
         assert!(!is_dry_run);
     }
 }

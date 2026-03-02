@@ -6,7 +6,7 @@ package models
 // Copilot 模型 ID 因 plan/org 不同可能变化。列表故意宽泛；
 // 如果某模型不可用，Copilot 会返回错误，用户可从配置中移除。
 
-import "github.com/anthropic/open-acosmi/pkg/types"
+import "github.com/openacosmi/claw-acismi/pkg/types"
 
 const (
 	copilotDefaultContextWindow = 128_000

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
-	"github.com/anthropic/open-acosmi/internal/media/understanding"
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/openacosmi/claw-acismi/internal/media/understanding"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // LinkUnderstandingResult 链接理解结果。

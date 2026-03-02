@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // ---------- Overlay 状态 ----------

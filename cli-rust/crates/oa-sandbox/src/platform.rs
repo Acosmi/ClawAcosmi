@@ -456,6 +456,120 @@ fn select_docker_runner() -> Result<Box<dyn SandboxRunner>, SandboxError> {
     }
 }
 
+// ── Self-sandbox API ───────────────────────────────────────────────────────
+
+/// Validate workspace path for self-sandboxing (subset of SandboxConfig::validate).
+fn validate_workspace(workspace: &std::path::Path) -> Result<(), SandboxError> {
+    if !workspace.is_absolute() {
+        return Err(SandboxError::PathError {
+            path: workspace.to_path_buf(),
+            reason: "workspace path must be absolute".into(),
+        });
+    }
+    if workspace
+        .components()
+        .any(|c| c == std::path::Component::ParentDir)
+    {
+        return Err(SandboxError::PathError {
+            path: workspace.to_path_buf(),
+            reason: "workspace path contains '..' traversal".into(),
+        });
+    }
+    Ok(())
+}
+
+/// Apply sandbox constraints to the **current** process (self-sandboxing).
+///
+/// This is irreversible — once applied, the sandbox cannot be removed.
+/// Child processes inherit the restrictions.
+///
+/// Used by the persistent Worker process (`worker-start`) to sandbox itself
+/// when started directly by the Go bridge (which bypasses the launcher's
+/// `pre_exec` sandbox path).
+///
+/// # Errors
+///
+/// Returns [`SandboxError`] if the platform sandbox cannot be applied.
+pub fn apply_sandbox_to_self(config: &SandboxConfig) -> Result<(), SandboxError> {
+    // NOTE: We do NOT call config.validate() here because validate() requires
+    // a non-empty command, which is irrelevant for self-sandboxing (we sandbox
+    // the current process, not a new command). Only workspace validity matters.
+    validate_workspace(&config.workspace)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        return apply_to_self_macos(config);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        return apply_to_self_linux(config);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        warn!("Windows self-sandbox not yet implemented; running unsandboxed");
+        let _ = config;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        let _ = config;
+        Err(SandboxError::PlatformNotSupported {
+            platform: std::env::consts::OS.into(),
+            reason: "self-sandbox not supported on this platform".into(),
+        })
+    }
+}
+
+/// macOS self-sandbox: generate Seatbelt profile → apply to current process.
+#[cfg(target_os = "macos")]
+fn apply_to_self_macos(config: &SandboxConfig) -> Result<(), SandboxError> {
+    use crate::macos::{ffi, seatbelt};
+
+    // 1. Generate SBPL profile from config
+    let profile = seatbelt::generate_profile(config)?;
+
+    // 2. Build parameter references
+    let params_refs: Vec<(&str, &str)> = profile
+        .params
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+
+    // 3. Create SandboxArgs and apply to current process
+    let sandbox_args = ffi::SandboxArgs::new(&profile.sbpl, &params_refs)?;
+    sandbox_args.apply().map_err(|e| SandboxError::Seatbelt {
+        message: format!("self-sandbox failed: {e}"),
+    })?;
+
+    info!(
+        security_level = ?config.security_level,
+        workspace = %config.workspace.display(),
+        "seatbelt self-sandbox applied (irreversible)"
+    );
+
+    Ok(())
+}
+
+/// Linux self-sandbox: apply Landlock rules + Seccomp filter to current process.
+#[cfg(target_os = "linux")]
+fn apply_to_self_linux(config: &SandboxConfig) -> Result<(), SandboxError> {
+    use crate::linux::landlock;
+
+    // Apply Landlock filesystem restrictions
+    landlock::apply_landlock_rules(config)?;
+
+    info!(
+        security_level = ?config.security_level,
+        workspace = %config.workspace.display(),
+        "landlock self-sandbox applied (irreversible)"
+    );
+
+    Ok(())
+}
+
 /// Auto-select: try native first, then Docker fallback.
 fn select_auto_runner() -> Result<Box<dyn SandboxRunner>, SandboxError> {
     match select_native_runner() {

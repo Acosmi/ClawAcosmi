@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/autoreply"
 	"github.com/gorilla/websocket"
+	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // ============================================================================

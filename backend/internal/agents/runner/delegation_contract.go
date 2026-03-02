@@ -10,11 +10,29 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"github.com/anthropic/open-acosmi/internal/infra"
 	"github.com/google/uuid"
+	"github.com/openacosmi/claw-acismi/internal/infra"
 )
+
+// ---------- ContractPersistence ----------
+
+// ContractPersistence 合约持久化抽象——解耦 runner 与 VFS。
+// 为 nil 时退化到当前内存模式（向后兼容）。
+type ContractPersistence interface {
+	// SaveContract 保存合约到持久存储。thought 可为 nil（非暂停状态）。
+	SaveContract(c *DelegationContract, thought *ThoughtResult) error
+	// LoadContract 按 ID 加载合约（自动遍历所有状态目录查找）。
+	LoadContract(contractID string) (*DelegationContract, *ThoughtResult, error)
+	// TransitionStatus 执行合约状态转换（含合法性校验）。
+	TransitionStatus(contractID string, from, to ContractStatus) error
+	// ListContracts 列出指定状态的所有合约。
+	ListContracts(status ContractStatus) ([]*DelegationContract, error)
+	// CleanupCompleted 清理超过 olderThan 的已完成合约，返回清理数量。
+	CleanupCompleted(olderThan time.Duration) (int, error)
+}
 
 // ---------- VFS 路径常量 ----------
 
@@ -82,19 +100,52 @@ type ContractConstraints struct {
 	AllowedCommands []string `json:"allowed_commands,omitempty"`
 }
 
+// ResourceBudget 资源预算——实现 Agent Contracts 论文的预算守恒验证。
+// child_budget ≤ parent_remaining_budget (arXiv:2601.08815)
+type ResourceBudget struct {
+	MaxBashCalls  uint32 `json:"max_bash_calls"`
+	UsedBashCalls uint32 `json:"used_bash_calls"`
+	MaxTimeMs     uint64 `json:"max_time_ms"`
+	UsedTimeMs    uint64 `json:"used_time_ms"`
+}
+
+// IsExhausted 检查预算是否已耗尽。返回 (true, reason) 表示耗尽。
+// 使用 atomic 读取，线程安全。
+func (rb *ResourceBudget) IsExhausted() (bool, string) {
+	if rb == nil {
+		return false, ""
+	}
+	used := atomic.LoadUint32(&rb.UsedBashCalls)
+	if rb.MaxBashCalls > 0 && used >= rb.MaxBashCalls {
+		return true, fmt.Sprintf("bash calls exhausted (%d/%d)", used, rb.MaxBashCalls)
+	}
+	usedTime := atomic.LoadUint64(&rb.UsedTimeMs)
+	if rb.MaxTimeMs > 0 && usedTime >= rb.MaxTimeMs {
+		return true, fmt.Sprintf("time budget exhausted (%dms/%dms)", usedTime, rb.MaxTimeMs)
+	}
+	return false, ""
+}
+
+// IncrementBashCalls 原子递增 bash 调用计数。
+func (rb *ResourceBudget) IncrementBashCalls() {
+	atomic.AddUint32(&rb.UsedBashCalls, 1)
+}
+
 // DelegationContract 委托合约——主 agent 授权子 agent 执行任务的结构化契约。
 type DelegationContract struct {
-	ContractID     string              `json:"contract_id"`
-	SchemaVersion  string              `json:"schema_version"`
-	ParentContract string              `json:"parent_contract,omitempty"`
-	TaskBrief      string              `json:"task_brief"`
-	SuccessCriteria string             `json:"success_criteria"`
-	Scope          []ScopeEntry        `json:"scope"`
-	Constraints    ContractConstraints `json:"constraints"`
-	IssuedBy       string              `json:"issued_by"`
-	IssuedAt       time.Time           `json:"issued_at"`
-	TimeoutMs      uint32              `json:"timeout_ms"`
-	Status         ContractStatus      `json:"status"`
+	ContractID      string              `json:"contract_id"`
+	SchemaVersion   string              `json:"schema_version"`
+	ParentContract  string              `json:"parent_contract,omitempty"`
+	TaskBrief       string              `json:"task_brief"`
+	SuccessCriteria string              `json:"success_criteria"`
+	Scope           []ScopeEntry        `json:"scope"`
+	Constraints     ContractConstraints `json:"constraints"`
+	IssuedBy        string              `json:"issued_by"`
+	IssuedAt        time.Time           `json:"issued_at"`
+	TimeoutMs       uint32              `json:"timeout_ms"`
+	Status          ContractStatus      `json:"status"`
+	// Phase 8: 资源预算（可选，nil = 无预算追踪）
+	Budget *ResourceBudget `json:"budget,omitempty"`
 }
 
 // NewDelegationContract 创建一份新合约（pending 状态）。
@@ -137,6 +188,36 @@ func (c *DelegationContract) Validate() error {
 	return nil
 }
 
+// ---------- 合约状态转换 ----------
+
+// validTransitions 合法状态转换表。
+var validTransitions = map[ContractStatus][]ContractStatus{
+	ContractPending:   {ContractActive},
+	ContractActive:    {ContractSuspended, ContractCompleted, ContractFailed},
+	ContractSuspended: {ContractActive, ContractCancelled},
+}
+
+// TransitionStatus 验证并执行状态转换。
+// 合法: pending→active, active→suspended/completed/failed, suspended→active/cancelled
+func (c *DelegationContract) TransitionStatus(to ContractStatus) error {
+	allowed, ok := validTransitions[c.Status]
+	if !ok {
+		return fmt.Errorf("contract %s: no transitions defined from status %q", c.ContractID, c.Status)
+	}
+	for _, a := range allowed {
+		if a == to {
+			c.Status = to
+			return nil
+		}
+	}
+	return fmt.Errorf("contract %s: illegal transition %q → %q (allowed: %v)", c.ContractID, c.Status, to, allowed)
+}
+
+// StatusToCategory 将合约状态映射为 VFS category 目录名。
+func (s ContractStatus) StatusToCategory() string {
+	return string(s)
+}
+
 // ---------- ThoughtResult ----------
 
 // ThoughtStatus 子 agent 返回状态。
@@ -147,6 +228,7 @@ const (
 	ThoughtPartial   ThoughtStatus = "partial"
 	ThoughtBlocked   ThoughtStatus = "blocked"
 	ThoughtNeedsAuth ThoughtStatus = "needs_auth"
+	ThoughtNeedsHelp ThoughtStatus = "needs_help" // Phase 4: 子智能体需要主智能体协助
 	ThoughtFailed    ThoughtStatus = "failed"
 	ThoughtTimeout   ThoughtStatus = "timeout"
 )
@@ -168,16 +250,26 @@ type AuthRequest struct {
 
 // ThoughtResult 子 agent 结构化返回——包含执行结果、状态、授权请求等。
 type ThoughtResult struct {
-	Result           string            `json:"result"`
-	ContractID       string            `json:"contract_id"`
-	Status           ThoughtStatus     `json:"status"`
-	Artifacts        *ThoughtArtifacts `json:"artifacts,omitempty"`
-	AuthRequest      *AuthRequest      `json:"auth_request,omitempty"`
-	ResumeHint       string            `json:"resume_hint,omitempty"`
-	PartialArtifacts *ThoughtArtifacts `json:"partial_artifacts,omitempty"`
-	ReasoningSummary string            `json:"reasoning_summary,omitempty"`
-	IterationCount   uint32            `json:"iteration_count,omitempty"`
-	ScopeViolations  []string          `json:"scope_violations,omitempty"`
+	Result           string              `json:"result"`
+	ContractID       string              `json:"contract_id"`
+	Status           ThoughtStatus       `json:"status"`
+	Artifacts        *ThoughtArtifacts   `json:"artifacts,omitempty"`
+	AuthRequest      *AuthRequest        `json:"auth_request,omitempty"`
+	HelpRequest      *ThoughtHelpRequest `json:"help_request,omitempty"` // Phase 4: status=needs_help 时填写
+	ResumeHint       string              `json:"resume_hint,omitempty"`
+	PartialArtifacts *ThoughtArtifacts   `json:"partial_artifacts,omitempty"`
+	ReasoningSummary string              `json:"reasoning_summary,omitempty"`
+	IterationCount   uint32              `json:"iteration_count,omitempty"`
+	ScopeViolations  []string            `json:"scope_violations,omitempty"`
+}
+
+// ThoughtHelpRequest 求助请求（status=needs_help 时填写）。
+// Phase 4: 子智能体在 ThoughtResult 中报告需要帮助。
+type ThoughtHelpRequest struct {
+	Question string   `json:"question"`          // 求助问题
+	Context  string   `json:"context,omitempty"` // 上下文背景
+	Options  []string `json:"options,omitempty"` // 建议选项
+	Urgency  string   `json:"urgency,omitempty"` // "low" | "medium" | "high"
 }
 
 // ValidateResult 校验 ThoughtResult 字段大小约束。
@@ -354,6 +446,14 @@ func (c *DelegationContract) ApplyConstraints(params *ToolExecParams) {
 		params.SecurityLevel = contractMaxLevel
 	}
 
+	// no_network → 禁用浏览器、媒体发送和媒体子系统工具（天然依赖网络访问）+ 清空挂载请求
+	if c.Constraints.NoNetwork {
+		params.BrowserController = nil
+		params.MediaSender = nil
+		params.MediaSubsystem = nil // 媒体子工具（trending_topics 等）依赖网络
+		params.MountRequests = nil  // 受限合约不应扩展文件系统
+	}
+
 	// scope_paths 提取（供 validateToolPathWithScope 使用）
 	scopePaths := make([]string, 0, len(c.Scope))
 	for _, s := range c.Scope {
@@ -371,19 +471,22 @@ type CapabilitySet struct {
 	AllowWrite       bool
 	AllowExec        bool
 	AllowNetwork     bool
-	MaxSecurityLevel string   // "deny" < "allowlist" < "full"
+	MaxSecurityLevel string   // "deny" < "allowlist" < "sandboxed" < "full"
 	ScopePaths       []string // 空 = workspace 全局
 }
 
 // securityLevelRank 返回安全级别的数值排序（越大越宽松）。
+// 四级模型: deny(0) < allowlist(1) < sandboxed(2) < full(3)
 func securityLevelRank(level string) int {
 	switch level {
 	case "deny":
 		return 0
 	case "allowlist":
 		return 1
-	case "full":
+	case "sandboxed":
 		return 2
+	case "full":
+		return 3
 	default:
 		return 0
 	}
@@ -410,9 +513,9 @@ func deriveMaxSecurityLevel(c *DelegationContract) string {
 	if !hasExec || c.Constraints.NoSpawn {
 		return "deny"
 	}
-	// sandbox_required → 最高 "allowlist"
+	// sandbox_required → 最高 "sandboxed"（沙箱内全权+挂载+网络）
 	if c.Constraints.SandboxRequired {
-		return "allowlist"
+		return "sandboxed"
 	}
 	return "full"
 }

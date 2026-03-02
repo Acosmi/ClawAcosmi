@@ -17,6 +17,7 @@ import {
 } from "./app-settings.ts";
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
 import { loadAgents } from "./controllers/agents.ts";
+import { loadChannels } from "./controllers/channels.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
@@ -37,7 +38,27 @@ import {
   isEscalationEvent,
   handleEscalationRequested,
   handleEscalationResolved,
+  loadEscalationStatus,
+  createEscalationState,
 } from "./controllers/escalation.ts";
+import {
+  addPlanConfirm,
+  parsePlanConfirmRequested,
+  parsePlanConfirmResolved,
+  removePlanConfirm,
+} from "./controllers/plan-confirmation.ts";
+import {
+  addResultReview,
+  parseResultReviewRequested,
+  parseResultReviewResolved,
+  removeResultReview,
+} from "./controllers/result-review.ts";
+import {
+  addSubagentHelp,
+  parseSubagentHelpRequested,
+  parseSubagentHelpResolved,
+  removeSubagentHelp,
+} from "./controllers/subagent-help.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { GatewayBrowserClient } from "./gateway.ts";
@@ -70,6 +91,9 @@ type GatewayHost = {
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
   coderConfirmQueue: CoderConfirmRequest[];
+  planConfirmQueue: import("./controllers/plan-confirmation.ts").PlanConfirmRequest[];
+  resultReviewQueue: import("./controllers/result-review.ts").ResultReviewRequest[];
+  subagentHelpQueue: import("./controllers/subagent-help.ts").SubagentHelpRequest[];
 };
 
 type SessionDefaultsSnapshot = {
@@ -161,7 +185,23 @@ export function connectGateway(host: GatewayHost) {
       void loadAgents(host as unknown as OpenAcosmiApp);
       void loadNodes(host as unknown as OpenAcosmiApp, { quiet: true });
       void loadDevices(host as unknown as OpenAcosmiApp, { quiet: true });
+      void loadChannels(host as unknown as OpenAcosmiApp, false);
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
+      // WS 重连时同步 escalation 状态（防止断连期间状态变更导致前端过时）
+      {
+        const app = host as unknown as OpenAcosmiApp;
+        if (app.client) {
+          void loadEscalationStatus(app.client).then((status) => {
+            if (status.hasActive && status.active) {
+              app.escalationState = { ...app.escalationState, activeGrant: status.active, popupVisible: false, request: null };
+            } else if (status.hasPending && status.pending) {
+              app.escalationState = { ...app.escalationState, request: status.pending, popupVisible: true, activeGrant: null };
+            } else {
+              app.escalationState = createEscalationState();
+            }
+          }).catch(() => { /* escalation status load failure is non-critical */ });
+        }
+      }
       // Auto-start setup wizard when ?onboarding=1 is in the URL (once only)
       if (host.onboarding && !host.wizardAutoStarted) {
         host.wizardAutoStarted = true;
@@ -246,6 +286,25 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     }
     if (state === "final") {
       void loadChatHistory(host as unknown as OpenAcosmiApp);
+    } else if (state === null && payload?.state === "final" && payload?.sessionKey) {
+      // 跨 session 回归：handleChatEvent 因 sessionKey 不匹配返回 null，
+      // 但任务已完成（state=final）。自动切回原始 session 并刷新历史，
+      // 确保用户提问和回复对用户可见。
+      const app = host as unknown as OpenAcosmiApp;
+      const completedSession = payload.sessionKey;
+      app.sessionKey = completedSession;
+      app.chatRunId = null;
+      (app as any).chatStream = null;
+      (app as any).chatStreamStartedAt = null;
+      app.applySettings?.({
+        ...app.settings,
+        sessionKey: completedSession,
+        lastActiveSessionKey: completedSession,
+      });
+      void loadChatHistory(app);
+      if (app.crossChannelNotificationActive) {
+        app.clearCrossChannelNotification?.();
+      }
     }
     return;
   }
@@ -287,17 +346,51 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       channel?: string;
       role?: string;
       text?: string;
+      mediaBase64?: string;
+      mediaMimeType?: string;
       ts?: number;
     } | undefined;
-    if (payload?.text && (!payload.sessionKey || payload.sessionKey === host.sessionKey)) {
+    if ((payload?.text || payload?.mediaBase64) && (!payload?.sessionKey || payload.sessionKey === host.sessionKey)) {
+      const content: Array<Record<string, unknown>> = [];
+      if (payload.text) {
+        content.push({ type: "text", text: payload.text });
+      }
+      if (payload.mediaBase64) {
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            data: payload.mediaBase64,
+            media_type: payload.mediaMimeType || "image/png",
+          },
+        });
+      }
       const msg = {
         role: payload.role ?? "user",
-        content: [{ type: "text", text: payload.text }],
+        content,
         timestamp: payload.ts ?? Date.now(),
         channel: payload.channel,
       };
       const app = host as unknown as OpenAcosmiApp;
       app.chatMessages = [...app.chatMessages, msg];
+
+      // 远程频道动画：user 消息到达 → 显示思考动画；assistant 回复到达 → 清除
+      const isRemoteChannel = payload.channel && payload.channel !== "web" && payload.channel !== "webchat";
+      if (isRemoteChannel) {
+        const role = payload.role ?? "user";
+        if (role === "user") {
+          app.chatRunId = app.chatRunId ?? `remote-${Date.now()}`;
+          (app as unknown as { chatStream: string | null }).chatStream =
+            (app as unknown as { chatStream: string | null }).chatStream ?? "";
+          (app as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt =
+            (app as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt ?? Date.now();
+        } else if (role === "assistant" && app.chatRunId?.startsWith("remote-")) {
+          app.chatRunId = null;
+          (app as unknown as { chatStream: string | null }).chatStream = null;
+          (app as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
+        }
+      }
+
       if (typeof app.requestUpdate === "function") {
         app.requestUpdate();
       }
@@ -319,8 +412,55 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       const app = host as unknown as OpenAcosmiApp;
       const fromStr = payload.from ? `[${payload.from}] ` : "";
       const msg = `${fromStr}${payload.text}`;
+
+      // 任务频道（task:{runId}）的工具执行日志由 channel.message.incoming 驱动，
+      // 这里仅对任务频道做实时追加；其他频道（飞书等）由 chat.message 负责，不重复追加。
+      if (payload.sessionKey === host.sessionKey && payload.sessionKey.startsWith("task:")) {
+        const content: Array<Record<string, unknown>> = [];
+        if (payload.text) {
+          content.push({ type: "text", text: payload.text });
+        }
+        app.chatMessages = [...app.chatMessages, {
+          role: "assistant",
+          content,
+          timestamp: payload.ts ?? Date.now(),
+          channel: payload.channel,
+        }];
+      }
+
+      // Trigger red dot jump only if the notification comes from a session we're not currently viewing
+      if (payload.sessionKey !== host.sessionKey) {
+        app.crossChannelNotificationActive = true;
+        app.crossChannelNotificationSessionKey = payload.sessionKey;
+        app.crossChannelNotificationText = payload.text;
+
+        // 缓存入站消息文本，供切换到该 session 时预填充（不依赖红点 3s 超时）
+        if (payload.text) {
+          if (!(host as any)._pendingChannelMsgs) {
+            (host as any)._pendingChannelMsgs = {};
+          }
+          (host as any)._pendingChannelMsgs[payload.sessionKey] = {
+            text: payload.text,
+            ts: payload.ts ?? Date.now(),
+          };
+        }
+
+        const channelKey = payload.channel || "web";
+        app.channelUnreadCounts = {
+          ...(app.channelUnreadCounts || {}),
+          [channelKey]: (app.channelUnreadCounts?.[channelKey] || 0) + 1
+        };
+
+        if ((app as any)._crossChannelTimeout) {
+          clearTimeout((app as any)._crossChannelTimeout);
+        }
+        (app as any)._crossChannelTimeout = setTimeout(() => {
+          app.crossChannelNotificationActive = false;
+        }, 3000);
+      }
+
       if (typeof app.addNotification === "function") {
-        app.addNotification(msg, "info");
+        app.addNotification(msg, "info", payload.sessionKey);
       }
       if (typeof app.requestUpdate === "function") {
         app.requestUpdate();
@@ -335,18 +475,17 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       state?: string;
       reason?: string;
     } | undefined;
+    const app = host as unknown as OpenAcosmiApp;
     if (payload?.state === "stopped") {
-      const app = host as unknown as OpenAcosmiApp;
       const reason = payload.reason ?? "unknown error";
       const msg = `[Argus] Visual agent stopped: ${reason}. Use argus.restart to recover.`;
       app.lastError = msg;
       if (typeof app.addNotification === "function") {
         app.addNotification(msg, "error");
       }
-      if (typeof app.requestUpdate === "function") {
-        app.requestUpdate();
-      }
     }
+    // 同步 subagentsList 中 argus-screen 状态
+    syncArgusSubagentStatus(app, mapArgusState(payload?.state), payload?.state === "stopped" || payload?.state === "degraded" ? payload?.reason : undefined);
     return;
   }
 
@@ -360,9 +499,8 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (typeof app.addNotification === "function") {
       app.addNotification(msg, "error");
     }
-    if (typeof app.requestUpdate === "function") {
-      app.requestUpdate();
-    }
+    // 同步 subagentsList 中 argus-screen 状态
+    syncArgusSubagentStatus(app, "stopped", reason);
     return;
   }
 
@@ -423,7 +561,98 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (resolved) {
       host.coderConfirmQueue = removeCoderConfirm(host.coderConfirmQueue ?? [], resolved.id);
     }
+    return;
   }
+
+  // ---------- 方案确认门控事件 (Phase 1: 三级指挥体系) ----------
+
+  if (evt.event === "plan.confirm.requested") {
+    const entry = parsePlanConfirmRequested(evt.payload);
+    if (entry) {
+      host.planConfirmQueue = addPlanConfirm(host.planConfirmQueue ?? [], entry);
+      // 自动过期清理
+      const delay = Math.max(0, entry.expiresAtMs - Date.now() + 500);
+      window.setTimeout(() => {
+        host.planConfirmQueue = removePlanConfirm(host.planConfirmQueue ?? [], entry.id);
+      }, delay);
+    }
+    return;
+  }
+
+  if (evt.event === "plan.confirm.resolved") {
+    const resolved = parsePlanConfirmResolved(evt.payload);
+    if (resolved) {
+      host.planConfirmQueue = removePlanConfirm(host.planConfirmQueue ?? [], resolved.id);
+    }
+    return;
+  }
+
+  // ---------- 结果签收门控事件 (Phase 3: 三级指挥体系) ----------
+
+  if (evt.event === "result.approve.requested") {
+    const entry = parseResultReviewRequested(evt.payload);
+    if (entry) {
+      host.resultReviewQueue = addResultReview(host.resultReviewQueue ?? [], entry);
+      // 自动过期清理
+      const delay = Math.max(0, entry.expiresAtMs - Date.now() + 500);
+      window.setTimeout(() => {
+        host.resultReviewQueue = removeResultReview(host.resultReviewQueue ?? [], entry.id);
+      }, delay);
+    }
+    return;
+  }
+
+  if (evt.event === "result.approve.resolved") {
+    const resolved = parseResultReviewResolved(evt.payload);
+    if (resolved) {
+      host.resultReviewQueue = removeResultReview(host.resultReviewQueue ?? [], resolved.id);
+    }
+    return;
+  }
+
+  // ---------- 子智能体求助事件 (Phase 4: 三级指挥体系) ----------
+
+  if (evt.event === "subagent.help.requested") {
+    const entry = parseSubagentHelpRequested(evt.payload);
+    if (entry) {
+      host.subagentHelpQueue = addSubagentHelp(host.subagentHelpQueue ?? [], entry);
+    }
+    return;
+  }
+
+  if (evt.event === "subagent.help.resolved") {
+    const resolved = parseSubagentHelpResolved(evt.payload);
+    if (resolved) {
+      host.subagentHelpQueue = removeSubagentHelp(host.subagentHelpQueue ?? [], resolved.id);
+    }
+  }
+}
+
+// ---------- Argus → subagentsList 同步辅助 ----------
+
+type ArgusSubagentStatus = "running" | "degraded" | "starting" | "stopped";
+
+function mapArgusState(state: string | undefined): ArgusSubagentStatus {
+  switch (state) {
+    case "ready": return "running";
+    case "degraded": return "degraded";
+    case "starting": return "starting";
+    default: return "stopped";
+  }
+}
+
+function syncArgusSubagentStatus(app: OpenAcosmiApp, status: ArgusSubagentStatus, errorReason?: string) {
+  if (!app.subagentsList?.length) return;
+  const idx = app.subagentsList.findIndex((e) => e.id === "argus-screen");
+  if (idx < 0) return;
+  const updated = [...app.subagentsList];
+  updated[idx] = {
+    ...updated[idx],
+    status,
+    enabled: status === "running" || status === "degraded" || status === "starting",
+    error: errorReason ?? undefined,
+  };
+  app.subagentsList = updated;
 }
 
 export function applySnapshot(host: GatewayHost, hello: GatewayHelloOk) {

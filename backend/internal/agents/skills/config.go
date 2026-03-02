@@ -12,7 +12,7 @@ package skills
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // SkillsInstallPreferences 技能安装偏好。

@@ -89,7 +89,7 @@ fn bench_native_cold_start(c: &mut Criterion) {
 
     let native_config = SandboxConfig {
         backend: BackendPreference::Native,
-        ..bench_config(SecurityLevel::L1Sandbox, false)
+        ..bench_config(SecurityLevel::L1Allowlist, false)
     };
 
     let runner = match oa_sandbox::select_runner(&native_config) {
@@ -112,7 +112,7 @@ fn bench_native_cold_start(c: &mut Criterion) {
     // Benchmark `true` (minimal command — measures pure sandbox overhead)
     group.bench_with_input(
         BenchmarkId::new("true", backend_name),
-        &SecurityLevel::L1Sandbox,
+        &SecurityLevel::L1Allowlist,
         |b, &sec| {
             let cfg = SandboxConfig {
                 backend: BackendPreference::Native,
@@ -128,7 +128,7 @@ fn bench_native_cold_start(c: &mut Criterion) {
     // Benchmark `echo hello` (light I/O)
     group.bench_with_input(
         BenchmarkId::new("echo", backend_name),
-        &SecurityLevel::L1Sandbox,
+        &SecurityLevel::L1Allowlist,
         |b, &sec| {
             let cfg = SandboxConfig {
                 backend: BackendPreference::Native,
@@ -172,7 +172,7 @@ fn bench_docker_cold_start(c: &mut Criterion) {
 
     let config = SandboxConfig {
         backend: BackendPreference::Docker,
-        ..bench_config(SecurityLevel::L1Sandbox, true)
+        ..bench_config(SecurityLevel::L1Allowlist, true)
     };
 
     let runner = match oa_sandbox::select_runner(&config) {
@@ -194,7 +194,7 @@ fn bench_docker_cold_start(c: &mut Criterion) {
     group.bench_function("true", |b| {
         let cfg = SandboxConfig {
             backend: BackendPreference::Docker,
-            ..bench_config(SecurityLevel::L1Sandbox, true)
+            ..bench_config(SecurityLevel::L1Allowlist, true)
         };
         b.iter(|| {
             let result = runner.run(&cfg);
@@ -206,7 +206,7 @@ fn bench_docker_cold_start(c: &mut Criterion) {
     group.bench_function("echo", |b| {
         let cfg = SandboxConfig {
             backend: BackendPreference::Docker,
-            ..echo_config(SecurityLevel::L1Sandbox, true)
+            ..echo_config(SecurityLevel::L1Allowlist, true)
         };
         b.iter(|| {
             let result = runner.run(&cfg);

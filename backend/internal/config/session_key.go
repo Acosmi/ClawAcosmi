@@ -9,7 +9,7 @@ package config
 import (
 	"strings"
 
-	"github.com/anthropic/open-acosmi/internal/routing"
+	"github.com/openacosmi/claw-acismi/internal/routing"
 )
 
 // DeriveSessionKey 根据 scope 和消息上下文推断 session key。

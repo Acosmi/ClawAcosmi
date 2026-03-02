@@ -16,9 +16,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anthropic/open-acosmi/internal/agents/sandbox"
-	"github.com/anthropic/open-acosmi/internal/config"
-	"github.com/anthropic/open-acosmi/internal/sessions"
+	"github.com/openacosmi/claw-acismi/internal/agents/sandbox"
+	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/openacosmi/claw-acismi/internal/sessions"
 )
 
 // ---------- sandbox 顶层命令 ----------
@@ -362,7 +362,7 @@ a session is/isn't sandboxed.`,
 					"enabled": globalSandboxCfg.Browser.Enabled,
 					"image":   orDefault(globalSandboxCfg.Browser.Image, sandbox.DefaultBrowserImage),
 				},
-				"docsUrl": "https://docs.openacosmi.ai/sandbox",
+				"docsUrl": "docs/skills/tools/sandbox/SKILL.md",
 			}
 
 			// S2-4: 如果指定了 --session，从 session store 查询上下文
@@ -417,7 +417,7 @@ a session is/isn't sandboxed.`,
 			cmd.Printf("  image:   %s\n", orDefault(globalSandboxCfg.Browser.Image, sandbox.DefaultBrowserImage))
 			cmd.Println()
 
-			cmd.Println("Docs: https://docs.openacosmi.ai/sandbox")
+			cmd.Println("Docs: docs/skills/tools/sandbox/SKILL.md")
 
 			// S2-4: session context
 			if sessionCtx != nil {

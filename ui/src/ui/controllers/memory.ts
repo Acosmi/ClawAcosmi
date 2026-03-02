@@ -16,8 +16,8 @@ export type MemoryItem = {
   updatedAt: number;
   lastAccessedAt?: number;
   archivedAt?: number;
-  eventTime?: number;
   vfsPath?: string;
+  vfsContent?: string;
 };
 
 export type MemoryDetail = MemoryItem & {

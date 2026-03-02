@@ -1,4 +1,4 @@
-module github.com/anthropic/open-acosmi
+module github.com/openacosmi/claw-acismi
 
 go 1.25.7
 

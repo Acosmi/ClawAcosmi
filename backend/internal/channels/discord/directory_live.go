@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // Discord 目录实时查找 — 继承自 src/discord/directory-live.ts (107L)

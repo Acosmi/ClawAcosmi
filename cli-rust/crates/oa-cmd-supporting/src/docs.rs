@@ -16,7 +16,7 @@ use oa_cli_shared::command_format::format_cli_command;
 /// The MCP tool identifier for searching docs.
 ///
 /// Source: `src/commands/docs.ts` - `SEARCH_TOOL`
-const SEARCH_TOOL: &str = "https://docs.openacosmi.ai/mcp.SearchOpenAcosmi";
+const SEARCH_TOOL: &str = "https://github.com/Acosmi/Claw-Acismi/tree/main/docs/mcp.SearchOpenAcosmi";
 
 /// Default timeout for doc search in milliseconds.
 ///
@@ -223,7 +223,7 @@ pub async fn docs_search_command(query_parts: &[String]) -> Result<()> {
         .to_owned();
 
     if query.is_empty() {
-        info!("Docs: https://docs.openacosmi.ai/");
+        info!("Docs: https://github.com/Acosmi/Claw-Acismi/tree/main/docs");
         info!(
             "Search: {}",
             format_cli_command("openacosmi docs \"your query\"")
@@ -329,11 +329,11 @@ mod tests {
 
     #[test]
     fn parse_single_result() {
-        let raw = "Title: Getting Started\nLink: https://docs.openacosmi.ai/start\nContent: Quick start guide\n";
+        let raw = "Title: Getting Started\nLink: https://github.com/Acosmi/Claw-Acismi/tree/main/docs/start\nContent: Quick start guide\n";
         let results = parse_search_output(raw);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Getting Started");
-        assert_eq!(results[0].link, "https://docs.openacosmi.ai/start");
+        assert_eq!(results[0].link, "https://github.com/Acosmi/Claw-Acismi/tree/main/docs/start");
         assert_eq!(results[0].snippet, Some("Quick start guide".to_owned()));
     }
 

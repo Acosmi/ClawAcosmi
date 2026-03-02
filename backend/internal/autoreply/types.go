@@ -25,6 +25,8 @@ type ReplyPayload struct {
 	Text           string         `json:"text,omitempty"`
 	MediaURL       string         `json:"mediaUrl,omitempty"`
 	MediaURLs      []string       `json:"mediaUrls,omitempty"`
+	MediaBase64    string         `json:"mediaBase64,omitempty"`
+	MediaMimeType  string         `json:"mediaMimeType,omitempty"`
 	ReplyToID      string         `json:"replyToId,omitempty"`
 	ReplyToTag     bool           `json:"replyToTag,omitempty"`
 	ReplyToCurrent bool           `json:"replyToCurrent,omitempty"`
@@ -36,17 +38,20 @@ type ReplyPayload struct {
 // GetReplyOptions 获取回复选项。
 // TS 对照: types.ts L16-44
 type GetReplyOptions struct {
-	RunID                 string
-	Ctx                   context.Context
-	OnAgentRunStart       func(runID string)
-	OnReplyStart          func()
-	OnTypingCleanup       func()
-	IsHeartbeat           bool
-	OnPartialReply        func(payload ReplyPayload)
-	OnReasoningStream     func(payload ReplyPayload)
-	OnBlockReply          func(payload ReplyPayload, ctx *BlockReplyContext)
-	OnToolResult          func(payload ReplyPayload)
-	OnModelSelected       func(ctx ModelSelectedContext)
+	RunID             string
+	Ctx               context.Context
+	OnAgentRunStart   func(runID string)
+	OnReplyStart      func()
+	OnTypingCleanup   func()
+	IsHeartbeat       bool
+	OnPartialReply    func(payload ReplyPayload)
+	OnReasoningStream func(payload ReplyPayload)
+	OnBlockReply      func(payload ReplyPayload, ctx *BlockReplyContext)
+	OnToolResult      func(payload ReplyPayload)
+	OnModelSelected   func(ctx ModelSelectedContext)
+	// OnToolEvent 结构化工具事件回调（可选）。
+	// 用于频道广播工具名、参数、结果。参数类型: runner.ToolEvent（通过 any 传递避免循环导入）。
+	OnToolEvent           any
 	DisableBlockStreaming bool
 	BlockReplyTimeoutMs   int
 	SkillFilter           []string

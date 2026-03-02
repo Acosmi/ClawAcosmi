@@ -46,6 +46,7 @@ type OpenAcosmiSkillMetadata struct {
 	OS         []string           `json:"os,omitempty"`
 	Requires   *SkillRequirements `json:"requires,omitempty"`
 	Install    []SkillInstallSpec `json:"install,omitempty"`
+	Tools      []string           `json:"tools,omitempty"` // 绑定的工具名列表
 }
 
 // SkillInvocationPolicy 技能调用策略。
@@ -254,6 +255,11 @@ func ResolveOpenAcosmiMetadata(fm ParsedSkillFrontmatter) *OpenAcosmiSkillMetada
 				meta.Install = append(meta.Install, *spec)
 			}
 		}
+	}
+
+	// tools — 绑定的工具名列表
+	if tools := NormalizeStringList(metadataObj["tools"]); len(tools) > 0 {
+		meta.Tools = tools
 	}
 
 	return meta

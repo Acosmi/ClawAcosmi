@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/anthropic/open-acosmi/pkg/types"
+	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // RedactedSentinel 敏感字段替换的哨兵值
