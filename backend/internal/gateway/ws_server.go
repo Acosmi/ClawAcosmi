@@ -524,5 +524,11 @@ func defaultGatewayEvents() []string {
 		"gateway.tick",
 		"gateway.shutdown",
 		"argus.status.changed",
+		// 任务看板事件（Phase 1: 主动消息推送）
+		EventTaskQueued,
+		EventTaskStarted,
+		EventTaskProgress,
+		EventTaskCompleted,
+		EventTaskFailed,
 	}
 }

@@ -384,6 +384,9 @@ export type AppViewState = {
   mediaDraftsLoading: boolean;
   mediaDraftsSelectedPlatform: string;
 
+  // Task Kanban
+  taskKanbanState: import("./controllers/task-kanban.js").TaskKanbanState;
+
   // Plugins & Tools
   pluginsPanel: "plugins" | "tools";
   pluginsLoading: boolean;

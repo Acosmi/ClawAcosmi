@@ -129,15 +129,15 @@ func TestManager_StartError(t *testing.T) {
 
 // configUpdaterPlugin 用于测试 ConfigUpdater 接口的 mock 插件。
 type configUpdaterPlugin struct {
-	id        ChannelID
-	lastCfg   interface{}
-	started   int
-	stopped   int
+	id      ChannelID
+	lastCfg interface{}
+	started int
+	stopped int
 }
 
-func (p *configUpdaterPlugin) ID() ChannelID        { return p.id }
-func (p *configUpdaterPlugin) Start(string) error   { p.started++; return nil }
-func (p *configUpdaterPlugin) Stop(string) error    { p.stopped++; return nil }
+func (p *configUpdaterPlugin) ID() ChannelID                { return p.id }
+func (p *configUpdaterPlugin) Start(string) error           { p.started++; return nil }
+func (p *configUpdaterPlugin) Stop(string) error            { p.stopped++; return nil }
 func (p *configUpdaterPlugin) UpdateConfig(cfg interface{}) { p.lastCfg = cfg }
 
 func TestManager_ReloadChannel_WithConfigUpdater(t *testing.T) {

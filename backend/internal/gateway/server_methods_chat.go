@@ -190,6 +190,20 @@ func handleChatSend(ctx *MethodHandlerContext) {
 	agentId, _ := ctx.Params["agentId"].(string)
 	idempotencyKey, _ := ctx.Params["idempotencyKey"].(string)
 
+	// 解析 async 参数（Phase 1: 仅解析，Phase 2 实现异步路由）
+	asyncMode, _ := ctx.Params["async"].(bool)
+
+	// 自动异步检测：消息内容暗示复杂多步操作时自动启用
+	if !asyncMode && text != "" {
+		if shouldAutoAsync(text) {
+			asyncMode = true
+			slog.Info("chat.send: auto-async activated",
+				"textLen", len([]rune(text)),
+				"textPreview", truncateStr(text, 60),
+			)
+		}
+	}
+
 	// 解析 attachments
 	var attachments []map[string]interface{}
 	if v, ok := ctx.Params["attachments"]; ok {
@@ -231,6 +245,16 @@ func handleChatSend(ctx *MethodHandlerContext) {
 		return
 	}
 
+	// Phase 2: async=true 并发守卫 — 在生成 runId 之前拦截
+	if asyncMode {
+		if !chatState.TryAcquireAsync() {
+			ctx.Respond(false, nil, NewErrorShape(ErrCodeTooManyRequests,
+				fmt.Sprintf("too many async tasks running (max %d)", MaxAsyncTasks)))
+			return
+		}
+		// 注意: Release 在 goroutine 的 defer 中执行
+	}
+
 	// 生成 runId — 优先使用客户端的 idempotencyKey，确保事件 runId 与 UI 的 chatRunId 匹配
 	runId := idempotencyKey
 	if runId == "" {
@@ -249,7 +273,21 @@ func handleChatSend(ctx *MethodHandlerContext) {
 		"text", truncateStr(text, 80),
 		"attachments", len(attachments),
 		"runId", runId,
+		"async", asyncMode,
 	)
+
+	// Phase 2: async=true 时广播 task.queued（在 ACK 之前广播，确保前端先收到排队事件）
+	if asyncMode {
+		if bc := ctx.Context.Broadcaster; bc != nil {
+			bc.Broadcast(EventTaskQueued, TaskQueuedEvent{
+				TaskID:     runId,
+				SessionKey: sessionKey,
+				Text:       truncateStr(text, 120),
+				Ts:         time.Now().UnixMilli(),
+				Async:      true,
+			}, &BroadcastOptions{DropIfSlow: true})
+		}
+	}
 
 	// 广播 chat 开始事件
 	if bc := ctx.Context.Broadcaster; bc != nil {
@@ -263,9 +301,14 @@ func handleChatSend(ctx *MethodHandlerContext) {
 	}
 
 	// 立即返回 ack（非阻塞）
+	ackStatus := "started"
+	if asyncMode {
+		ackStatus = "queued"
+	}
 	ctx.Respond(true, map[string]interface{}{
 		"runId":  runId,
-		"status": "started",
+		"status": ackStatus,
+		"async":  asyncMode,
 		"ts":     time.Now().UnixMilli(), // F5: ACK 时间戳
 	}, nil)
 
@@ -282,6 +325,19 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			// 清理运行条目
 			chatState.Registry.Remove(sessionKey, runId, sessionKey)
 		}()
+		// Phase 2: async=true 时释放并发槽位
+		if asyncMode {
+			defer chatState.ReleaseAsync()
+		}
+
+		// 广播 task.started 事件（结构化看板事件）
+		if broadcaster != nil {
+			broadcaster.Broadcast(EventTaskStarted, TaskStartedEvent{
+				TaskID:     runId,
+				SessionKey: sessionKey,
+				Ts:         time.Now().UnixMilli(),
+			}, &BroadcastOptions{DropIfSlow: true})
+		}
 
 		// 订阅全局事件总线 → 广播 agent 工具事件到 WebSocket
 		if broadcaster != nil {
@@ -396,6 +452,20 @@ func handleChatSend(ctx *MethodHandlerContext) {
 						toolText = fmt.Sprintf("[结果] %s (%dms)", event.Result, event.Duration)
 					}
 				}
+
+				// 广播 task.progress 结构化看板事件（并行于 channel.message.incoming）
+				broadcaster.Broadcast(EventTaskProgress, TaskProgressEvent{
+					TaskID:     runId,
+					SessionKey: sessionKey,
+					ToolName:   event.ToolName,
+					ToolID:     event.ToolID,
+					Phase:      event.Phase,
+					Text:       truncateForLog(toolText, 300),
+					IsError:    event.IsError,
+					Duration:   event.Duration,
+					Ts:         time.Now().UnixMilli(),
+				}, &BroadcastOptions{DropIfSlow: true})
+
 				if toolText != "" {
 					broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
 						"sessionKey": taskSessionKey,
@@ -454,6 +524,26 @@ func handleChatSend(ctx *MethodHandlerContext) {
 						{Type: "text", Text: fmt.Sprintf("[任务] 执行失败: %s", errBrief)},
 					},
 				})
+			}
+			// 广播 task.failed 结构化看板事件
+			if broadcaster != nil {
+				broadcaster.Broadcast(EventTaskFailed, TaskFailedEvent{
+					TaskID:     runId,
+					SessionKey: sessionKey,
+					Error:      truncateForLog(result.Error.Error(), 200),
+					Ts:         time.Now().UnixMilli(),
+				}, &BroadcastOptions{DropIfSlow: true})
+			}
+			// Phase 2: async=true 时注入错误通知到 webchat
+			if asyncMode && broadcaster != nil {
+				broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+					"sessionKey": sessionKey,
+					"channel":    "webchat",
+					"text":       fmt.Sprintf("[异步任务失败] %s: %s", truncateStr(text, 60), truncateForLog(result.Error.Error(), 100)),
+					"from":       "system",
+					"ts":         time.Now().UnixMilli(),
+					"async":      true,
+				}, nil)
 			}
 			// 广播错误
 			if broadcaster != nil {
@@ -543,6 +633,34 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			}
 		}
 
+		// 广播 task.completed 结构化看板事件
+		if broadcaster != nil {
+			summary := truncateForLog(combinedReply, 200)
+			broadcaster.Broadcast(EventTaskCompleted, TaskCompletedEvent{
+				TaskID:     runId,
+				SessionKey: sessionKey,
+				Summary:    summary,
+				Ts:         time.Now().UnixMilli(),
+			}, &BroadcastOptions{DropIfSlow: true})
+		}
+
+		// Phase 2: async=true 时注入 webchat 通知（跨 session 通知用户异步任务已完成）
+		if asyncMode && broadcaster != nil {
+			notifyText := fmt.Sprintf("[异步任务完成] %s", truncateStr(text, 60))
+			if combinedReply != "" {
+				notifyText = fmt.Sprintf("[异步任务完成] %s\n结果: %s",
+					truncateStr(text, 60), truncateForLog(combinedReply, 150))
+			}
+			broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
+				"sessionKey": sessionKey,
+				"channel":    "webchat",
+				"text":       notifyText,
+				"from":       "system",
+				"ts":         time.Now().UnixMilli(),
+				"async":      true,
+			}, nil)
+		}
+
 		// 广播 final
 		if broadcaster != nil {
 			broadcaster.Broadcast("chat", map[string]interface{}{
@@ -557,6 +675,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			"runId", runId,
 			"sessionKey", sessionKey,
 			"replyLength", len(combinedReply),
+			"async", asyncMode,
 		)
 	}()
 }

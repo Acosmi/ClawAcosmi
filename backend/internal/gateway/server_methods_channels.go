@@ -150,9 +150,9 @@ func handleChannelsSave(ctx *MethodHandlerContext) {
 		msg = "Channel configuration saved. Gateway is restarting to activate the new channel."
 	}
 	ctx.Respond(true, map[string]interface{}{
-		"ok":             true,
-		"channel":        channelID,
-		"message":        msg,
+		"ok":              true,
+		"channel":         channelID,
+		"message":         msg,
 		"requiresRestart": needsRestart,
 	}, nil)
 }

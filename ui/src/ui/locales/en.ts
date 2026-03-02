@@ -44,6 +44,7 @@ export const enMessages: Record<string, string> = {
   "nav.tab.subagents": "Sub-Agents",
   "nav.tab.media": "Media Ops",
   "nav.tab.plugins": "Plugins & Tools",
+  "nav.tab.tasks": "Task Board",
 
   // ── Tab subtitles ──
   "nav.sub.agents": "Manage agent workspaces, tools, and identities.",
@@ -64,6 +65,16 @@ export const enMessages: Record<string, string> = {
   "nav.sub.subagents": "Monitor and control vision and coding sub-agents.",
   "nav.sub.media": "Trending topics, content drafts, and publish management.",
   "nav.sub.plugins": "Manage built-in channel plugins, search plugins, and system tools.",
+  "nav.sub.tasks": "Background task execution status and async task board.",
+
+  // ── Task Board ──
+  "tasks.title": "Task Board",
+  "tasks.subtitle": "Real-time tracking of background task execution",
+  "tasks.empty": "No running or queued tasks.",
+  "tasks.prune": "Clear Completed",
+  "tasks.col.queued": "Queued",
+  "tasks.col.running": "Running",
+  "tasks.col.done": "Done",
 
   // ── Media Dashboard ──
   "media.trending.title": "Trending Topics",

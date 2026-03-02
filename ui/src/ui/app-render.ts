@@ -110,6 +110,7 @@ import { renderNotificationCenter } from "./views/notification-center.ts";
 import { renderMediaConfig, loadMediaConfig } from "./views/media-config.ts";
 import { renderMediaDashboard } from "./views/media-dashboard.ts";
 import { loadMediaDashboard } from "./controllers/media-dashboard.ts";
+import { renderTaskKanban } from "./views/task-kanban.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
@@ -1115,6 +1116,19 @@ export function renderApp(state: AppViewState) {
 
         ${state.tab === "media"
       ? renderMediaDashboard(state)
+      : nothing
+    }
+
+        ${state.tab === "tasks"
+      ? renderTaskKanban({
+        kanbanState: state.taskKanbanState,
+        onPrune: () => {
+          import("./controllers/task-kanban.ts").then((m) => {
+            state.taskKanbanState = m.pruneCompletedTasks(state.taskKanbanState);
+            state.requestUpdate();
+          });
+        },
+      })
       : nothing
     }
 

@@ -45,6 +45,7 @@ export const zhMessages: Record<string, string> = {
   "nav.tab.maintenance": "系统维护",
   "nav.tab.media": "媒体运营",
   "nav.tab.plugins": "插件/工具中心",
+  "nav.tab.tasks": "任务看板",
 
   // ── Tab 副标题 ──
   "nav.sub.agents": "管理代理工作区、工具和身份。",
@@ -66,6 +67,17 @@ export const zhMessages: Record<string, string> = {
   "nav.sub.maintenance": "配置备份恢复与运行时状态重置。",
   "nav.sub.media": "热点趋势、内容草稿和发布管理。",
   "nav.sub.plugins": "管理内置渠道插件、联网搜索插件和系统工具。",
+  "nav.sub.tasks": "后台任务执行状态和异步任务看板。",
+
+  // ── 任务看板 ──
+  "tasks.title": "任务看板",
+  "tasks.subtitle": "实时追踪后台任务执行状态",
+  "tasks.empty": "暂无运行中或已排队的任务。",
+  "tasks.prune": "清理已完成",
+  "tasks.col.queued": "排队中",
+  "tasks.col.running": "执行中",
+  "tasks.col.done": "已完成",
+
   // ── 媒体运营仪表盘 ──
   "media.trending.title": "热点趋势",
   "media.trending.fetch": "获取热点",

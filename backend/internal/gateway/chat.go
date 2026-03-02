@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -337,6 +338,10 @@ func ResolveChatRunExpiresAtMs(nowMs, timeoutMs int64) int64 {
 
 // ---------- Chat 运行状态 ----------
 
+// MaxAsyncTasks 最大并发异步任务数（async=true 的 chat.send 并发上限）。
+// 防止过多后台任务同时运行导致资源耗尽。
+const MaxAsyncTasks = 5
+
 // ChatRunState 聊天运行全局状态。
 type ChatRunState struct {
 	Registry         *ChatRunRegistry
@@ -344,6 +349,9 @@ type ChatRunState struct {
 	DeltaSentAt      sync.Map // runId → int64 (时间戳 ms)
 	AbortedRuns      sync.Map // runId → int64 (时间戳 ms)
 	AbortControllers sync.Map // runId → *ChatAbortControllerEntry
+
+	// 异步任务并发守卫（Phase 2: 主动消息推送）
+	asyncRunning atomic.Int32
 }
 
 // NewChatRunState 创建聊天运行状态。
@@ -353,6 +361,41 @@ func NewChatRunState() *ChatRunState {
 	}
 }
 
+// TryAcquireAsync 尝试获取异步任务槽位。
+// 返回 true 表示成功获取（计数器已递增），false 表示已达上限。
+// 调用方必须在任务完成后调用 ReleaseAsync。
+func (s *ChatRunState) TryAcquireAsync() bool {
+	for {
+		current := s.asyncRunning.Load()
+		if current >= int32(MaxAsyncTasks) {
+			return false
+		}
+		if s.asyncRunning.CompareAndSwap(current, current+1) {
+			return true
+		}
+		// CAS 失败 → 重试（竞争窗口极小）
+	}
+}
+
+// ReleaseAsync 释放异步任务槽位。
+// 使用 CAS 循环防止下溢（计数器不会低于 0）。
+func (s *ChatRunState) ReleaseAsync() {
+	for {
+		current := s.asyncRunning.Load()
+		if current <= 0 {
+			return // 下溢保护：不减到负值
+		}
+		if s.asyncRunning.CompareAndSwap(current, current-1) {
+			return
+		}
+	}
+}
+
+// AsyncCount 返回当前运行中的异步任务数。
+func (s *ChatRunState) AsyncCount() int {
+	return int(s.asyncRunning.Load())
+}
+
 // Clear 清空所有状态。
 func (s *ChatRunState) Clear() {
 	s.Registry.Clear()
@@ -360,6 +403,7 @@ func (s *ChatRunState) Clear() {
 	s.DeltaSentAt = sync.Map{}
 	s.AbortedRuns = sync.Map{}
 	s.AbortControllers = sync.Map{}
+	s.asyncRunning.Store(0)
 }
 
 // ---------- 工具事件接收者注册表 ----------

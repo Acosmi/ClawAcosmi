@@ -346,7 +346,13 @@ This is a creation/modification task.
 - Complex/multi-file coding tasks: delegate to spawn_coder_agent (Open Coder).
 - Media operations (content creation, publishing, trending analysis): delegate to spawn_media_agent.
 - After creating visual artifacts (HTML/web), use browser screenshot for verification.
-- Combine related write operations into fewer steps.`
+- Combine related write operations into fewer steps.
+
+### Background Execution
+此任务可能在后台异步执行。当任务涉及多步操作时：
+- 第一句话告知用户："这个任务需要多步执行，我会在后台处理。你可以在「任务看板」中查看实时进度，完成后我会主动向你汇报结果。"
+- 直接开始执行，不等待用户确认。
+- 完成后简要汇报结果。`
 	case intentTaskDelete:
 		return `## Intent Guidance (Delete Task Mode)
 This is a destructive operation requiring caution.
@@ -354,7 +360,13 @@ This is a destructive operation requiring caution.
   The target path should already be known from prior context.
 - Combine deletion steps into one command (e.g., 'rm file && rmdir dir').
 - Deletion commands will trigger security approval — this is expected behavior.
-- After deletion, a brief confirmation is sufficient (no need for ls verification).`
+- After deletion, a brief confirmation is sufficient (no need for ls verification).
+
+### Background Execution
+此任务可能在后台异步执行。当任务涉及多步操作时：
+- 第一句话告知用户："这个任务需要多步执行，我会在后台处理。你可以在「任务看板」中查看实时进度，完成后我会主动向你汇报结果。"
+- 直接开始执行，不等待用户确认。
+- 完成后简要汇报结果。`
 	case intentTaskMultimodal:
 		return `## Intent Guidance (Multimodal Task Mode)
 This task involves visual or browser interaction.
@@ -364,7 +376,13 @@ This task involves visual or browser interaction.
 - For complex multi-step web tasks: use 'browser' tool with 'ai_browse' action.
 - For desktop application interaction (native apps, not web): use 'spawn_argus_agent' to delegate to 灵瞳 sub-agent.
 - For full desktop screenshots (not web): use 'argus_capture_screen' directly.
-- Rule: if the target is a URL or web page, use 'browser'. Only use argus for native desktop apps.`
+- Rule: if the target is a URL or web page, use 'browser'. Only use argus for native desktop apps.
+
+### Background Execution
+此任务可能在后台异步执行。当任务涉及多步操作时：
+- 第一句话告知用户："这个任务需要多步执行，我会在后台处理。你可以在「任务看板」中查看实时进度，完成后我会主动向你汇报结果。"
+- 直接开始执行，不等待用户确认。
+- 完成后简要汇报结果。`
 	default:
 		return ""
 	}

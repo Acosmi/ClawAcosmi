@@ -462,6 +462,9 @@ export class OpenAcosmiApp extends LitElement {
   @state() subagentsError: string | null = null;
   @state() subagentsBusyKey: string | null = null;
 
+  // Task Kanban
+  @state() taskKanbanState: import("./controllers/task-kanban.js").TaskKanbanState = { tasks: new Map(), sortedIds: [] };
+
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;

@@ -610,6 +610,20 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
+  // ---------- 任务看板事件 (task.*) ----------
+
+  if (evt.event.startsWith("task.")) {
+    const app = host as unknown as OpenAcosmiApp;
+    import("./controllers/task-kanban.ts").then((m) => {
+      app.taskKanbanState = m.handleTaskEvent(
+        app.taskKanbanState,
+        evt.event,
+        evt.payload as Record<string, unknown> | undefined,
+      );
+    });
+    return;
+  }
+
   // ---------- 子智能体求助事件 (Phase 4: 三级指挥体系) ----------
 
   if (evt.event === "subagent.help.requested") {
