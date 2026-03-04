@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ThinkTaggedBlock splitThinkingTaggedText 的拆分结果。

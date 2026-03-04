@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/outbound"
-	"github.com/openacosmi/claw-acismi/internal/routing"
-	"github.com/openacosmi/claw-acismi/internal/security"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/outbound"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/security"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- DI 接口 ----------

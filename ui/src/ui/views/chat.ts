@@ -57,6 +57,7 @@ export type ChatProps = {
   // Image attachments
   attachments?: ChatAttachment[];
   onAttachmentsChange?: (attachments: ChatAttachment[]) => void;
+  onAttachmentRejected?: (message: string) => void;
   // Voice recording
   voiceRecording?: boolean;
   voiceRecordingDuration?: number;
@@ -160,13 +161,34 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Maximum file size for attachments (10 MB) */
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_IMAGE = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_AUDIO = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_FILE = 30 * 1024 * 1024;
+
+function maxAttachmentSizeForCategory(category: AttachmentCategory): number {
+  switch (category) {
+    case "image":
+      return MAX_ATTACHMENT_SIZE_IMAGE;
+    case "audio":
+      return MAX_ATTACHMENT_SIZE_AUDIO;
+    default:
+      return MAX_ATTACHMENT_SIZE_FILE;
+  }
+}
 
 /** Read a File into a ChatAttachment and append it to the list */
 function addFileAsAttachment(file: File, props: ChatProps) {
-  if (file.size > MAX_ATTACHMENT_SIZE) {
-    // silently skip oversized files (UI could show a toast in the future)
+  const mimeType = file.type || "application/octet-stream";
+  const category = inferCategory(mimeType);
+  const maxSize = maxAttachmentSizeForCategory(category);
+  if (file.size > maxSize) {
+    props.onAttachmentRejected?.(
+      t("chat.attachmentTooLarge", {
+        name: file.name || t("chat.attachmentUnnamed"),
+        size: formatFileSize(file.size),
+        max: formatFileSize(maxSize),
+      }),
+    );
     return;
   }
   const reader = new FileReader();
@@ -175,8 +197,8 @@ function addFileAsAttachment(file: File, props: ChatProps) {
     const newAttachment: ChatAttachment = {
       id: generateAttachmentId(),
       dataUrl,
-      mimeType: file.type || "application/octet-stream",
-      category: inferCategory(file.type || "application/octet-stream"),
+      mimeType,
+      category,
       fileName: file.name,
       fileSize: file.size,
     };
@@ -549,8 +571,8 @@ export function renderChat(props: ChatProps) {
               <button
                 class="chat-compose__action-btn"
                 type="button"
-                title="Image"
-                aria-label="Attach image"
+                title="${t("chat.attachImage")}"
+                aria-label="${t("chat.attachImage")}"
                 ?disabled=${!props.connected}
                 @click=${() => {
       const input = document.createElement("input");
@@ -603,25 +625,38 @@ export function renderChat(props: ChatProps) {
                 title="${t("chat.newSession")}"
                 aria-label="${t("chat.newSession")}"
                 ?disabled=${!props.connected}
-                @click=${() => {
-      const tooltip = document.querySelector(".chat-compose__new-tooltip");
-      if (tooltip) {
-        tooltip.remove();
+                @click=${(e: Event) => {
+      const btn = e.currentTarget as HTMLElement | null;
+      if (!btn) {
         props.onNewSession();
         return;
       }
-      const btn = document.querySelector(".chat-compose__new-session") as HTMLElement;
-      if (!btn) { props.onNewSession(); return; }
+
+      const confirmClass = "chat-compose__new-session--confirm";
+      const existingTip = btn.querySelector(".chat-compose__new-tooltip");
+      if (btn.classList.contains(confirmClass)) {
+        btn.classList.remove(confirmClass);
+        if (existingTip) existingTip.remove();
+        props.onNewSession();
+        return;
+      }
+
+      if (existingTip) existingTip.remove();
+      btn.classList.add(confirmClass);
       const tip = document.createElement("div");
       tip.className = "chat-compose__new-tooltip";
-      tip.textContent = "Click again to start new session";
-      btn.style.position = "relative";
+      tip.textContent = t("chat.newSessionConfirm");
       btn.appendChild(tip);
-      setTimeout(() => { if (tip.parentNode) tip.remove(); }, 3000);
+      window.setTimeout(() => {
+        if (!btn.isConnected) return;
+        btn.classList.remove(confirmClass);
+        tip.remove();
+      }, 3000);
     }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
                 </svg>
               </button>
             </div>
@@ -640,6 +675,7 @@ export function renderChat(props: ChatProps) {
               </button>
             </div>`
       : nothing}
+        <p class="chat-compose__safety-hint">${t("chat.safetyHint")}</p>
       </div>
       ${props.permissionPopupCallbacks && props.requestUpdate
       ? renderPermissionPopup(props.permissionPopupCallbacks, props.requestUpdate)

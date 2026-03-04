@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // SkillsChangeEvent 技能变更事件。

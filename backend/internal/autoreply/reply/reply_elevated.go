@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/reply-elevated.ts (234L)

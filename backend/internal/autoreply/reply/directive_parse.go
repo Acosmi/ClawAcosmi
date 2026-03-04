@@ -1,8 +1,8 @@
 package reply
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // TS 对照: auto-reply/reply/directive-handling.parse.ts (216L)

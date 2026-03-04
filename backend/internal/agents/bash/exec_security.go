@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // ========== 安全黑名单 ==========

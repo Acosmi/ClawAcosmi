@@ -158,13 +158,25 @@ export async function loadMemoryList(
 
 export async function loadMemoryDetail(state: MemoryState, id: string, level: number) {
   if (!state.client || !state.connected) return;
+  // 立即更新选中层级，确保 UI 点击反馈及时可见。
+  const mutableState = state as MemoryState & { __memoryDetailReqToken?: number };
+  mutableState.memoryDetailLevel = level;
+  const reqToken = (mutableState.__memoryDetailReqToken ?? 0) + 1;
+  mutableState.__memoryDetailReqToken = reqToken;
   try {
     const res = await state.client.request<MemoryDetail>("memory.get", { id, level });
+    if (mutableState.__memoryDetailReqToken !== reqToken) {
+      // 忽略过期响应，避免快速切换标签时内容“跳回”旧层级。
+      return;
+    }
     if (res) {
       state.memoryDetail = res;
-      state.memoryDetailLevel = level;
+      if (typeof res.vfsLevel === "number" && Number.isFinite(res.vfsLevel)) {
+        state.memoryDetailLevel = Math.max(0, Math.min(2, Math.trunc(res.vfsLevel)));
+      }
     }
   } catch (err) {
+    if (mutableState.__memoryDetailReqToken !== reqToken) return;
     state.memoryError = String(err);
   }
 }

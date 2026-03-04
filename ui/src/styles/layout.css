@@ -5,7 +5,7 @@
 .shell {
   --shell-pad: 16px;
   --shell-gap: 16px;
-  --shell-nav-width: 220px;
+  --shell-nav-width: 280px;
   --shell-topbar-height: 56px;
   --shell-focus-duration: 200ms;
   --shell-focus-ease: var(--ease-out);
@@ -29,6 +29,7 @@
 }
 
 .shell--chat {
+  --shell-topbar-height: 48px;
   min-height: 100vh;
   height: 100vh;
   overflow: visible;
@@ -84,17 +85,147 @@
   padding: 0 20px;
   height: var(--shell-topbar-height);
   background: var(--bg);
-  /* Removed border-bottom for macOS seamless look, using a subtle inset shadow instead */
-  box-shadow: inset 0 -0.5px 0 var(--border);
+  box-shadow: none;
+  border-bottom: none;
   -webkit-app-region: drag;
-  /* Support custom dragging window if running in Tauri/Electron */
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 8px;
   -webkit-app-region: no-drag;
+  background: var(--panel);
+  width: var(--shell-nav-width);
+  min-width: var(--shell-nav-width);
+  height: 100%;
+  margin-left: -20px;
+  padding-left: 20px;
+  padding-right: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition:
+    width var(--shell-focus-duration) var(--shell-focus-ease),
+    min-width var(--shell-focus-duration) var(--shell-focus-ease),
+    margin var(--shell-focus-duration) var(--shell-focus-ease),
+    padding var(--shell-focus-duration) var(--shell-focus-ease),
+    opacity var(--shell-focus-duration) var(--shell-focus-ease),
+    background var(--shell-focus-duration) var(--shell-focus-ease);
+}
+
+.shell--nav-collapsed .topbar-left,
+.shell--chat-focus .topbar-left {
+  width: 0;
+  min-width: 0;
+  margin-left: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.brand--topbar {
+  width: 100%;
+}
+
+/* Chat workspace header — channel + refresh at top of content area */
+.chat-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 0;
+  flex-shrink: 0;
+}
+
+/* Floating compress context FAB */
+.compress-fab {
+  position: fixed;
+  bottom: 140px;
+  right: 32px;
+  z-index: 50;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: none;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(139, 92, 246, 0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-base);
+  letter-spacing: 0.5px;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
+  opacity: 0.7;
+}
+
+.compress-fab__text {
+  display: inline;
+}
+
+.compress-fab__confirm-text {
+  display: none;
+}
+
+.compress-fab:hover {
+  opacity: 1;
+  transform: scale(1.05);
+  box-shadow:
+    0 4px 20px rgba(139, 92, 246, 0.25),
+    0 0 0 1px rgba(139, 92, 246, 0.3);
+}
+
+.compress-fab:active {
+  transform: scale(0.95);
+}
+
+.compress-fab:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Confirm state — first click */
+.compress-fab--confirm {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: white;
+  opacity: 1;
+  animation: compress-pulse 1s ease-in-out infinite alternate;
+  box-shadow:
+    0 4px 20px rgba(139, 92, 246, 0.4),
+    0 0 0 1px rgba(236, 72, 153, 0.4);
+}
+
+.compress-fab--confirm .compress-fab__text {
+  display: none;
+}
+
+.compress-fab--confirm .compress-fab__confirm-text {
+  display: inline;
+}
+
+@keyframes compress-pulse {
+  0% {
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3), 0 0 0 1px rgba(236, 72, 153, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 4px 24px rgba(139, 92, 246, 0.5), 0 0 0 2px rgba(236, 72, 153, 0.5);
+  }
 }
 
 .topbar .nav-collapse-toggle {
@@ -118,6 +249,20 @@
 .topbar .nav-collapse-toggle__icon svg {
   width: 16px;
   height: 16px;
+}
+
+.topbar-status .nav-collapse-toggle--workspace {
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+/* Brand in nav sidebar */
+.nav .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 0 2px;
 }
 
 /* Brand */
@@ -168,6 +313,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-right-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .topbar-status .pill {
@@ -211,14 +366,11 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 20px 12px;
-  /* macOS sidebar Vibrancy effect */
   background: var(--panel);
-  -webkit-backdrop-filter: blur(40px) saturate(150%);
-  backdrop-filter: blur(40px) saturate(150%);
-  border-right: 0.5px solid var(--border);
+  backdrop-filter: none;
+  border-right: none;
 
   scrollbar-width: none;
-  /* Firefox */
   transition:
     width var(--shell-focus-duration) var(--shell-focus-ease),
     padding var(--shell-focus-duration) var(--shell-focus-ease),
@@ -228,7 +380,6 @@
 
 .nav::-webkit-scrollbar {
   display: none;
-  /* Chrome/Safari */
 }
 
 .shell--chat-focus .nav {
@@ -258,7 +409,7 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition:
@@ -269,7 +420,6 @@
 
 .nav-collapse-toggle:hover {
   background: var(--bg-hover);
-  border-color: var(--border);
 }
 
 .nav-collapse-toggle__icon {
@@ -375,7 +525,7 @@
   gap: 10px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border: none;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -433,6 +583,23 @@
   color: var(--accent);
 }
 
+.nav-item__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #ef4444;
+  color: white;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg-sidebar);
+}
+
 /* ===========================================
    Content Area
    =========================================== */
@@ -444,24 +611,23 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* subtle contrasting background for content area vs sidebar */
-  background: var(--bg);
+  background: var(--bg-content, var(--bg));
 }
 
 .content>*+* {
   margin-top: 24px;
 }
 
-:root[data-theme="light"] .content {
-  background: var(--bg-content);
-}
-
 .content--chat {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: visible;
+  padding-top: 0;
   padding-bottom: 0;
+  padding-left: 10%;
+  padding-right: 10%;
 }
 
 .content--chat>*+* {
@@ -605,7 +771,7 @@
     gap: 6px;
     overflow-x: auto;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: none;
     padding: 10px 14px;
     background: var(--bg);
   }
@@ -627,8 +793,53 @@
     gap: 10px;
   }
 
+  .topbar-left {
+    width: auto;
+    min-width: 0;
+    margin-left: 0;
+    padding: 0;
+    background: transparent;
+  }
+
   .topbar-status {
     flex-wrap: wrap;
+  }
+
+  .shell--chat .topbar-status {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .shell--chat .topbar-status::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shell--chat .topbar-right-controls {
+    margin-left: 8px;
+  }
+
+  .shell--chat.shell--nav-collapsed .topbar-left,
+  .shell--chat.shell--chat-focus .topbar-left {
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .shell--chat.shell--nav-collapsed .nav,
+  .shell--chat.shell--chat-focus .nav {
+    display: none;
+    padding: 0;
+    max-height: 0;
+    border: none;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
   }
 
   .table-head,

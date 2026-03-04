@@ -121,7 +121,7 @@ make ui          # 另一终端启动前端
 
 ```bash
 cd backend
-make gateway-devmake gateway-dev
+make gateway-dev
 ```
 
 Gateway 以 dev 模式启动在 `localhost:19001`。

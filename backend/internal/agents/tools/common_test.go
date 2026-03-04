@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
 )
 
 // ---------- schema.go ----------

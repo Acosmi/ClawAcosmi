@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
 )
 
 const (

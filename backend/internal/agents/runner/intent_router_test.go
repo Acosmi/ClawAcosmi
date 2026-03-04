@@ -3,7 +3,7 @@ package runner
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ---------- classifyIntent 测试 ----------
@@ -131,6 +131,78 @@ func TestHasImperativePrefix_Embedded(t *testing.T) {
 	for _, c := range cases {
 		if got := hasImperativePrefix(c.input); got != c.want {
 			t.Errorf("hasImperativePrefix(%q) = %v, want %v", c.input, got, c.want)
+		}
+	}
+}
+
+// ---------- Bug#11: 中文 NLP 修复测试 ----------
+
+func TestClassifyIntent_ChinesePoliteImperative(t *testing.T) {
+	// Bug#11 核心: "你能X吗"/"能不能X"/"可以X吗" 形式的排查任务不应被分类为 question
+	cases := []struct {
+		input string
+		want  intentTier
+	}{
+		// 礼貌祈使 + 诊断动词 → task_light（非 question）
+		{"远程飞书不好用了你能排查吗？", intentTaskLight},
+		{"能否检查一下系统日志？", intentTaskLight},
+		// 帮我 已覆盖，确认不退化
+		{"你能帮我排查吗？", intentTaskLight},
+		// 纯疑问句不受影响
+		{"这是什么意思？", intentQuestion},
+		// 英文对应模式
+		{"Can you debug this error?", intentTaskLight},
+		{"What is the meaning of life?", intentQuestion},
+	}
+	for _, c := range cases {
+		if tier := classifyIntent(c.input); tier != c.want {
+			t.Errorf("classifyIntent(%q) = %q, want %q", c.input, tier, c.want)
+		}
+	}
+}
+
+func TestHasImperativePrefix_PoliteRequest(t *testing.T) {
+	// Bug#11: 礼貌祈使句模式检测
+	cases := []struct {
+		input string
+		want  bool
+	}{
+		{"你能排查一下吗", true},
+		{"能不能查一下", true},
+		{"可以帮忙看看吗", true},
+		{"能否检查一下", true},
+		{"can you help me", true},
+		{"could you check this", true},
+		{"would you please look", true},
+		// 不应匹配的
+		{"这个好用吗", false},
+		{"what is this", false},
+	}
+	for _, c := range cases {
+		if got := hasImperativePrefix(c.input); got != c.want {
+			t.Errorf("hasImperativePrefix(%q) = %v, want %v", c.input, got, c.want)
+		}
+	}
+}
+
+func TestContainsActionVerb(t *testing.T) {
+	cases := []struct {
+		input string
+		want  bool
+	}{
+		{"帮我排查一下", true},
+		{"需要诊断问题", true},
+		{"可以调试吗", true},
+		{"请重启服务", true},
+		{"can you debug this", true},
+		// 不含动作动词
+		{"你好吗", false},
+		{"这是什么", false},
+		{"how are you", false},
+	}
+	for _, c := range cases {
+		if got := containsActionVerb(c.input); got != c.want {
+			t.Errorf("containsActionVerb(%q) = %v, want %v", c.input, got, c.want)
 		}
 	}
 }

@@ -3,8 +3,8 @@ package reply
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/markdown"
 )
 
 // TS 对照: auto-reply/reply/ 中分散的 response-body 逻辑。

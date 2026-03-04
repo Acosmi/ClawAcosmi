@@ -26,11 +26,10 @@ type OAuthCredentials struct {
 
 // 已知 OAuth 提供商集合（对应 TS OAUTH_PROVIDER_IDS）。
 var knownOAuthProviders = map[string]bool{
-	"anthropic":      true,
 	"google":         true,
-	"openai":         true,
 	"github-copilot": true,
 	"qwen-portal":    true,
+	"minimax-portal": true,
 }
 
 // IsOAuthProvider 检查是否为已知 OAuth 提供商。

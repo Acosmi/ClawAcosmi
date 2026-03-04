@@ -14,7 +14,7 @@ package runner
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ---------- 意图分级 ----------
@@ -56,10 +56,14 @@ func classifyIntent(prompt string) intentTier {
 		}
 	}
 
-	// ── 2. Question: 疑问标记 + 无祈使前缀 ──
+	// ── 2. Question: 疑问标记 + 无祈使前缀 + 无动作动词 ──
 	// 核心设计: 先检测提问再检测任务，避免 "代码是谁写的？" 被误判为 task_write
+	// Bug#11 修复: 动作动词兜底 — 即使句式是疑问且无祈使前缀，包含诊断/执行类动词也应归类为任务
 	if isInterrogative(lower) && !hasImperativePrefix(lower) {
-		return intentQuestion
+		if !containsActionVerb(lower) {
+			return intentQuestion
+		}
+		// 包含动作动词 → 跳过 question，继续走关键词匹配
 	}
 
 	// ── 3. Task Delete: 破坏性操作关键词 ──
@@ -163,8 +167,13 @@ func hasImperativePrefix(lower string) bool {
 
 	// 2. 强任务标记: 无论出现在前缀还是句中都表示任务委托
 	// "帮我X" = "替我做X"，"帮忙X" = "请做X"，"请帮" = "please help"，"替我" = "on my behalf"
+	// Bug#11 修复: 增加中文礼貌祈使句 + 英文对应模式
 	strongMarkers := []string{
 		"帮我", "帮忙", "麻烦", "请帮", "替我",
+		// 礼貌祈使: "你能X吗"/"能不能X"/"可以帮X"/"可以做X"/"能否X"
+		"你能", "能不能", "可以帮", "可以做", "能否",
+		// 英文礼貌祈使
+		"can you", "could you", "would you",
 	}
 	for _, m := range strongMarkers {
 		if strings.Contains(lower, m) {
@@ -252,18 +261,21 @@ var tierToolAllowlist = map[intentTier]map[string]bool{
 		"search_skills": true,
 		"lookup_skill":  true,
 		"memory_search": true,
+		"memory_get":    true,
 	},
 	intentTaskLight: {
-		"bash":          true,
-		"read_file":     true,
-		"list_dir":      true,
-		"search":        true,
-		"grep":          true,
-		"glob":          true,
-		"web_search":    true,
-		"search_skills": true,
-		"lookup_skill":  true,
-		"memory_search": true,
+		"bash":            true,
+		"read_file":       true,
+		"list_dir":        true,
+		"search":          true,
+		"grep":            true,
+		"glob":            true,
+		"web_search":      true,
+		"search_skills":   true,
+		"lookup_skill":    true,
+		"memory_search":   true,
+		"memory_get":      true,
+		"report_progress": true,
 	},
 	intentTaskWrite: {
 		"bash":              true,
@@ -281,13 +293,16 @@ var tierToolAllowlist = map[intentTier]map[string]bool{
 		"search_skills":     true,
 		"lookup_skill":      true,
 		"memory_search":     true,
+		"memory_get":        true,
+		"report_progress":   true,
 	},
 	intentTaskDelete: {
-		"bash":          true,
-		"read_file":     true,
-		"list_dir":      true,
-		"search_skills": true,
-		"lookup_skill":  true,
+		"bash":            true,
+		"read_file":       true,
+		"list_dir":        true,
+		"search_skills":   true,
+		"lookup_skill":    true,
+		"report_progress": true,
 	},
 }
 
@@ -337,7 +352,8 @@ This is a read/check operation.
 - Use known file paths from history — avoid broad searches like 'find ~'.
 - Prefer read_file/list_dir for direct access over bash for file operations.
 - If the user is checking status, provide a brief summary.
-- Prefer direct tool use over searching skills. Only search_skills if the task truly requires specialized knowledge.
+- When the user's request matches a known skill topic (e.g., system diagnostics, deployment, debugging, monitoring), use search_skills first to leverage specialized knowledge and best practices.
+- For common system commands (ls, top, df, cat, grep, etc.), use tools directly without searching skills.
 - NEVER execute system diagnostics, service start/stop/restart, or environment repair commands that were NOT explicitly requested by the user.`
 	case intentTaskWrite:
 		return `## Intent Guidance (Write Task Mode)
@@ -403,6 +419,24 @@ func needsPlanConfirmation(tier intentTier) bool {
 }
 
 // ---------- 辅助函数 ----------
+
+// ---------- 动作动词检测（Bug#11 修复） ----------
+
+// actionVerbs 诊断/执行类动作动词 — 表示用户期望 agent 采取行动，
+// 即使句式是疑问也不应归类为 question。
+var actionVerbs = []string{
+	// 诊断类
+	"排查", "诊断", "调试", "检查", "分析", "定位", "排错", "修复",
+	"troubleshoot", "investigate", "diagnose", "debug",
+	// 执行类
+	"执行", "运行", "启动", "停止", "重启", "部署", "安装", "卸载",
+	"execute", "restart",
+}
+
+// containsActionVerb 检测消息是否包含动作动词。
+func containsActionVerb(lower string) bool {
+	return containsAnyKeyword(lower, actionVerbs)
+}
 
 // containsAnyKeyword 检查 lower 是否包含关键词列表中的任何一个。
 func containsAnyKeyword(lower string, keywords []string) bool {

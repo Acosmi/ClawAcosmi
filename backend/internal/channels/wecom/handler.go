@@ -17,18 +17,20 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // CallbackHandler 企业微信 HTTP 回调处理器
 type CallbackHandler struct {
 	client    *WeComClient
-	onMessage func(msgType, content, fromUser string)
+	onMessage func(msg *channels.ChannelMessage, fromUser string)
 }
 
 // CallbackHandlerConfig 回调处理器配置
 type CallbackHandlerConfig struct {
 	Client    *WeComClient
-	OnMessage func(msgType, content, fromUser string)
+	OnMessage func(msg *channels.ChannelMessage, fromUser string)
 }
 
 // NewCallbackHandler 创建回调处理器
@@ -74,7 +76,7 @@ func (h *CallbackHandler) HandleCallback(msgSignature, timestamp, nonce, body st
 		"msg_type", msg.MsgType,
 	)
 	if h.onMessage != nil {
-		h.onMessage(msg.MsgType, msg.Content, msg.FromUserName)
+		h.onMessage(toChannelMessage(msg), msg.FromUserName)
 	}
 	return nil
 }
@@ -98,6 +100,12 @@ type WeComDecryptedMsg struct {
 	CreateTime   int64    `xml:"CreateTime"`
 	MsgType      string   `xml:"MsgType"`
 	Content      string   `xml:"Content"`
+	PicURL       string   `xml:"PicUrl"`
+	MediaID      string   `xml:"MediaId"`
+	ThumbMediaID string   `xml:"ThumbMediaId"`
+	Format       string   `xml:"Format"`
+	Recognition  string   `xml:"Recognition"`
+	FileName     string   `xml:"FileName"`
 	MsgId        int64    `xml:"MsgId"`
 	AgentID      int      `xml:"AgentID"`
 }
@@ -194,12 +202,63 @@ func (h *CallbackHandler) handleMessage(w http.ResponseWriter, r *http.Request) 
 	)
 
 	if h.onMessage != nil {
-		h.onMessage(msg.MsgType, msg.Content, msg.FromUserName)
+		h.onMessage(toChannelMessage(msg), msg.FromUserName)
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("success"))
+}
+
+func toChannelMessage(msg WeComDecryptedMsg) *channels.ChannelMessage {
+	cm := &channels.ChannelMessage{
+		Text:        strings.TrimSpace(msg.Content),
+		MessageID:   fmt.Sprintf("%d", msg.MsgId),
+		MessageType: strings.ToLower(strings.TrimSpace(msg.MsgType)),
+	}
+
+	switch cm.MessageType {
+	case "image":
+		cm.Attachments = append(cm.Attachments, channels.ChannelAttachment{
+			Category: "image",
+			FileKey:  strings.TrimSpace(msg.MediaID),
+			DataURL:  strings.TrimSpace(msg.PicURL),
+		})
+		if cm.Text == "" {
+			cm.Text = "[企业微信图片消息]"
+		}
+	case "voice":
+		cm.Attachments = append(cm.Attachments, channels.ChannelAttachment{
+			Category: "audio",
+			FileKey:  strings.TrimSpace(msg.MediaID),
+			MimeType: "audio/" + strings.TrimSpace(msg.Format),
+		})
+		if cm.Text == "" && strings.TrimSpace(msg.Recognition) != "" {
+			cm.Text = fmt.Sprintf("[企业微信语音识别] %s", strings.TrimSpace(msg.Recognition))
+		}
+		if cm.Text == "" {
+			cm.Text = "[企业微信语音消息]"
+		}
+	case "file":
+		cm.Attachments = append(cm.Attachments, channels.ChannelAttachment{
+			Category: "document",
+			FileKey:  strings.TrimSpace(msg.MediaID),
+			FileName: strings.TrimSpace(msg.FileName),
+		})
+		if cm.Text == "" {
+			cm.Text = "[企业微信文件消息]"
+		}
+	case "video":
+		cm.Attachments = append(cm.Attachments, channels.ChannelAttachment{
+			Category: "video",
+			FileKey:  strings.TrimSpace(msg.MediaID),
+		})
+		if cm.Text == "" {
+			cm.Text = "[企业微信视频消息]"
+		}
+	}
+
+	return cm
 }
 
 // verifySignature 验证企业微信签名

@@ -3,7 +3,7 @@ package feishu
 // resource.go — 飞书消息资源下载（Phase B）
 // API: GET /open-apis/im/v1/messages/{message_id}/resources/{file_key}?type={image|file}
 // 需要权限: im:resource
-// 限制: 文件大小 ≤ 100MB
+// 限制: 文件大小 ≤ 30MB（与上传回传窗口统一）
 
 import (
 	"bytes"
@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // httpClient 模块级 HTTP 客户端（带 30s 超时，防 slowloris）。
@@ -67,13 +69,13 @@ func (c *FeishuClient) DownloadResource(ctx context.Context, messageID, fileKey,
 		return nil, fmt.Errorf("feishu: download failed: status=%d body=%s", resp.StatusCode, string(body))
 	}
 
-	const maxResourceDownloadSize = 50 * 1024 * 1024 // 50 MB
+	const maxResourceDownloadSize = channels.FeishuResourceDownloadMaxBytes
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResourceDownloadSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("feishu: read resource body: %w", err)
 	}
 	if int64(len(data)) > maxResourceDownloadSize {
-		return nil, fmt.Errorf("feishu: resource too large (>50 MB)")
+		return nil, fmt.Errorf("feishu: resource too large (max %d bytes)", maxResourceDownloadSize)
 	}
 
 	slog.Info("feishu: resource downloaded",
@@ -104,9 +106,9 @@ func (c *FeishuClient) UploadImage(ctx context.Context, imageData []byte, imageT
 	if len(imageData) == 0 {
 		return "", fmt.Errorf("feishu: imageData is empty")
 	}
-	const maxImageSize = 10 * 1024 * 1024
+	const maxImageSize = channels.FeishuImageMaxBytes
 	if len(imageData) > maxImageSize {
-		return "", fmt.Errorf("feishu: image too large (%d bytes, max 10 MB)", len(imageData))
+		return "", fmt.Errorf("feishu: image too large (%d bytes, max %d bytes)", len(imageData), maxImageSize)
 	}
 	if imageType == "" {
 		imageType = "message"
@@ -175,9 +177,9 @@ func (c *FeishuClient) UploadFile(ctx context.Context, fileData []byte, fileName
 	if len(fileData) == 0 {
 		return "", fmt.Errorf("feishu: fileData is empty")
 	}
-	const maxFileSize = 30 * 1024 * 1024
+	const maxFileSize = channels.FeishuFileMaxBytes
 	if len(fileData) > maxFileSize {
-		return "", fmt.Errorf("feishu: file too large (%d bytes, max 30 MB)", len(fileData))
+		return "", fmt.Errorf("feishu: file too large (%d bytes, max %d bytes)", len(fileData), maxFileSize)
 	}
 	if fileType == "" {
 		fileType = FeishuFileType("", fileName)

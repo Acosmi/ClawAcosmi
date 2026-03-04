@@ -18,7 +18,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
 )
 
 // AIBrowseAction represents a single browser action to execute.

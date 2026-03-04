@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestNormalizeProviderId(t *testing.T) {

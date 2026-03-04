@@ -98,7 +98,7 @@ func IsTrustedProxyAddress(ip string, trustedProxies []string) bool {
 // ResolveGatewayClientIP 从请求元数据中解析真实客户端 IP。
 // 如果 remoteAddr 是可信代理，则使用 X-Forwarded-For 或 X-Real-IP。
 func ResolveGatewayClientIP(remoteAddr, forwardedFor, realIP string, trustedProxies []string) string {
-	remote := NormalizeIP(remoteAddr)
+	remote := NormalizeIP(StripOptionalPort(remoteAddr))
 	if remote == "" {
 		return ""
 	}

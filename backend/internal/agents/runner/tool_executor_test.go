@@ -9,18 +9,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- UHMSBridge mock ----------
 
-// stubUHMSBridge 用于 search_skills / lookup_skill 测试的最小模拟。
+// stubUHMSBridge 用于 search_skills / lookup_skill / memory 测试的最小模拟。
 type stubUHMSBridge struct {
 	hits         []SkillSearchHit
 	searchErr    error
 	distributing bool
 	indexed      bool
+	// memory mock fields
+	memoryHits      []MemorySearchHit
+	memorySearchErr error
+	memoryHit       *MemoryHit
+	memoryGetErr    error
 }
 
 func (s *stubUHMSBridge) CompressChatMessages(_ context.Context, msgs []llmclient.ChatMessage, _ int) ([]llmclient.ChatMessage, error) {
@@ -35,6 +40,12 @@ func (s *stubUHMSBridge) IsSkillsDistributing() bool                            
 func (s *stubUHMSBridge) ReadSkillVFS(_ context.Context, _, _ string) (string, error) { return "", nil }
 func (s *stubUHMSBridge) SearchSkillsVFS(_ context.Context, _ string, _ int) ([]SkillSearchHit, error) {
 	return s.hits, s.searchErr
+}
+func (s *stubUHMSBridge) SearchMemories(_ context.Context, _ string, _ int) ([]MemorySearchHit, error) {
+	return s.memoryHits, s.memorySearchErr
+}
+func (s *stubUHMSBridge) GetMemory(_ context.Context, _ string) (*MemoryHit, error) {
+	return s.memoryHit, s.memoryGetErr
 }
 
 // ============================================================================
@@ -1032,6 +1043,11 @@ func TestIsToolSoftError(t *testing.T) {
 		{"bash command blocked", "bash", "[Command blocked by security rule: rm *] reason", true},
 		{"bash command denied", "bash", "[Command denied on non-web channel: pattern]", true},
 		{"bash write approval error", "bash", "[Write operation approval error: timeout]", true},
+		// Bug#11: bash exit code 检测
+		{"bash exit code 1", "bash", "command not found\n[exit code: 1]", true},
+		{"bash exit code 0", "bash", "success output\n[exit code: 0]", false},
+		{"bash sandbox exit code 2", "bash", "permission denied\n[sandbox exit code: 2]", true},
+		{"bash sandbox exit code 0", "bash", "ok\n[sandbox exit code: 0]", false},
 
 		// browser
 		{"browser navigate error", "browser", "[Browser navigate error: timeout]", true},
@@ -1135,6 +1151,25 @@ func (m *mockMediaSender) SendMedia(_ context.Context, _, _ string, _ []byte, _,
 	return m.sendErr
 }
 
+type mockStructuredSendError struct {
+	code      string
+	channel   string
+	operation string
+	message   string
+	retryable bool
+}
+
+func (m *mockStructuredSendError) Error() string       { return m.message }
+func (m *mockStructuredSendError) SendCode() string    { return m.code }
+func (m *mockStructuredSendError) SendChannel() string { return m.channel }
+func (m *mockStructuredSendError) SendOperation() string {
+	return m.operation
+}
+func (m *mockStructuredSendError) SendRetryable() bool { return m.retryable }
+func (m *mockStructuredSendError) SendUserMessage() string {
+	return m.message
+}
+
 func sendMediaTestParams(sessionKey string) ToolExecParams {
 	return ToolExecParams{
 		SessionKey:   sessionKey,
@@ -1236,6 +1271,49 @@ func TestSendMedia_NoMediaSender_Error(t *testing.T) {
 	}
 	if !strings.Contains(result, "not available") {
 		t.Errorf("should report media sender not available, got %q", result)
+	}
+}
+
+func TestSendMedia_ChannelSendError_UsesStructuredMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "sample.png")
+	if err := os.WriteFile(testFile, []byte("fake-png-data"), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	sendErr := &mockStructuredSendError{
+		code:      "unsupported_feature",
+		channel:   "dingtalk",
+		operation: "send.media.upload",
+		message:   "dingtalk media upload not supported",
+	}
+
+	p := ToolExecParams{
+		SessionKey:   "dingtalk:cid_test",
+		MediaSender:  &mockMediaSender{sendErr: sendErr},
+		WorkspaceDir: tmpDir,
+		ScopePaths:   []string{tmpDir},
+	}
+	result, err := ExecuteToolCall(context.Background(), "send_media",
+		json.RawMessage(fmt.Sprintf(`{"file_path":%q}`, testFile)), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "sendCode=unsupported_feature") {
+		t.Fatalf("expected structured sendCode in result, got %q", result)
+	}
+	if !strings.Contains(result, "channel=dingtalk") {
+		t.Fatalf("expected channel metadata in result, got %q", result)
+	}
+	if !strings.Contains(result, "暂不支持") {
+		t.Fatalf("expected actionable hint in result, got %q", result)
+	}
+}
+
+func TestFormatSendMediaDeliveryError_PlainError(t *testing.T) {
+	msg := formatSendMediaDeliveryError(fmt.Errorf("network timeout"))
+	if !strings.Contains(msg, "Failed to send") {
+		t.Fatalf("expected plain fallback message, got %q", msg)
 	}
 }
 
@@ -1393,5 +1471,89 @@ func TestArgusTool_NilBridge_NoPanic(t *testing.T) {
 	}
 	if !strings.Contains(result, "not available") {
 		t.Errorf("should report Argus not available, got %q", result)
+	}
+}
+
+// ---------- Memory tools ----------
+
+func TestMemorySearch_Basic(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		memoryHits: []MemorySearchHit{
+			{ID: "m1", Content: "用户喜欢深色主题", Score: 0.95, Type: "preference"},
+			{ID: "m2", Content: "用户是前端开发者", Score: 0.80, Type: "personal_info"},
+		},
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := executeMemorySearch(context.Background(), json.RawMessage(`{"query":"用户偏好","limit":5}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "m1") || !strings.Contains(result, "深色主题") {
+		t.Errorf("expected memory hits in result, got %q", result)
+	}
+}
+
+func TestMemorySearch_NilBridge(t *testing.T) {
+	p := ToolExecParams{} // UHMSBridge is nil
+	result, err := executeMemorySearch(context.Background(), json.RawMessage(`{"query":"test"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "unavailable") {
+		t.Errorf("nil bridge should report unavailable, got %q", result)
+	}
+}
+
+func TestMemorySearch_EmptyQuery(t *testing.T) {
+	bridge := &stubUHMSBridge{}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := executeMemorySearch(context.Background(), json.RawMessage(`{"query":""}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "query is required") {
+		t.Errorf("empty query should error, got %q", result)
+	}
+}
+
+func TestMemoryGet_Basic(t *testing.T) {
+	bridge := &stubUHMSBridge{
+		memoryHit: &MemoryHit{
+			ID:       "m1",
+			Content:  "用户喜欢深色主题",
+			Type:     "preference",
+			Category: "ui_preference",
+		},
+	}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := executeMemoryGet(context.Background(), json.RawMessage(`{"id":"m1"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "m1") || !strings.Contains(result, "深色主题") {
+		t.Errorf("expected memory hit in result, got %q", result)
+	}
+}
+
+func TestMemoryGet_NilBridge(t *testing.T) {
+	p := ToolExecParams{} // UHMSBridge is nil
+	result, err := executeMemoryGet(context.Background(), json.RawMessage(`{"id":"m1"}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "unavailable") {
+		t.Errorf("nil bridge should report unavailable, got %q", result)
+	}
+}
+
+func TestMemoryGet_EmptyID(t *testing.T) {
+	bridge := &stubUHMSBridge{}
+	p := ToolExecParams{UHMSBridge: bridge}
+	result, err := executeMemoryGet(context.Background(), json.RawMessage(`{"id":""}`), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "id is required") {
+		t.Errorf("empty id should error, got %q", result)
 	}
 }

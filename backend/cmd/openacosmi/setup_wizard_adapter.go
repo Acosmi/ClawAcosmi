@@ -9,8 +9,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/internal/gateway"
-	"github.com/openacosmi/claw-acismi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/internal/gateway"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
 )
 
 // gatewayToTuiPrompter 将 gateway.WizardPrompter 适配为 tui.WizardPrompter。

@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ImageDescriber 图片理解 Provider 接口

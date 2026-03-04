@@ -13,9 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 const defaultAgentWorkspaceDir = "agents"

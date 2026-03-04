@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // ---------- buildResponsesAgentPrompt 测试 ----------

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // ---------- 路径常量 ----------

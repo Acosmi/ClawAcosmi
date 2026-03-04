@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/helpers"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/helpers"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ResolveFinalAssistantText 选择最终助手输出文本。

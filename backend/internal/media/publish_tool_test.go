@@ -45,7 +45,7 @@ func TestPublishTool_Approve(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	tool := CreateMediaPublishTool(store, nil)
+	tool := CreateMediaPublishTool(store, nil, nil)
 	result, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "approve",
 		"draft_id": draft.ID,
@@ -82,7 +82,7 @@ func TestPublishTool_Approve_AlreadyPublished(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	tool := CreateMediaPublishTool(store, nil)
+	tool := CreateMediaPublishTool(store, nil, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "approve",
 		"draft_id": draft.ID,
@@ -108,7 +108,7 @@ func TestPublishTool_Publish_Approved(t *testing.T) {
 		PlatformWeChat: &mockPublisher{},
 	}
 
-	tool := CreateMediaPublishTool(store, publishers)
+	tool := CreateMediaPublishTool(store, publishers, nil)
 	result, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "publish",
 		"draft_id": draft.ID,
@@ -145,7 +145,7 @@ func TestPublishTool_Publish_NotApproved(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	tool := CreateMediaPublishTool(store, nil)
+	tool := CreateMediaPublishTool(store, nil, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "publish",
 		"draft_id": draft.ID,
@@ -175,7 +175,7 @@ func TestPublishTool_Publish_UnsupportedPlatform(t *testing.T) {
 		PlatformWeChat: &mockPublisher{},
 	}
 
-	tool := CreateMediaPublishTool(store, publishers)
+	tool := CreateMediaPublishTool(store, publishers, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "publish",
 		"draft_id": draft.ID,
@@ -204,7 +204,7 @@ func TestPublishTool_Publish_Website(t *testing.T) {
 		PlatformWebsite: &mockPublisher{},
 	}
 
-	tool := CreateMediaPublishTool(store, publishers)
+	tool := CreateMediaPublishTool(store, publishers, nil)
 	result, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "publish",
 		"draft_id": draft.ID,
@@ -240,7 +240,7 @@ func TestPublishTool_Publish_Error(t *testing.T) {
 		},
 	}
 
-	tool := CreateMediaPublishTool(store, publishers)
+	tool := CreateMediaPublishTool(store, publishers, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "publish",
 		"draft_id": draft.ID,
@@ -250,6 +250,55 @@ func TestPublishTool_Publish_Error(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "rate limit") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPublishTool_Publish_WritesHistory(t *testing.T) {
+	store := newTestStore(t)
+	historyStore := newTestHistoryStore(t)
+
+	draft := &ContentDraft{
+		Title:    "History Test",
+		Body:     "Body with history",
+		Platform: PlatformWeChat,
+		Status:   DraftStatusApproved,
+	}
+	if err := store.Save(draft); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	publishers := map[Platform]MediaPublisher{
+		PlatformWeChat: &mockPublisher{},
+	}
+
+	tool := CreateMediaPublishTool(store, publishers, historyStore)
+	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
+		"action":   "publish",
+		"draft_id": draft.ID,
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	// Verify history was written.
+	records, err := historyStore.List(nil)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 history record, got %d", len(records))
+	}
+	if records[0].DraftID != draft.ID {
+		t.Errorf("DraftID: got %q, want %q", records[0].DraftID, draft.ID)
+	}
+	if records[0].Title != "History Test" {
+		t.Errorf("Title: got %q, want %q", records[0].Title, "History Test")
+	}
+	if records[0].Platform != PlatformWeChat {
+		t.Errorf("Platform: got %q, want %q", records[0].Platform, PlatformWeChat)
+	}
+	if records[0].PostID != "mock_post_001" {
+		t.Errorf("PostID: got %q, want %q", records[0].PostID, "mock_post_001")
 	}
 }
 
@@ -265,7 +314,7 @@ func TestPublishTool_Status(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	tool := CreateMediaPublishTool(store, nil)
+	tool := CreateMediaPublishTool(store, nil, nil)
 	result, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "status",
 		"draft_id": draft.ID,
@@ -282,7 +331,7 @@ func TestPublishTool_Status(t *testing.T) {
 }
 
 func TestPublishTool_NilStore(t *testing.T) {
-	tool := CreateMediaPublishTool(nil, nil)
+	tool := CreateMediaPublishTool(nil, nil, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "approve",
 		"draft_id": "some-id",
@@ -294,7 +343,7 @@ func TestPublishTool_NilStore(t *testing.T) {
 
 func TestPublishTool_UnknownAction(t *testing.T) {
 	store := newTestStore(t)
-	tool := CreateMediaPublishTool(store, nil)
+	tool := CreateMediaPublishTool(store, nil, nil)
 	_, err := tool.ToolExecute(context.Background(), "test", map[string]any{
 		"action":   "unknown",
 		"draft_id": "some-id",

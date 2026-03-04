@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/markdown"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/markdown"
 )
 
 // Slack mrkdwn 格式化 — 继承自 src/slack/format.ts (147L)

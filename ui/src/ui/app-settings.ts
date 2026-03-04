@@ -25,6 +25,7 @@ import { loadPresence } from "./controllers/presence.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
 import { loadSubAgents } from "./controllers/subagents.ts";
+import { loadUsage } from "./controllers/usage.ts";
 import { loadPlugins, loadTools, loadBrowserToolConfig } from "./controllers/plugins.ts";
 import {
   inferBasePathFromPathname,
@@ -46,6 +47,7 @@ type SettingsHost = {
   applySessionKey: string;
   sessionKey: string;
   tab: Tab;
+  overviewPanel?: "dashboard" | "instances" | "usage";
   connected: boolean;
   chatHasAutoScrolled: boolean;
   logsAtBottom: boolean;
@@ -202,13 +204,23 @@ export function setTheme(host: SettingsHost, next: ThemeMode, context?: ThemeTra
 
 export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "overview") {
-    await loadOverview(host);
+    const panel = host.overviewPanel ?? "dashboard";
+    if (panel === "instances") {
+      await loadPresence(host as unknown as OpenAcosmiApp);
+    } else if (panel === "usage") {
+      await loadUsage(host as unknown as OpenAcosmiApp);
+    } else {
+      await loadOverview(host);
+    }
   }
   if (host.tab === "channels") {
     await loadChannelsTab(host);
   }
   if (host.tab === "instances") {
     await loadPresence(host as unknown as OpenAcosmiApp);
+  }
+  if (host.tab === "usage") {
+    await loadUsage(host as unknown as OpenAcosmiApp);
   }
   if (host.tab === "cron") {
     await loadCron(host);
@@ -218,10 +230,17 @@ export async function refreshActiveTab(host: SettingsHost) {
   }
   if (host.tab === "subagents") {
     await loadSubAgents(host as any);
+    if ((host as any).subagentsActiveTab === "media") {
+      const { loadMediaDashboard } = await import("./controllers/media-dashboard.ts");
+      await loadMediaDashboard(host as any);
+    }
   }
   if (host.tab === "media") {
     const { loadMediaDashboard } = await import("./controllers/media-dashboard.ts");
     await loadMediaDashboard(host as any);
+  }
+  if (host.tab === "tasks") {
+    await loadTasks(host);
   }
   if (host.tab === "plugins") {
     await loadPlugins(host as any);
@@ -230,6 +249,8 @@ export async function refreshActiveTab(host: SettingsHost) {
         loadTools(host as any),
         loadBrowserToolConfig(host as any),
       ]);
+    } else if ((host as any).pluginsPanel === "skills") {
+      await loadSkills(host as unknown as OpenAcosmiApp);
     }
   }
   if (host.tab === "agents") {
@@ -475,4 +496,24 @@ export async function loadCron(host: SettingsHost) {
     loadCronStatus(host as unknown as OpenAcosmiApp),
     loadCronJobs(host as unknown as OpenAcosmiApp),
   ]);
+}
+
+export async function loadTasks(host: SettingsHost) {
+  const app = host as unknown as OpenAcosmiApp;
+  if (!app.client) return;
+  try {
+    const res = await app.client.request<{ tasks?: unknown[] }>(
+      "tasks.list",
+      { limit: 100 },
+    );
+    if (res && Array.isArray(res.tasks)) {
+      const { mergeLoadedTasks } = await import("./controllers/task-kanban.ts");
+      app.taskKanbanState = mergeLoadedTasks(
+        app.taskKanbanState,
+        res.tasks as import("./controllers/task-kanban.ts").TaskListEntry[],
+      );
+    }
+  } catch {
+    // 非关键路径，静默忽略
+  }
 }

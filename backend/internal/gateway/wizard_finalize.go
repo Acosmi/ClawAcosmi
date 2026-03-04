@@ -14,9 +14,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/daemon"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/daemon"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 类型定义 ----------

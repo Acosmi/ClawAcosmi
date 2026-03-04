@@ -211,6 +211,56 @@ function buildSortedIds(tasks: Map<string, TaskKanbanItem>): string[] {
   return arr.map((t) => t.taskId);
 }
 
+// ---------- 持久化加载 ----------
+
+/** tasks.list RPC 响应条目（与后端 TaskListEntry 对齐）。 */
+export type TaskListEntry = {
+  taskId: string;
+  sessionKey: string;
+  text: string;
+  status: string;
+  async?: boolean;
+  summary?: string;
+  error?: string;
+  toolName?: string;
+  queuedAt: number;
+  startedAt?: number;
+  completedAt?: number;
+};
+
+/** 将 tasks.list RPC 返回的历史任务合并入看板状态（WS 实时事件优先）。 */
+export function mergeLoadedTasks(
+  state: TaskKanbanState,
+  loaded: TaskListEntry[],
+): TaskKanbanState {
+  const tasks = new Map(state.tasks);
+  for (const t of loaded) {
+    // WS 实时事件优先（已有的不覆盖）
+    if (tasks.has(t.taskId)) continue;
+    tasks.set(t.taskId, {
+      taskId: t.taskId,
+      sessionKey: t.sessionKey,
+      text: t.text,
+      status: mapStatus(t.status),
+      async: t.async ?? false,
+      summary: t.summary,
+      error: t.error,
+      toolName: t.toolName,
+      queuedAt: t.queuedAt,
+      startedAt: t.startedAt,
+      completedAt: t.completedAt,
+    });
+  }
+  return { tasks, sortedIds: buildSortedIds(tasks) };
+}
+
+function mapStatus(s: string): TaskStatus {
+  if (s === "queued" || s === "started" || s === "progress" || s === "completed" || s === "failed") {
+    return s;
+  }
+  return "queued";
+}
+
 /** 辅助：按看板列分组。 */
 export function groupByColumn(state: TaskKanbanState): {
   queued: TaskKanbanItem[];

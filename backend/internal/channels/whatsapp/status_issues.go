@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // WhatsApp 状态问题收集 — 继承自 src/channels/plugins/status-issues/whatsapp.ts (74L)

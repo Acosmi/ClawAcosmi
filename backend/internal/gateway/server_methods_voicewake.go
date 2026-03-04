@@ -6,7 +6,7 @@ package gateway
 // 方法列表 (2): voicewake.get, voicewake.set
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // VoiceWakeHandlers 返回 voicewake.* 方法映射。

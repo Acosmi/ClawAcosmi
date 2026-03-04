@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestPickHost(t *testing.T) {

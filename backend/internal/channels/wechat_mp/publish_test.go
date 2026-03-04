@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // newPublishTestServer 创建 mock 服务器 + Publisher。

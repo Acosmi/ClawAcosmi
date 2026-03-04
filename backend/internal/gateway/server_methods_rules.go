@@ -14,8 +14,8 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // RulesHandlers 返回 security.rules.* 方法处理器映射。

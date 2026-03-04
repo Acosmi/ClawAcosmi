@@ -6,8 +6,8 @@ package infra
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/routing"
-	"github.com/openacosmi/claw-acismi/internal/sessions"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/sessions"
 )
 
 // isSurfaceGroupKey 判断是否为 surface group key。

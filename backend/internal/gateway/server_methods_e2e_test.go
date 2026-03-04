@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
-	"github.com/openacosmi/claw-acismi/internal/agents/session"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/session"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ============================================================

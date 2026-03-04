@@ -14,7 +14,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/argus"
+	"github.com/Acosmi/ClawAcosmi/internal/argus"
 )
 
 // ArgusHandlers 返回 argus.* 静态方法映射。
@@ -23,7 +23,63 @@ func ArgusHandlers() map[string]GatewayMethodHandler {
 		"argus.status":           handleArgusStatus,
 		"argus.restart":          handleArgusRestart,
 		"argus.approval.resolve": handleArgusApprovalResolve,
+		"argus.permission.check": handleArgusPermissionCheck,
+		"argus.diagnose":         handleArgusDiagnose, // ARGUS-004: 一键诊断
 	}
+}
+
+// ---------- argus.permission.check ----------
+
+func handleArgusPermissionCheck(ctx *MethodHandlerContext) {
+	tcc := argus.CheckTCCPermissions()
+
+	// ARGUS-006: 构建结构化恢复动作（供前端 UI 渲染按钮）
+	var actions []map[string]string
+	if tcc.ScreenRecording == argus.PermDenied {
+		actions = append(actions, map[string]string{
+			"action": "open_settings",
+			"target": "screen_recording",
+			"label":  "Open Screen Recording Settings",
+			"hint":   "System Settings > Privacy & Security > Screen Recording",
+		})
+	}
+	if tcc.Accessibility == argus.PermDenied {
+		actions = append(actions, map[string]string{
+			"action": "open_settings",
+			"target": "accessibility",
+			"label":  "Open Accessibility Settings",
+			"hint":   "System Settings > Privacy & Security > Accessibility",
+		})
+	}
+	if tcc.HasRequiredPermissions() {
+		// 权限已获得 → 提供一键重试启动
+		bridge := ctx.Context.State.ArgusBridge()
+		if bridge == nil || bridge.State() == argus.BridgeStateStopped {
+			actions = append(actions, map[string]string{
+				"action": "retry_start",
+				"label":  "Retry Start Argus",
+				"hint":   "Permissions granted. Click to start Argus.",
+			})
+		}
+	}
+
+	// Bridge 状态（供前端判断是否显示重试按钮）
+	bridge := ctx.Context.State.ArgusBridge()
+	bridgeState := "not_configured"
+	if bridge != nil {
+		bridgeState = string(bridge.State())
+	}
+
+	ctx.Respond(true, map[string]interface{}{
+		"screen_recording":           string(tcc.ScreenRecording),
+		"accessibility":              string(tcc.Accessibility),
+		"all_granted":                tcc.HasRequiredPermissions(),
+		"recovery":                   tcc.Recovery(),
+		"screen_recording_expiring":  tcc.ScreenRecordingExpiring,
+		"screen_recording_days_left": tcc.ScreenRecordingDaysLeft,
+		"bridge_state":               bridgeState,
+		"actions":                    actions,
+	}, nil)
 }
 
 // ---------- argus.status ----------
@@ -103,6 +159,79 @@ func handleArgusRestart(ctx *MethodHandlerContext) {
 func handleArgusApprovalResolve(ctx *MethodHandlerContext) {
 	// Phase 2: 实现审批决策中继到 Argus ApprovalGateway
 	ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "argus.approval.resolve: not yet implemented (Phase 2)"))
+}
+
+// ---------- argus.diagnose ----------
+// ARGUS-004: 一键诊断 — 输出 resolvedPath/exists/executable/codesign/TCC/recovery/trace。
+
+func handleArgusDiagnose(ctx *MethodHandlerContext) {
+	// 从 live config 获取 binaryPath 配置
+	var configBinaryPath string
+	liveCfg := ctx.Context.Config
+	if ctx.Context.ConfigLoader != nil {
+		if fresh, err := ctx.Context.ConfigLoader.LoadConfig(); err == nil {
+			liveCfg = fresh
+		}
+	}
+	if liveCfg != nil && liveCfg.SubAgents != nil && liveCfg.SubAgents.ScreenObserver != nil {
+		configBinaryPath = liveCfg.SubAgents.ScreenObserver.BinaryPath
+	}
+
+	// 运行完整 resolver 获取路径和 trace
+	result := resolveArgusBinaryFull(configBinaryPath)
+
+	// 二进制检查
+	binaryCheck := argus.CheckBinary(result.Path)
+
+	// TCC 权限检查
+	tcc := argus.CheckTCCPermissions()
+
+	// 签名状态（仅路径有效时检查）
+	codesignStatus := "unknown"
+	if binaryCheck.Status == "available" {
+		if argus.IsValidlySigned(result.Path) {
+			codesignStatus = "valid"
+		} else {
+			codesignStatus = "unsigned_or_invalid"
+		}
+	}
+
+	// Bridge 运行状态
+	bridge := ctx.Context.State.ArgusBridge()
+	bridgeState := "not_configured"
+	var bridgePID int
+	if bridge != nil {
+		bridgeState = string(bridge.State())
+		bridgePID = bridge.PID()
+	}
+
+	// 恢复建议
+	recovery := ""
+	if result.Error != nil {
+		recovery = result.Error.Recovery
+	} else if binaryCheck.Recovery != "" {
+		recovery = binaryCheck.Recovery
+	} else if !tcc.HasRequiredPermissions() {
+		recovery = tcc.Recovery()
+	}
+
+	ctx.Respond(true, map[string]interface{}{
+		"resolvedPath": result.Path,
+		"exists":       binaryCheck.Status != "not_found",
+		"executable":   binaryCheck.Status == "available",
+		"codesign":     codesignStatus,
+		"tcc": map[string]interface{}{
+			"screen_recording": string(tcc.ScreenRecording),
+			"accessibility":    string(tcc.Accessibility),
+			"all_granted":      tcc.HasRequiredPermissions(),
+		},
+		"bridge": map[string]interface{}{
+			"state": bridgeState,
+			"pid":   bridgePID,
+		},
+		"trace":    result.Trace,
+		"recovery": recovery,
+	}, nil)
 }
 
 // ---------- 动态方法注册 ----------

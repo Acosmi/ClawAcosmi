@@ -18,8 +18,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // ---------- Provider 接口 ----------
@@ -413,6 +416,92 @@ func (n *RemoteApprovalNotifier) NotifyCoderConfirmResult(id string, approved bo
 	}
 }
 
+// ---------- PlanConfirmation 方案确认卡片 ----------
+
+// PlanConfirmCardRequest 方案确认卡片请求参数。
+type PlanConfirmCardRequest struct {
+	ConfirmID        string   `json:"confirmId"`
+	TaskBrief        string   `json:"taskBrief"`
+	PlanSteps        []string `json:"planSteps"`
+	IntentTier       string   `json:"intentTier"`
+	SessionKey       string   `json:"sessionKey"`                 // 来源会话标识
+	OriginatorChatID string   `json:"originatorChatId,omitempty"` // 飞书 chat_id
+	OriginatorUserID string   `json:"originatorUserId,omitempty"` // 飞书 open_id
+	TTLMinutes       int      `json:"ttlMinutes"`
+}
+
+// PlanConfirmNotifier 可选接口——Provider 实现后可推送方案确认卡片。
+type PlanConfirmNotifier interface {
+	SendPlanConfirmRequest(ctx context.Context, req PlanConfirmCardRequest) error
+	SendPlanConfirmResult(ctx context.Context, id string, decision string) error
+}
+
+// NotifyPlanConfirm 向所有已启用的 Provider 发送方案确认通知。
+func (n *RemoteApprovalNotifier) NotifyPlanConfirm(req PlanConfirmCardRequest) {
+	n.mu.RLock()
+	if !n.config.Enabled || len(n.providers) == 0 {
+		n.mu.RUnlock()
+		return
+	}
+	providers := make([]RemoteApprovalProvider, len(n.providers))
+	copy(providers, n.providers)
+	n.mu.RUnlock()
+
+	for _, p := range providers {
+		pn, ok := p.(PlanConfirmNotifier)
+		if !ok {
+			continue
+		}
+		go func(notifier PlanConfirmNotifier, name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := notifier.SendPlanConfirmRequest(ctx, req); err != nil {
+				n.logger.Error("方案确认通知发送失败",
+					"provider", name,
+					"confirmId", req.ConfirmID,
+					"error", err,
+				)
+			} else {
+				n.logger.Info("方案确认通知已发送",
+					"provider", name,
+					"confirmId", req.ConfirmID,
+					"taskBrief", req.TaskBrief,
+				)
+			}
+		}(pn, p.Name())
+	}
+}
+
+// NotifyPlanConfirmResult 向所有已启用的 Provider 推送方案确认结果。
+func (n *RemoteApprovalNotifier) NotifyPlanConfirmResult(id string, decision string) {
+	n.mu.RLock()
+	if !n.config.Enabled || len(n.providers) == 0 {
+		n.mu.RUnlock()
+		return
+	}
+	providers := make([]RemoteApprovalProvider, len(n.providers))
+	copy(providers, n.providers)
+	n.mu.RUnlock()
+
+	for _, p := range providers {
+		pn, ok := p.(PlanConfirmNotifier)
+		if !ok {
+			continue
+		}
+		go func(notifier PlanConfirmNotifier, name string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := notifier.SendPlanConfirmResult(ctx, id, decision); err != nil {
+				n.logger.Error("方案确认结果通知失败",
+					"provider", name,
+					"confirmId", id,
+					"error", err,
+				)
+			}
+		}(pn, p.Name())
+	}
+}
+
 // GetConfig 获取当前配置（脱敏）。
 func (n *RemoteApprovalNotifier) GetConfig() RemoteApprovalConfig {
 	n.mu.RLock()
@@ -490,22 +579,61 @@ func (n *RemoteApprovalNotifier) TestProvider(providerName string) error {
 
 	for _, p := range n.providers {
 		if p.Name() == providerName {
+			channelID := remoteApprovalProviderChannelID(providerName)
 			if err := p.ValidateConfig(); err != nil {
-				return fmt.Errorf("配置验证失败: %w", err)
+				return channels.NewSendError(channelID, channels.SendErrInvalidRequest,
+					"remote approval config invalid: "+err.Error()).
+					WithOperation("remote_approval.validate").
+					WithDetails(map[string]interface{}{
+						"provider": providerName,
+					})
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			return p.SendApprovalRequest(ctx, ApprovalCardRequest{
+			if err := p.SendApprovalRequest(ctx, ApprovalCardRequest{
 				EscalationID:   "test_" + fmt.Sprintf("%d", time.Now().UnixMilli()),
 				RequestedLevel: "full",
 				Reason:         "测试远程审批连接 / Test remote approval connection",
 				TTLMinutes:     30,
 				CallbackURL:    n.config.CallbackURL,
 				RequestedAt:    time.Now(),
-			})
+			}); err != nil {
+				if _, ok := channels.AsSendError(err); ok {
+					return err
+				}
+				return channels.WrapSendError(channelID, channels.SendErrUpstream,
+					"remote_approval.test.send",
+					"remote approval test send failed", err).
+					WithRetryable(true).
+					WithDetails(map[string]interface{}{
+						"provider": providerName,
+					})
+			}
+			return nil
 		}
 	}
-	return fmt.Errorf("provider %q 未启用或不存在", providerName)
+	return channels.NewSendError(remoteApprovalProviderChannelID(providerName), channels.SendErrInvalidTarget,
+		fmt.Sprintf("provider %q 未启用或不存在", providerName)).
+		WithOperation("remote_approval.resolve_provider").
+		WithDetails(map[string]interface{}{
+			"provider": providerName,
+		})
+}
+
+func remoteApprovalProviderChannelID(providerName string) channels.ChannelID {
+	switch strings.ToLower(strings.TrimSpace(providerName)) {
+	case "feishu", "lark":
+		return channels.ChannelFeishu
+	case "dingtalk":
+		return channels.ChannelDingTalk
+	case "wecom", "wechatwork", "workweixin":
+		return channels.ChannelWeCom
+	default:
+		if trimmed := strings.TrimSpace(providerName); trimmed != "" {
+			return channels.ChannelID(trimmed)
+		}
+		return channels.ChannelID("remote_approval")
+	}
 }
 
 // EnabledProviderNames 返回当前已启用的 Provider 名称列表。

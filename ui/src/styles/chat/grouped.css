@@ -5,11 +5,17 @@
 /* Chat Group Layout - default (assistant/other on left) */
 .chat-group {
   display: flex;
-  gap: 12px;
+  gap: 0;
   align-items: flex-start;
   margin-bottom: 16px;
-  margin-left: 4px;
-  margin-right: 16px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Align message area start with compose pill start. */
+.content--chat .chat-thread {
+  padding-left: 8px;
+  overflow-x: hidden;
 }
 
 /* User messages on right */
@@ -22,7 +28,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-width: min(900px, calc(100% - 60px));
+  max-width: min(900px, 100%);
 }
 
 /* User messages align content right */
@@ -87,13 +93,17 @@
   height: 40px;
   border-radius: 8px;
   background: var(--panel-strong);
+  position: relative;
+  z-index: 2;
   display: grid;
   place-items: center;
   font-weight: 600;
   font-size: 14px;
   flex-shrink: 0;
-  align-self: flex-end; /* Align with last message in group */
-  margin-bottom: 4px; /* Optical alignment */
+  align-self: flex-end;
+  /* Align with last message in group */
+  margin-bottom: 4px;
+  /* Optical alignment */
 }
 
 .chat-avatar.user {
@@ -274,10 +284,12 @@ img.chat-avatar {
 }
 
 @keyframes pulsing-border {
+
   0%,
   100% {
     border-color: var(--border);
   }
+
   50% {
     border-color: var(--accent);
   }
@@ -293,8 +305,21 @@ img.chat-avatar {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Avatar is intentionally disabled in chat UI. */
+.content--chat .chat-avatar,
+.content--chat img.chat-avatar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
 }

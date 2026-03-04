@@ -146,6 +146,7 @@ var (
 	}
 	authPatterns = []ErrorPattern{
 		re(`invalid[_ ]?api[_ ]?key`),
+		substr("api key not valid"), // Gemini: "API key not valid. Please pass a valid API key."
 		substr("incorrect api key"),
 		substr("invalid token"),
 		substr("authentication"),
@@ -164,6 +165,8 @@ var (
 	overloadPatterns = []ErrorPattern{
 		re(`overloaded_error|"type"\s*:\s*"overloaded_error"`),
 		substr("overloaded"),
+		substr("high demand"),                      // Gemini: "currently experiencing high demand"
+		re(`(?i)UNAVAILABLE.*(?:try again|later)`), // Gemini 503: "UNAVAILABLE: ... try again later"
 	}
 	formatPatterns = []ErrorPattern{
 		substr("string should match pattern"),

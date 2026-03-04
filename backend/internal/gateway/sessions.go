@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
 )
 
 // ---------- Session 存储 (移植自 sessions.ts / store.ts) ----------

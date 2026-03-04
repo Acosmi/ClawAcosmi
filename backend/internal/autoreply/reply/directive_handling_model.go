@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 // TS 对照: auto-reply/reply/directive-handling.model.ts (403L)

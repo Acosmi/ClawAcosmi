@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 func TestReplyDispatcher_SendFinalReply(t *testing.T) {

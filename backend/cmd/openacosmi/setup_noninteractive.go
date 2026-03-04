@@ -14,8 +14,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- NonInteractive 选项 ----------
@@ -92,15 +92,8 @@ var authChoiceFlagMap = []authChoiceFlagEntry{
 	{"anthropic", AuthChoiceApiKey, "--anthropic-api-key"},
 	{"gemini", AuthChoiceGeminiApiKey, "--gemini-api-key"},
 	{"openai", AuthChoiceOpenAIApiKey, "--openai-api-key"},
-	{"openrouter", AuthChoiceOpenRouterApiKey, "--openrouter-api-key"},
-	{"ai-gateway", AuthChoiceAIGatewayApiKey, "--ai-gateway-api-key"},
-	{"cloudflare", AuthChoiceCloudflareAIGatewayKey, "--cloudflare-ai-gateway-api-key"},
 	{"moonshot", AuthChoiceMoonshotApiKey, "--moonshot-api-key"},
-	{"kimi-code", AuthChoiceKimiCodeApiKey, "--kimi-code-api-key"},
-	{"synthetic", AuthChoiceSyntheticApiKey, "--synthetic-api-key"},
-	{"venice", AuthChoiceVeniceApiKey, "--venice-api-key"},
 	{"zai", AuthChoiceZaiApiKey, "--zai-api-key"},
-	{"xiaomi", AuthChoiceXiaomiApiKey, "--xiaomi-api-key"},
 	{"xai", AuthChoiceXAIApiKey, "--xai-api-key"},
 	{"minimax", AuthChoiceMinimaxApi, "--minimax-api-key"},
 	{"openacosmi-zen", AuthChoiceAcosmiZen, "--openacosmi-zen-api-key"},

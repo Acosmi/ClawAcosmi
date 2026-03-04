@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- sessions.usage ----------

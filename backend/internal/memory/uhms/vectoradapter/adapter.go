@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
 )
 
 // SystemCollections 系统级 Qdrant collections (非用户记忆)。

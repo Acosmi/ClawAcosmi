@@ -18,11 +18,31 @@ import (
 
 const defaultOpenAIBaseURL = "https://api.openai.com/v1"
 
+// providerDefaultBaseURLs maps OpenAI-compatible providers to their default API endpoints.
+// Prevents silent misrouting when BaseURL is empty (e.g. DeepSeek → api.openai.com).
+var providerDefaultBaseURLs = map[string]string{
+	"deepseek":          "https://api.deepseek.com/v1",
+	"deepseek-reasoner": "https://api.deepseek.com/v1",
+	"moonshot":          "https://api.moonshot.cn/v1",
+	"kimi":              "https://api.moonshot.cn/v1",
+	"qwen":              "https://dashscope.aliyuncs.com/compatible-mode/v1",
+	"qwen-portal":       "https://dashscope.aliyuncs.com/compatible-mode/v1",
+	"minimax":           "https://api.minimax.chat/v1",
+	"zai":               "https://open.bigmodel.cn/api/paas/v4",
+	"zhipu":             "https://open.bigmodel.cn/api/paas/v4",
+	"doubao":            "https://ark.cn-beijing.volces.com/api/v3",
+	"xai":               "https://api.x.ai/v1",
+}
+
 // openaiStreamChat 调用 OpenAI Chat Completions API (流式)。
 func openaiStreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamEvent)) (*ChatResult, error) {
 	baseURL := req.BaseURL
 	if baseURL == "" {
-		baseURL = defaultOpenAIBaseURL
+		if providerURL, ok := providerDefaultBaseURLs[strings.ToLower(req.Provider)]; ok {
+			baseURL = providerURL
+		} else {
+			baseURL = defaultOpenAIBaseURL
+		}
 	}
 	endpoint := strings.TrimRight(baseURL, "/") + "/chat/completions"
 

@@ -11,7 +11,7 @@
 #   make lint           # 静态分析
 #   make clean          # 清理构建产物
 
-.PHONY: gateway cli build-all build-cpp test lint clean fmt vet help \
+.PHONY: gateway cli build-all build-cpp test test-multimedia report-multimedia lint clean fmt vet help \
         gateway-dev gateway-run test-rust install-cli build-go-cli-deprecated
 
 # 版本信息
@@ -82,6 +82,14 @@ test: ## 运行全部 Go 测试
 	@echo "🧪 运行测试..."
 	go test -race -cover ./...
 	@echo "✅ 测试通过"
+
+test-multimedia: ## 运行多媒体关键回归测试（飞书/钉钉/企微/网关管道）
+	@echo "🧪 运行多媒体关键回归..."
+	go test ./internal/channels/feishu ./internal/channels/dingtalk ./internal/channels/wecom ./internal/channels ./internal/agents/runner ./internal/gateway -run 'TestFeishuSendMessage_|TestWeComSendMessage_|TestWecomMediaURLFallbackText|TestDingTalkSendMessage_|TestDingTalkUploadHelpers|TestBuildDingTalkImageMsgParam_|TestSendErrorExportedAccessors|TestMapSendErrorToShape|TestHandleSend_|TestHandlePoll_|TestProcessFeishuMessage_|TestProcessAttachmentsForChat_|TestSendMedia_ChannelSendError_UsesStructuredMessage|TestBuildPayloads_|TestExtractMediaListFromReplies_|TestHandleRemoteApprovalTest_|TestRemoteApprovalNotifier_TestProvider_'
+	@echo "✅ 多媒体关键回归通过"
+
+report-multimedia: ## 生成多媒体回归报告（写入 docs/codex）
+	@../scripts/generate_multimedia_regression_report.sh
 
 test-verbose: ## 运行测试（详细输出）
 	go test -race -cover -v ./...

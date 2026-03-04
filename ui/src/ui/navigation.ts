@@ -3,13 +3,16 @@ import { t } from "./i18n.ts";
 
 export function getTabGroups() {
   return [
-    { label: t("nav.group.chat"), tabs: ["chat"] as const },
+    {
+      label: t("nav.group.agent"),
+      hideLabel: true,
+      tabs: ["chat", "tasks", "agents", "nodes", "subagents"] as const,
+    },
     {
       label: t("nav.group.control"),
-      tabs: ["overview", "channels", "plugins", "instances", "memory", "usage", "cron"] as const,
+      tabs: ["overview", "channels", "plugins", "memory", "cron", "security"] as const,
     },
-    { label: t("nav.group.agent"), tabs: ["agents", "skills", "nodes", "subagents", "media", "tasks"] as const },
-    { label: t("nav.group.settings"), tabs: ["security", "config", "debug", "logs"] as const },
+    { label: t("nav.group.settings"), tabs: ["config", "debug", "logs"] as const },
   ];
 }
 

@@ -11,7 +11,8 @@
   min-width: 400px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
   /* Smooth transition when sidebar opens/closes */
   transition: flex 250ms ease-out;
 }

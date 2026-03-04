@@ -4,9 +4,9 @@ package main
 // 对应 TS src/commands/onboard-types.ts (106L) + auth-choice-options.ts (272L)
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- AuthChoice 常量 ----------
@@ -15,40 +15,23 @@ import (
 type AuthChoice = string
 
 const (
-	AuthChoiceOAuth                  AuthChoice = "oauth"
-	AuthChoiceSetupToken             AuthChoice = "setup-token"
-	AuthChoiceClaudeCli              AuthChoice = "claude-cli"
-	AuthChoiceToken                  AuthChoice = "token"
-	AuthChoiceChutes                 AuthChoice = "chutes"
-	AuthChoiceOpenAICodex            AuthChoice = "openai-codex"
-	AuthChoiceOpenAIApiKey           AuthChoice = "openai-api-key"
-	AuthChoiceOpenRouterApiKey       AuthChoice = "openrouter-api-key"
-	AuthChoiceAIGatewayApiKey        AuthChoice = "ai-gateway-api-key"
-	AuthChoiceCloudflareAIGatewayKey AuthChoice = "cloudflare-ai-gateway-api-key"
-	AuthChoiceMoonshotApiKey         AuthChoice = "moonshot-api-key"
-	AuthChoiceMoonshotApiKeyCn       AuthChoice = "moonshot-api-key-cn"
-	AuthChoiceKimiCodeApiKey         AuthChoice = "kimi-code-api-key"
-	AuthChoiceSyntheticApiKey        AuthChoice = "synthetic-api-key"
-	AuthChoiceVeniceApiKey           AuthChoice = "venice-api-key"
-	AuthChoiceCodexCli               AuthChoice = "codex-cli"
-	AuthChoiceApiKey                 AuthChoice = "apiKey"
-	AuthChoiceGeminiApiKey           AuthChoice = "gemini-api-key"
-	AuthChoiceGoogleAntigravity      AuthChoice = "google-antigravity"
-	AuthChoiceGoogleGeminiCli        AuthChoice = "google-gemini-cli"
-	AuthChoiceZaiApiKey              AuthChoice = "zai-api-key"
-	AuthChoiceXiaomiApiKey           AuthChoice = "xiaomi-api-key"
-	AuthChoiceMinimaxCloud           AuthChoice = "minimax-cloud"
-	AuthChoiceMinimax                AuthChoice = "minimax"
-	AuthChoiceMinimaxApi             AuthChoice = "minimax-api"
-	AuthChoiceMinimaxApiLightning    AuthChoice = "minimax-api-lightning"
-	AuthChoiceMinimaxPortal          AuthChoice = "minimax-portal"
-	AuthChoiceAcosmiZen              AuthChoice = "openacosmi-zen"
-	AuthChoiceGitHubCopilot          AuthChoice = "github-copilot"
-	AuthChoiceCopilotProxy           AuthChoice = "copilot-proxy"
-	AuthChoiceQwenPortal             AuthChoice = "qwen-portal"
-	AuthChoiceXAIApiKey              AuthChoice = "xai-api-key"
-	AuthChoiceQianfanApiKey          AuthChoice = "qianfan-api-key"
-	AuthChoiceSkip                   AuthChoice = "skip"
+	AuthChoiceToken               AuthChoice = "token"
+	AuthChoiceOpenAIApiKey        AuthChoice = "openai-api-key"
+	AuthChoiceMoonshotApiKey      AuthChoice = "moonshot-api-key"
+	AuthChoiceMoonshotApiKeyCn    AuthChoice = "moonshot-api-key-cn"
+	AuthChoiceApiKey              AuthChoice = "apiKey"
+	AuthChoiceGeminiApiKey        AuthChoice = "gemini-api-key"
+	AuthChoiceGoogleAntigravity   AuthChoice = "google-antigravity"
+	AuthChoiceGoogleGeminiCli     AuthChoice = "google-gemini-cli"
+	AuthChoiceZaiApiKey           AuthChoice = "zai-api-key"
+	AuthChoiceMinimaxApi          AuthChoice = "minimax-api"
+	AuthChoiceMinimaxApiLightning AuthChoice = "minimax-api-lightning"
+	AuthChoiceMinimaxPortal       AuthChoice = "minimax-portal"
+	AuthChoiceAcosmiZen           AuthChoice = "openacosmi-zen"
+	AuthChoiceGitHubCopilot       AuthChoice = "github-copilot"
+	AuthChoiceQwenPortal          AuthChoice = "qwen-portal"
+	AuthChoiceXAIApiKey           AuthChoice = "xai-api-key"
+	AuthChoiceSkip                AuthChoice = "skip"
 )
 
 // ---------- AuthChoice 分组 ----------
@@ -57,23 +40,16 @@ const (
 type AuthChoiceGroupID = string
 
 const (
-	GroupOpenAI              AuthChoiceGroupID = "openai"
-	GroupAnthropic           AuthChoiceGroupID = "anthropic"
-	GroupGoogle              AuthChoiceGroupID = "google"
-	GroupCopilot             AuthChoiceGroupID = "copilot"
-	GroupOpenRouter          AuthChoiceGroupID = "openrouter"
-	GroupAIGateway           AuthChoiceGroupID = "ai-gateway"
-	GroupCloudflareAIGateway AuthChoiceGroupID = "cloudflare-ai-gateway"
-	GroupMoonshot            AuthChoiceGroupID = "moonshot"
-	GroupZAI                 AuthChoiceGroupID = "zai"
-	GroupXiaomi              AuthChoiceGroupID = "xiaomi"
-	GroupAcosmiZen           AuthChoiceGroupID = "openacosmi-zen"
-	GroupMinimax             AuthChoiceGroupID = "minimax"
-	GroupSynthetic           AuthChoiceGroupID = "synthetic"
-	GroupVenice              AuthChoiceGroupID = "venice"
-	GroupQwen                AuthChoiceGroupID = "qwen"
-	GroupQianfan             AuthChoiceGroupID = "qianfan"
-	GroupXAI                 AuthChoiceGroupID = "xai"
+	GroupOpenAI    AuthChoiceGroupID = "openai"
+	GroupAnthropic AuthChoiceGroupID = "anthropic"
+	GroupGoogle    AuthChoiceGroupID = "google"
+	GroupCopilot   AuthChoiceGroupID = "copilot"
+	GroupMoonshot  AuthChoiceGroupID = "moonshot"
+	GroupZAI       AuthChoiceGroupID = "zai"
+	GroupAcosmiZen AuthChoiceGroupID = "openacosmi-zen"
+	GroupMinimax   AuthChoiceGroupID = "minimax"
+	GroupQwen      AuthChoiceGroupID = "qwen"
+	GroupXAI       AuthChoiceGroupID = "xai"
 )
 
 // AuthChoiceOption 认证选项（对应 TS AuthChoiceOption）。
@@ -107,12 +83,9 @@ type ApplyAuthChoiceParams struct {
 
 // ApplyAuthChoiceOpts 可选参数。
 type ApplyAuthChoiceOpts struct {
-	TokenProvider                string
-	Token                        string
-	CloudflareAIGatewayAccountID string
-	CloudflareAIGatewayGatewayID string
-	CloudflareAIGatewayApiKey    string
-	XAIApiKey                    string
+	TokenProvider string
+	Token         string
+	XAIApiKey     string
 }
 
 // ApplyAuthChoiceResult 应用认证选择的结果。
@@ -188,24 +161,14 @@ type OnboardOptions struct {
 	TokenExpiresIn string `json:"tokenExpiresIn,omitempty"`
 
 	// Provider API keys
-	AnthropicApiKey              string `json:"anthropicApiKey,omitempty"`
-	OpenAIApiKey                 string `json:"openaiApiKey,omitempty"`
-	OpenRouterApiKey             string `json:"openrouterApiKey,omitempty"`
-	AIGatewayApiKey              string `json:"aiGatewayApiKey,omitempty"`
-	CloudflareAIGatewayAccountID string `json:"cloudflareAiGatewayAccountId,omitempty"`
-	CloudflareAIGatewayGatewayID string `json:"cloudflareAiGatewayGatewayId,omitempty"`
-	CloudflareAIGatewayApiKey    string `json:"cloudflareAiGatewayApiKey,omitempty"`
-	MoonshotApiKey               string `json:"moonshotApiKey,omitempty"`
-	KimiCodeApiKey               string `json:"kimiCodeApiKey,omitempty"`
-	GeminiApiKey                 string `json:"geminiApiKey,omitempty"`
-	ZaiApiKey                    string `json:"zaiApiKey,omitempty"`
-	XiaomiApiKey                 string `json:"xiaomiApiKey,omitempty"`
-	MinimaxApiKey                string `json:"minimaxApiKey,omitempty"`
-	SyntheticApiKey              string `json:"syntheticApiKey,omitempty"`
-	VeniceApiKey                 string `json:"veniceApiKey,omitempty"`
-	AcosmiZenApiKey              string `json:"openacosmiZenApiKey,omitempty"`
-	XAIApiKey                    string `json:"xaiApiKey,omitempty"`
-	QianfanApiKey                string `json:"qianfanApiKey,omitempty"`
+	AnthropicApiKey string `json:"anthropicApiKey,omitempty"`
+	OpenAIApiKey    string `json:"openaiApiKey,omitempty"`
+	MoonshotApiKey  string `json:"moonshotApiKey,omitempty"`
+	GeminiApiKey    string `json:"geminiApiKey,omitempty"`
+	ZaiApiKey       string `json:"zaiApiKey,omitempty"`
+	MinimaxApiKey   string `json:"minimaxApiKey,omitempty"`
+	AcosmiZenApiKey string `json:"openacosmiZenApiKey,omitempty"`
+	XAIApiKey       string `json:"xaiApiKey,omitempty"`
 
 	// Gateway
 	GatewayPort     int               `json:"gatewayPort,omitempty"`

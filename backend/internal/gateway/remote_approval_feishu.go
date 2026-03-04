@@ -228,6 +228,7 @@ type feishuTarget struct {
 
 // broadcastCard 群发飞书卡片到所有已配置的目标（群聊+用户）+ 可选额外目标。
 // Fix 10: 统一目标收集逻辑，消除与 SendApprovalRequest 的重复代码。
+// Fix D5: 群聊优先策略——有群聊目标时不发私聊，避免视觉"双卡片"。
 func (p *feishuProvider) broadcastCard(ctx context.Context, token string, card map[string]interface{}, extraTargets ...feishuTarget) error {
 	seen := make(map[string]bool)
 	var targets []feishuTarget
@@ -243,16 +244,34 @@ func (p *feishuProvider) broadcastCard(ctx context.Context, token string, card m
 		targets = append(targets, feishuTarget{idType, id})
 	}
 
-	// 静态配置目标
+	// 第一步：收集群聊目标（优先级最高）
 	addTarget("chat_id", p.config.ChatID)
-	addTarget("open_id", p.config.UserID)
 	addTarget("chat_id", p.config.ApprovalChatID) // 固定审批群 fallback
 	addTarget("chat_id", p.config.LastKnownChatID)
-	addTarget("open_id", p.config.LastKnownUserID)
 
-	// 动态额外目标（如 originator）
+	// 动态额外目标中的群聊
 	for _, t := range extraTargets {
-		addTarget(t.idType, t.id)
+		if t.idType == "chat_id" {
+			addTarget(t.idType, t.id)
+		}
+	}
+
+	// 第二步：仅在无群聊目标时才添加私聊目标（避免群+私双卡片）
+	hasChatTarget := false
+	for _, t := range targets {
+		if t.idType == "chat_id" {
+			hasChatTarget = true
+			break
+		}
+	}
+	if !hasChatTarget {
+		addTarget("open_id", p.config.UserID)
+		addTarget("open_id", p.config.LastKnownUserID)
+		for _, t := range extraTargets {
+			if t.idType == "open_id" {
+				addTarget(t.idType, t.id)
+			}
+		}
 	}
 
 	if len(targets) == 0 {
@@ -517,6 +536,178 @@ func (p *feishuProvider) buildCoderConfirmResultCard(id string, approved bool) m
 		headerTitle = "❌ 操作已拒绝 / Action Denied"
 		headerTemplate = "red"
 		bodyText = "操作确认请求已拒绝，任务将跳过此操作。"
+	}
+
+	return map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"title": map[string]interface{}{
+				"tag":     "plain_text",
+				"content": headerTitle,
+			},
+			"template": headerTemplate,
+		},
+		"elements": []interface{}{
+			map[string]interface{}{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"tag":     "lark_md",
+					"content": bodyText,
+				},
+			},
+			map[string]interface{}{
+				"tag": "note",
+				"elements": []interface{}{
+					map[string]interface{}{
+						"tag":     "plain_text",
+						"content": fmt.Sprintf("ID: %s", id),
+					},
+				},
+			},
+		},
+	}
+}
+
+// ---------- PlanConfirmation 方案确认卡片 ----------
+
+// SendPlanConfirmRequest 实现 PlanConfirmNotifier 接口，发送方案确认卡片。
+func (p *feishuProvider) SendPlanConfirmRequest(ctx context.Context, req PlanConfirmCardRequest) error {
+	if err := p.ValidateConfig(); err != nil {
+		return err
+	}
+
+	token, err := p.getTenantAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("获取飞书 access token 失败: %w", err)
+	}
+
+	card := p.buildPlanConfirmCard(req)
+	return p.broadcastCard(ctx, token, card,
+		feishuTarget{"chat_id", req.OriginatorChatID},
+		feishuTarget{"open_id", req.OriginatorUserID},
+	)
+}
+
+// SendPlanConfirmResult 实现 PlanConfirmNotifier 接口，发送方案确认结果卡片。
+func (p *feishuProvider) SendPlanConfirmResult(ctx context.Context, id string, decision string) error {
+	if err := p.ValidateConfig(); err != nil {
+		return err
+	}
+
+	token, err := p.getTenantAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("获取飞书 access token 失败: %w", err)
+	}
+
+	card := p.buildPlanConfirmResultCard(id, decision)
+	return p.broadcastCard(ctx, token, card)
+}
+
+// buildPlanConfirmCard 构建方案确认互动卡片（蓝色主题）。
+func (p *feishuProvider) buildPlanConfirmCard(req PlanConfirmCardRequest) map[string]interface{} {
+	brief := req.TaskBrief
+	if len([]rune(brief)) > 200 {
+		brief = string([]rune(brief)[:200]) + "..."
+	}
+
+	// 格式化方案步骤
+	stepsText := ""
+	for i, step := range req.PlanSteps {
+		if i >= 10 { // 最多展示 10 步
+			stepsText += fmt.Sprintf("\n...（共 %d 步）", len(req.PlanSteps))
+			break
+		}
+		stepsText += fmt.Sprintf("\n%d. %s", i+1, step)
+	}
+
+	return map[string]interface{}{
+		"config": map[string]interface{}{
+			"wide_screen_mode": true,
+		},
+		"header": map[string]interface{}{
+			"title": map[string]interface{}{
+				"tag":     "plain_text",
+				"content": "📋 方案确认 / Plan Confirmation",
+			},
+			"template": "blue",
+		},
+		"elements": []interface{}{
+			map[string]interface{}{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"tag":     "lark_md",
+					"content": fmt.Sprintf("**任务**: %s\n**意图级别**: %s\n\n**执行方案**:%s", brief, req.IntentTier, stepsText),
+				},
+			},
+			map[string]interface{}{
+				"tag": "hr",
+			},
+			map[string]interface{}{
+				"tag": "action",
+				"actions": []interface{}{
+					map[string]interface{}{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"tag":     "plain_text",
+							"content": "✅ 批准 / Approve",
+						},
+						"type": "primary",
+						"value": map[string]interface{}{
+							"type":   "plan_confirm",
+							"action": "approve",
+							"id":     req.ConfirmID,
+						},
+					},
+					map[string]interface{}{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"tag":     "plain_text",
+							"content": "❌ 拒绝 / Reject",
+						},
+						"type": "danger",
+						"value": map[string]interface{}{
+							"type":   "plan_confirm",
+							"action": "reject",
+							"id":     req.ConfirmID,
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"tag": "note",
+				"elements": []interface{}{
+					map[string]interface{}{
+						"tag":     "plain_text",
+						"content": fmt.Sprintf("ID: %s | 超时: %d 分钟", req.ConfirmID, req.TTLMinutes),
+					},
+				},
+			},
+		},
+	}
+}
+
+// buildPlanConfirmResultCard 构建方案确认结果卡片。
+func (p *feishuProvider) buildPlanConfirmResultCard(id string, decision string) map[string]interface{} {
+	var headerTitle, headerTemplate, bodyText string
+	switch decision {
+	case "approve":
+		headerTitle = "✅ 方案已批准 / Plan Approved"
+		headerTemplate = "green"
+		bodyText = "方案确认请求已批准，正在执行。"
+	case "reject":
+		headerTitle = "❌ 方案已拒绝 / Plan Rejected"
+		headerTemplate = "red"
+		bodyText = "方案确认请求已拒绝，任务已暂停。"
+	case "edit":
+		headerTitle = "✏️ 方案已修改 / Plan Edited"
+		headerTemplate = "orange"
+		bodyText = "方案已被编辑，正在按修改后的方案执行。"
+	default:
+		headerTitle = "📋 方案确认已处理 / Plan Processed"
+		headerTemplate = "grey"
+		bodyText = fmt.Sprintf("方案确认已处理，决策: %s", decision)
 	}
 
 	return map[string]interface{}{

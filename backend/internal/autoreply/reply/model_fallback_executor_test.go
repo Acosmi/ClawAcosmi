@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Mock 实现 ----------
@@ -154,7 +154,15 @@ func TestConvertEmbeddedResult_NilResult(t *testing.T) {
 func TestConvertEmbeddedResult_WithPayloads(t *testing.T) {
 	input := &runner.EmbeddedPiRunResult{
 		Payloads: []runner.RunPayload{
-			{Text: "hello", IsError: false},
+			{
+				Text: "hello", IsError: false,
+				MediaItems: []runner.MediaBlock{
+					{MimeType: "image/png", Base64: "img-1"},
+					{MimeType: "image/jpeg", Base64: "img-2"},
+				},
+				MediaBase64:   "img-2",
+				MediaMimeType: "image/jpeg",
+			},
 			{Text: "error", IsError: true},
 		},
 		Meta: runner.EmbeddedPiRunMeta{
@@ -181,6 +189,15 @@ func TestConvertEmbeddedResult_WithPayloads(t *testing.T) {
 	}
 	if !result.Payloads[1].IsError {
 		t.Error("expected second payload to be error")
+	}
+	if len(result.Payloads[0].MediaItems) != 2 {
+		t.Fatalf("expected 2 media items, got %d", len(result.Payloads[0].MediaItems))
+	}
+	if result.Payloads[0].MediaItems[0].MediaBase64 != "img-1" || result.Payloads[0].MediaItems[0].MediaMimeType != "image/png" {
+		t.Fatalf("unexpected first media item: %+v", result.Payloads[0].MediaItems[0])
+	}
+	if result.Payloads[0].MediaBase64 != "img-2" || result.Payloads[0].MediaMimeType != "image/jpeg" {
+		t.Fatalf("legacy media fields mismatch: base64=%q mime=%q", result.Payloads[0].MediaBase64, result.Payloads[0].MediaMimeType)
 	}
 	if result.Usage == nil {
 		t.Fatal("expected usage")

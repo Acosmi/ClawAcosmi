@@ -91,7 +91,7 @@ func EnsureCodeSigned(binaryPath string) error {
 	}
 
 	// 检查当前签名状态
-	if isValidlySigned(binaryPath) {
+	if IsValidlySigned(binaryPath) {
 		slog.Debug("argus: binary already signed", "path", binaryPath)
 		return nil
 	}
@@ -146,8 +146,8 @@ func isInsideAppBundle(path string) bool {
 		strings.HasSuffix(filepath.Dir(filepath.Dir(dir)), ".app")
 }
 
-// isValidlySigned 检查二进制是否有有效签名。
-func isValidlySigned(path string) bool {
+// IsValidlySigned 检查二进制是否有有效签名。
+func IsValidlySigned(path string) bool {
 	cmd := exec.Command("codesign", "--verify", "--verbose=0", path)
 	return cmd.Run() == nil
 }

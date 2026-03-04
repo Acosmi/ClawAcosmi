@@ -104,6 +104,7 @@ type OpenCoderSettings struct {
 
 // ScreenObserverSettings 视觉观测器配置。
 type ScreenObserverSettings struct {
+	BinaryPath      string  `json:"binaryPath,omitempty"`      // argus-sensory 二进制绝对路径（ARGUS-002: 显式配置，优先于自动发现）
 	Enabled         *bool   `json:"enabled,omitempty"`         // 是否启用
 	IntervalMs      int     `json:"intervalMs,omitempty"`      // 截图间隔 ms（默认 1000）
 	ChangeThreshold float32 `json:"changeThreshold,omitempty"` // 变化阈值（默认 0.02）

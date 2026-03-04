@@ -8,7 +8,7 @@ package runner
 import (
 	"context"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // --- 模型解析 ---
@@ -149,6 +149,9 @@ type AttemptParams struct {
 	// 值: "coder" / "argus" / "media"
 	// 用于在 RunAttempt 中按类型注入子智能体专属工具。
 	AgentType string `json:"agentType,omitempty"`
+	// SuppressTranscript Bug#11: 在 model fallback 场景下跳过 transcript 持久化，
+	// 避免失败 attempt 的数据污染后续 attempt 的历史。
+	SuppressTranscript bool `json:"-"`
 }
 
 // --- Compaction ---

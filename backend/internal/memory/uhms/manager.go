@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -500,11 +499,8 @@ func (m *DefaultManager) CompressIfNeeded(ctx context.Context, messages []Messag
 	m.mu.Unlock()
 	m.persistLastSummary(summary)
 
-	// 提取 userID 一次，供后续异步闭包共享 (避免 triple extractUserID 冗余)
+	// userID: 统一为 "default" (Bug#11 P0 — 与查询路径一致)
 	asyncUserID := extractUserID(messages)
-	if asyncUserID == "" {
-		asyncUserID = "default"
-	}
 
 	// 2a. 压缩存档写入 VFS L0/L1/L2 (异步, non-blocking)
 	//     使 CompressIfNeeded 产物可被 BuildContextBlock 在跨会话恢复时检索到。
@@ -536,11 +532,8 @@ func (m *DefaultManager) CompressIfNeeded(ctx context.Context, messages []Messag
 	// 搜索相关记忆注入
 	query := extractQueryFromRecent(recentMessages)
 	if query != "" {
-		userID := extractUserID(messages)
-		if userID == "" {
-			userID = "default"
-		}
-		memBlock, err := m.BuildContextBlock(ctx, userID, query, tokenBudget/5)
+		// Bug#11 P3: 复用已提取的 asyncUserID，消除重复 extractUserID 调用
+		memBlock, err := m.BuildContextBlock(ctx, asyncUserID, query, tokenBudget/5)
 		if err == nil && memBlock != "" {
 			compressed = append(compressed, Message{
 				Role:    "system",
@@ -1280,11 +1273,56 @@ Overview:`, memType, category, truncate(content, 8000))
 	if err != nil {
 		slog.Warn("uhms: L1 summary LLM failed", "error", err)
 		// L0 成功但 L1 失败：仍返回 L0，L1 用截断
-		return l0, truncate(content, 2000)
+		l1 = truncate(content, 2000)
+	} else {
+		l1 = strings.TrimSpace(l1Result)
 	}
-	l1 = strings.TrimSpace(l1Result)
+
+	// 分层护栏：确保 L0 <= L1 <= L2(full) 的长度关系，避免“摘要比完整更完整”。
+	l0, l1 = enforceMemoryTierHierarchy(content, l0, l1)
 
 	return l0, l1
+}
+
+func enforceMemoryTierHierarchy(content, l0, l1 string) (string, string) {
+	content = strings.TrimSpace(content)
+	l0 = strings.TrimSpace(l0)
+	l1 = strings.TrimSpace(l1)
+	if content == "" {
+		return l0, l1
+	}
+
+	fullRunes := len([]rune(content))
+	if fullRunes <= 0 {
+		return l0, l1
+	}
+
+	l0Limit := minInt(200, fullRunes)
+	if l0 == "" {
+		l0 = truncate(content, l0Limit)
+	} else {
+		l0 = truncate(l0, l0Limit)
+	}
+
+	l1Limit := minInt(2000, fullRunes)
+	if l1 == "" {
+		l1 = truncate(content, l1Limit)
+	} else {
+		l1 = truncate(l1, l1Limit)
+	}
+
+	if len([]rune(l1)) < len([]rune(l0)) {
+		l1 = l0
+	}
+
+	return strings.TrimSpace(l0), strings.TrimSpace(l1)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (m *DefaultManager) indexVector(ctx context.Context, mem *Memory, content string) {
@@ -1401,6 +1439,11 @@ func (m *DefaultManager) summarizeMessages(ctx context.Context, messages []Messa
 
 func (m *DefaultManager) extractAndStoreMemories(ctx context.Context, userID string, messages []Message) {
 	if m.llm == nil {
+		// Bug#11 P1: LLM 不可用时降级到启发式提取
+		extracted := extractMemoriesHeuristic(buildTranscriptText(messages))
+		for _, em := range extracted {
+			m.AddMemory(ctx, userID, em.Content, em.MemType, em.Category)
+		}
 		return
 	}
 
@@ -1419,13 +1462,19 @@ JSON array:`, truncate(sb.String(), 8000))
 
 	result, err := m.llm.Complete(ctx, ExtractMemoriesSystemPrompt, prompt)
 	if err != nil {
-		// Warn 而非 Debug: 非关键但生产环境应可见 (参考 Dave Cheney 日志哲学 + slog 级别定义)
-		slog.Warn("uhms: memory extraction failed", "error", err, "userID", userID)
+		// Bug#11 P1: LLM 失败时降级到启发式提取
+		provider, model := m.LLMInfo()
+		slog.Warn("uhms: memory extraction LLM failed, fallback to heuristic",
+			"error", err, "userID", userID, "provider", provider, "model", model)
+		extracted := extractMemoriesHeuristic(buildTranscriptText(messages))
+		for _, em := range extracted {
+			m.AddMemory(ctx, userID, em.Content, em.MemType, em.Category)
+		}
 		return
 	}
 
-	// 解析并存储
-	memories := parseExtractedMemories(result)
+	// 解析并存储 (Bug#11 P3: 统一使用 parseExtractedJSON 替代重复的 parseExtractedMemories)
+	memories := parseExtractedJSON(result)
 	for _, em := range memories {
 		m.AddMemory(ctx, userID, em.Content, em.MemType, em.Category)
 	}
@@ -1501,8 +1550,8 @@ func filterResults(results []SearchResult, opts SearchOptions) []SearchResult {
 }
 
 func extractUserID(messages []Message) string {
-	// 从消息元数据中提取 userID (简化版: 返回空)
-	return ""
+	// 统一返回 "default"，与 server_methods_memory.go 查询路径一致 (Bug#11 P2)
+	return "default"
 }
 
 func extractQueryFromRecent(messages []Message) string {
@@ -1521,48 +1570,8 @@ type extractedMemory struct {
 	Category MemoryCategory `json:"category"`
 }
 
-func parseExtractedMemories(jsonStr string) []extractedMemory {
-	// 简单解析 JSON 数组 — 容错处理
-	jsonStr = strings.TrimSpace(jsonStr)
-
-	// 找到 JSON 数组边界
-	start := strings.Index(jsonStr, "[")
-	end := strings.LastIndex(jsonStr, "]")
-	if start < 0 || end < 0 || end <= start {
-		return nil
-	}
-	jsonStr = jsonStr[start : end+1]
-
-	var memories []extractedMemory
-	// 使用 encoding/json 解析
-	if err := parseJSONArray(jsonStr, &memories); err != nil {
-		return nil
-	}
-	return memories
-}
-
 func countEntries(s string) int {
 	return strings.Count(s, "\n\n")
-}
-
-func parseJSONArray(jsonStr string, out *[]extractedMemory) error {
-	type raw struct {
-		Content  string `json:"content"`
-		Type     string `json:"type"`
-		Category string `json:"category"`
-	}
-	var raws []raw
-	if err := json.Unmarshal([]byte(jsonStr), &raws); err != nil {
-		return err
-	}
-	for _, r := range raws {
-		*out = append(*out, extractedMemory{
-			Content:  r.Content,
-			MemType:  MemoryType(r.Type),
-			Category: MemoryCategory(r.Category),
-		})
-	}
-	return nil
 }
 
 // ============================================================================

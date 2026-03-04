@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/session"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/followup-runner.ts (286L) — 骨架版
@@ -61,6 +61,7 @@ type FollowupRunParams struct {
 	BashElevated      *BashElevatedConfig     // TS: bashElevated 完整结构
 	TimeoutMs         int
 	BlockReplyBreak   string
+	RunID             string // Bug#11: 从 dispatch_inbound 传入，确保全链路可追踪
 }
 
 // BashElevatedConfig bash 提权配置。

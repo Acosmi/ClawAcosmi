@@ -10,107 +10,110 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/internal/goproviders/bridge"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ApplyAuthChoice 主路由 — 按 authChoice 分发到对应 handler。
 // 对应 TS: applyAuthChoice (auth-choice.apply.ts)
 func ApplyAuthChoice(params ApplyAuthChoiceParams) (*ApplyAuthChoiceResult, error) {
+	applyDefault := &bridge.ApplyOpts{SetDefaultModel: true}
+
 	switch params.AuthChoice {
 	// Anthropic
-	case AuthChoiceToken, AuthChoiceSetupToken, AuthChoiceOAuth:
-		return applyAnthropicToken(params)
+	case AuthChoiceToken:
+		result, err := applyAnthropicToken(params)
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("anthropic", result.Config, applyDefault)
+		}
+		return result, err
 	case AuthChoiceApiKey:
-		return applyAnthropicApiKey(params)
+		result, err := applyAnthropicApiKey(params)
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("anthropic", result.Config, applyDefault)
+		}
+		return result, err
 
 	// OpenAI
 	case AuthChoiceOpenAIApiKey:
-		return applyGenericApiKey(params, "openai", "OPENAI_API_KEY", "Enter OpenAI API key")
-	case AuthChoiceOpenAICodex:
-		return applyOAuthPlaceholder(params, "openai-codex", "OpenAI Codex OAuth")
+		result, err := applyGenericApiKey(params, "openai", "OPENAI_API_KEY", "Enter OpenAI API key")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("openai", result.Config, applyDefault)
+		}
+		return result, err
 
 	// Google
 	case AuthChoiceGeminiApiKey:
 		result, err := applyGenericApiKey(params, "google", "GEMINI_API_KEY", "Enter Gemini API key")
 		if err == nil && result != nil {
-			ApplyGoogleConfig(result.Config)
+			bridge.ApplyProviderByID("google", result.Config, applyDefault)
 		}
 		return result, err
 	case AuthChoiceGoogleAntigravity:
 		result, err := applyOAuthPlaceholder(params, "google", "Google Antigravity OAuth")
 		if err == nil && result != nil {
-			ApplyGoogleConfig(result.Config)
+			bridge.ApplyProviderByID("google", result.Config, applyDefault)
 		}
 		return result, err
 	case AuthChoiceGoogleGeminiCli:
 		result, err := applyOAuthPlaceholder(params, "google", "Google Gemini CLI OAuth")
 		if err == nil && result != nil {
-			ApplyGoogleConfig(result.Config)
+			bridge.ApplyProviderByID("google", result.Config, applyDefault)
 		}
 		return result, err
 
 	// xAI
 	case AuthChoiceXAIApiKey:
-		return applyGenericApiKey(params, "xai", "XAI_API_KEY", "Enter xAI (Grok) API key")
+		result, err := applyGenericApiKey(params, "xai", "XAI_API_KEY", "Enter xAI (Grok) API key")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("xai", result.Config, applyDefault)
+		}
+		return result, err
 
-	// OpenRouter
-	case AuthChoiceOpenRouterApiKey:
-		return applyGenericApiKey(params, "openrouter", "OPENROUTER_API_KEY", "Enter OpenRouter API key")
-
-	// Moonshot
+	// Moonshot / Kimi
 	case AuthChoiceMoonshotApiKey, AuthChoiceMoonshotApiKeyCn:
-		return applyGenericApiKey(params, "moonshot", "MOONSHOT_API_KEY", "Enter Moonshot API key")
-	case AuthChoiceKimiCodeApiKey:
-		return applyGenericApiKey(params, "kimi-coding", "KIMI_API_KEY", "Enter Kimi Coding API key")
+		result, err := applyGenericApiKey(params, "moonshot", "MOONSHOT_API_KEY", "Enter Moonshot API key")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("moonshot", result.Config, applyDefault)
+		}
+		return result, err
 
-	// Z.AI
+	// Z.AI (GLM)
 	case AuthChoiceZaiApiKey:
-		return applyGenericApiKey(params, "zai", "ZAI_API_KEY", "Enter Z.AI API key")
-
-	// Xiaomi
-	case AuthChoiceXiaomiApiKey:
-		return applyGenericApiKey(params, "xiaomi", "XIAOMI_API_KEY", "Enter Xiaomi API key")
+		result, err := applyGenericApiKey(params, "zai", "ZAI_API_KEY", "Enter Z.AI API key")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("zai", result.Config, applyDefault)
+		}
+		return result, err
 
 	// MiniMax
 	case AuthChoiceMinimaxApi, AuthChoiceMinimaxApiLightning:
-		return applyGenericApiKey(params, "minimax", "MINIMAX_API_KEY", "Enter MiniMax API key")
+		result, err := applyGenericApiKey(params, "minimax", "MINIMAX_API_KEY", "Enter MiniMax API key")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("minimax", result.Config, applyDefault)
+		}
+		return result, err
 	case AuthChoiceMinimaxPortal:
-		return applyOAuthPlaceholder(params, "minimax-portal", "MiniMax OAuth")
-
-	// Synthetic
-	case AuthChoiceSyntheticApiKey:
-		return applyGenericApiKey(params, "synthetic", "SYNTHETIC_API_KEY", "Enter Synthetic API key")
-
-	// Venice
-	case AuthChoiceVeniceApiKey:
-		return applyGenericApiKey(params, "venice", "VENICE_API_KEY", "Enter Venice AI API key")
-
-	// Vercel AI Gateway
-	case AuthChoiceAIGatewayApiKey:
-		return applyGenericApiKey(params, "vercel-ai-gateway", "AI_GATEWAY_API_KEY", "Enter Vercel AI Gateway API key")
-
-	// Cloudflare AI Gateway
-	case AuthChoiceCloudflareAIGatewayKey:
-		return applyCloudflareAIGateway(params)
+		result, err := applyOAuthPlaceholder(params, "minimax-portal", "MiniMax OAuth")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("minimax", result.Config, applyDefault)
+		}
+		return result, err
 
 	// OpenAcosmi Zen
 	case AuthChoiceAcosmiZen:
 		return applyGenericApiKey(params, "openacosmi", "OPENACOSMI_API_KEY", "Enter OpenAcosmi Zen API key")
 
-	// Qianfan
-	case AuthChoiceQianfanApiKey:
-		return applyGenericApiKey(params, "qianfan", "QIANFAN_API_KEY", "Enter Qianfan API key")
-
 	// OAuth-only providers
 	case AuthChoiceQwenPortal:
-		return applyOAuthPlaceholder(params, "qwen-portal", "Qwen OAuth")
+		result, err := applyOAuthPlaceholder(params, "qwen-portal", "Qwen OAuth")
+		if err == nil && result != nil {
+			bridge.ApplyProviderByID("qwen", result.Config, applyDefault)
+		}
+		return result, err
 	case AuthChoiceGitHubCopilot:
 		return applyCopilotDeviceFlow(params)
-	case AuthChoiceCopilotProxy:
-		return applyOAuthPlaceholder(params, "copilot-proxy", "Copilot Proxy")
-	case AuthChoiceChutes:
-		return applyOAuthPlaceholder(params, "chutes", "Chutes OAuth")
 
 	case AuthChoiceSkip:
 		return &ApplyAuthChoiceResult{Config: params.Config}, nil
@@ -234,15 +237,13 @@ func applyOAuthPlaceholder(params ApplyAuthChoiceParams, provider, label string)
 	ctx := context.Background()
 	token, err := auth.RunOAuthWebFlow(ctx, providerConfig, params.AuthStore)
 	if err != nil {
-		// OAuth 失败不阻断，报错但仍配置 profile
+		// OAuth 失败 — 明确报错，不写入空 profile
 		slog.Warn("OAuth web flow failed", "provider", provider, "error", err)
 		params.Prompter.Note(
 			fmt.Sprintf("OAuth authorization failed: %v\nYou can retry with `openacosmi onboard --provider %s`", err, provider),
 			label,
 		)
-		profileID := auth.FormatProfileId(provider, "default")
-		cfg := ensureAuthConfig(params.Config, profileID, provider)
-		return &ApplyAuthChoiceResult{Config: cfg}, nil
+		return nil, fmt.Errorf("OAuth authorization for %s failed: %w", label, err)
 	}
 
 	params.Prompter.Note(
@@ -260,58 +261,6 @@ func applyOAuthPlaceholder(params ApplyAuthChoiceParams, provider, label string)
 	}
 	_ = token // 已通过 RunOAuthWebFlow 存入 auth store
 
-	return &ApplyAuthChoiceResult{Config: cfg}, nil
-}
-
-// ---------- Cloudflare AI Gateway ----------
-
-func applyCloudflareAIGateway(params ApplyAuthChoiceParams) (*ApplyAuthChoiceResult, error) {
-	accountID, err := params.Prompter.TextInput("Enter Cloudflare Account ID", "", "", func(v string) string {
-		if v == "" {
-			return "Account ID is required"
-		}
-		return ""
-	})
-	if err != nil {
-		return nil, fmt.Errorf("account id: %w", err)
-	}
-
-	gatewayID, err := params.Prompter.TextInput("Enter Cloudflare AI Gateway ID", "", "", func(v string) string {
-		if v == "" {
-			return "Gateway ID is required"
-		}
-		return ""
-	})
-	if err != nil {
-		return nil, fmt.Errorf("gateway id: %w", err)
-	}
-
-	apiKey, err := params.Prompter.TextInput("Enter Cloudflare AI Gateway API key", "", "", ValidateApiKeyInput)
-	if err != nil {
-		return nil, fmt.Errorf("api key: %w", err)
-	}
-	apiKey = NormalizeApiKeyInput(apiKey)
-
-	// 存储凭据（包含 account/gateway metadata）
-	profileID := "cloudflare-ai-gateway:default"
-	if params.AuthStore != nil {
-		if _, err := params.AuthStore.Update(func(s *auth.AuthProfileStore) bool {
-			s.Profiles[profileID] = &auth.AuthProfileCredential{
-				Type:     auth.CredentialAPIKey,
-				Provider: "cloudflare-ai-gateway",
-				Key:      apiKey,
-				Metadata: map[string]string{
-					"accountId": accountID,
-					"gatewayId": gatewayID,
-				},
-			}
-			return true
-		}); err != nil {
-			return nil, fmt.Errorf("store credential: %w", err)
-		}
-	}
-
-	cfg := ensureAuthConfig(params.Config, profileID, "cloudflare-ai-gateway")
 	return &ApplyAuthChoiceResult{Config: cfg}, nil
 }
 

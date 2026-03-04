@@ -21,11 +21,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/argus"
-	"github.com/openacosmi/claw-acismi/internal/routing"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/argus"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // SkillsHandlers 返回 skills.* 方法映射。

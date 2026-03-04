@@ -9,13 +9,19 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/channels/feishu"
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/feishu"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // MultimodalPreprocessor 多模态消息预处理器。
@@ -30,14 +36,119 @@ type MultimodalPreprocessor struct {
 	ImageDescriber media.ImageDescriber
 }
 
+// MultimodalPreprocessorResolver 运行态预处理器解析器。
+// 通过短 TTL 缓存避免每条消息都重建 provider，同时保证配置修改后能快速生效。
+type MultimodalPreprocessorResolver struct {
+	loader interface {
+		LoadConfig() (*types.OpenAcosmiConfig, error)
+	}
+	fallbackCfg *types.OpenAcosmiConfig
+	ttl         time.Duration
+
+	mu        sync.Mutex
+	cached    *MultimodalPreprocessor
+	expiresAt time.Time
+}
+
+// NewMultimodalPreprocessorResolver 创建运行态预处理器解析器。
+func NewMultimodalPreprocessorResolver(
+	loader interface {
+		LoadConfig() (*types.OpenAcosmiConfig, error)
+	},
+	fallbackCfg *types.OpenAcosmiConfig,
+	ttl time.Duration,
+) *MultimodalPreprocessorResolver {
+	if ttl <= 0 {
+		ttl = 10 * time.Second
+	}
+	return &MultimodalPreprocessorResolver{
+		loader:      loader,
+		fallbackCfg: fallbackCfg,
+		ttl:         ttl,
+	}
+}
+
+// Get 获取当前可用的预处理器实例（带 TTL 缓存）。
+func (r *MultimodalPreprocessorResolver) Get() *MultimodalPreprocessor {
+	now := time.Now()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.cached != nil && now.Before(r.expiresAt) {
+		return r.cached
+	}
+
+	cfg := r.fallbackCfg
+	if r.loader != nil {
+		if freshCfg, err := r.loader.LoadConfig(); err != nil {
+			slog.Warn("multimodal: reload config failed, using cached/fallback", "error", err)
+		} else if freshCfg != nil {
+			cfg = freshCfg
+		}
+	}
+
+	r.cached = NewMultimodalPreprocessorFromConfig(cfg)
+	r.expiresAt = now.Add(r.ttl)
+	return r.cached
+}
+
+// NewMultimodalPreprocessorFromConfig 根据配置构建预处理器。
+func NewMultimodalPreprocessorFromConfig(cfg *types.OpenAcosmiConfig) *MultimodalPreprocessor {
+	p := &MultimodalPreprocessor{}
+	if cfg == nil {
+		return p
+	}
+
+	if cfg.STT != nil && cfg.STT.Provider != "" {
+		if prov, err := media.NewSTTProvider(cfg.STT); err == nil {
+			p.STTProvider = prov
+		} else {
+			slog.Warn("multimodal: STT provider init failed (non-fatal)", "error", err)
+		}
+	}
+	if cfg.DocConv != nil && cfg.DocConv.Provider != "" {
+		if conv, err := media.NewDocConverter(cfg.DocConv); err == nil {
+			p.DocConverter = conv
+		} else {
+			slog.Warn("multimodal: DocConv provider init failed (non-fatal)", "error", err)
+		}
+	}
+	if cfg.ImageUnderstanding != nil && cfg.ImageUnderstanding.Provider != "" {
+		if desc, err := media.NewImageDescriber(cfg.ImageUnderstanding); err == nil {
+			p.ImageDescriber = desc
+		} else {
+			slog.Warn("multimodal: ImageDescriber provider init failed (non-fatal)", "error", err)
+		}
+	}
+
+	return p
+}
+
+// PreprocessImage 预处理后的图片数据。
+type PreprocessImage struct {
+	Base64   string
+	MimeType string
+}
+
 // PreprocessResult 预处理结果
 type PreprocessResult struct {
 	// Text 增强后的文本（原文本 + 附件描述）
 	Text string
+	// Images 所有图片 base64 数据（新增，多图支持）。
+	Images []PreprocessImage
 	// ImageBase64 第一张图片的 base64 编码（用于前端显示）
+	// 兼容字段：后续可迁移到 Images。
 	ImageBase64 string
 	// ImageMimeType 图片 MIME 类型
+	// 兼容字段：后续可迁移到 Images。
 	ImageMimeType string
+}
+
+// feishuResourceDownloader 抽象飞书资源下载能力，便于单测覆盖多媒体预处理分支。
+type feishuResourceDownloader interface {
+	DownloadImage(ctx context.Context, messageID, imageKey string) ([]byte, error)
+	DownloadFile(ctx context.Context, messageID, fileKey string) ([]byte, error)
 }
 
 // ProcessFeishuMessage 预处理飞书多模态消息。
@@ -47,6 +158,14 @@ type PreprocessResult struct {
 func (p *MultimodalPreprocessor) ProcessFeishuMessage(
 	ctx context.Context,
 	client *feishu.FeishuClient,
+	msg *channels.ChannelMessage,
+) *PreprocessResult {
+	return p.processFeishuMessageWithDownloader(ctx, client, msg)
+}
+
+func (p *MultimodalPreprocessor) processFeishuMessageWithDownloader(
+	ctx context.Context,
+	client feishuResourceDownloader,
 	msg *channels.ChannelMessage,
 ) *PreprocessResult {
 	if msg == nil {
@@ -197,7 +316,13 @@ func (p *MultimodalPreprocessor) ProcessFeishuMessage(
 		if r.text != "" {
 			textParts = append(textParts, r.text)
 		}
-		// 取第一张图片的 base64 数据
+		if r.imageBase64 != "" {
+			result.Images = append(result.Images, PreprocessImage{
+				Base64:   r.imageBase64,
+				MimeType: r.imageMimeType,
+			})
+		}
+		// 兼容：保留第一张图片到旧字段
 		if result.ImageBase64 == "" && r.imageBase64 != "" {
 			result.ImageBase64 = r.imageBase64
 			result.ImageMimeType = r.imageMimeType
@@ -206,6 +331,277 @@ func (p *MultimodalPreprocessor) ProcessFeishuMessage(
 
 	result.Text = strings.Join(textParts, "\n")
 	return result
+}
+
+// ProcessGenericChannelMessage 预处理通用渠道消息（钉钉/企微等）。
+// 优先使用附件内联数据（Data/DataURL），其次尝试安全下载外部 URL。
+// 结果统一为增强文本，可直接交给 DispatchFunc。
+func (p *MultimodalPreprocessor) ProcessGenericChannelMessage(
+	ctx context.Context,
+	msg *channels.ChannelMessage,
+) *PreprocessResult {
+	if msg == nil {
+		return &PreprocessResult{}
+	}
+
+	result := &PreprocessResult{
+		Text: strings.TrimSpace(msg.Text),
+	}
+	if len(msg.Attachments) == 0 {
+		return result
+	}
+
+	var textParts []string
+	if result.Text != "" {
+		textParts = append(textParts, result.Text)
+	}
+
+	const maxAttachments = 10
+	attachments := msg.Attachments
+	if len(attachments) > maxAttachments {
+		slog.Warn("multimodal: attachment count exceeds limit, truncating",
+			"total", len(attachments), "limit", maxAttachments)
+		attachments = attachments[:maxAttachments]
+	}
+
+	for _, att := range attachments {
+		data, mimeType, loadErr := loadChannelAttachmentData(ctx, att)
+		category := strings.ToLower(strings.TrimSpace(att.Category))
+		switch category {
+		case "image":
+			if loadErr != nil || len(data) == 0 {
+				textParts = append(textParts, "[图片消息: 当前渠道未提供可读取内容]")
+				continue
+			}
+			if mimeType == "" {
+				mimeType = detectImageMediaType(data)
+			}
+			if p.ImageDescriber != nil {
+				desc, descErr := p.ImageDescriber.Describe(ctx, data, mimeType)
+				if descErr != nil {
+					slog.Warn("multimodal: generic image describe failed, fallback metadata",
+						"provider", p.ImageDescriber.Name(), "error", descErr)
+					textParts = append(textParts, fmt.Sprintf("[图片: %s, 大小: %s]", mimeType, humanReadableSize(int64(len(data)))))
+				} else {
+					textParts = append(textParts, fmt.Sprintf("[图片描述]: %s", desc))
+				}
+			} else {
+				textParts = append(textParts, fmt.Sprintf("[图片: %s, 大小: %s]", mimeType, humanReadableSize(int64(len(data)))))
+			}
+
+			imgB64 := base64.StdEncoding.EncodeToString(data)
+			result.Images = append(result.Images, PreprocessImage{
+				Base64:   imgB64,
+				MimeType: mimeType,
+			})
+			if result.ImageBase64 == "" {
+				result.ImageBase64 = imgB64
+				result.ImageMimeType = mimeType
+			}
+
+		case "audio":
+			if loadErr != nil || len(data) == 0 {
+				textParts = append(textParts, "[语音消息: 当前渠道未提供可读取内容]")
+				continue
+			}
+			if p.STTProvider == nil {
+				textParts = append(textParts, "[语音消息: STT 未配置]")
+				continue
+			}
+			if mimeType == "" {
+				mimeType = "audio/opus"
+			}
+			transcript, sttErr := p.STTProvider.Transcribe(ctx, data, mimeType)
+			if sttErr != nil {
+				slog.Error("multimodal: generic STT failed", "error", sttErr)
+				textParts = append(textParts, "[语音转录失败]")
+			} else {
+				textParts = append(textParts, fmt.Sprintf("[语音转录]: %s", transcript))
+			}
+
+		case "document":
+			name := strings.TrimSpace(att.FileName)
+			if name == "" {
+				name = "未命名文件"
+			}
+			if loadErr != nil || len(data) == 0 {
+				textParts = append(textParts, fmt.Sprintf("[文件: %s, 当前渠道未提供可读取内容]", name))
+				continue
+			}
+			if p.DocConverter != nil && media.IsSupportedFormat(name) {
+				md, convErr := p.DocConverter.Convert(ctx, data, mimeType, name)
+				if convErr != nil {
+					slog.Error("multimodal: generic DocConv failed", "file", name, "error", convErr)
+					textParts = append(textParts, fmt.Sprintf("[文件: %s, 转换失败]", name))
+				} else {
+					textParts = append(textParts, fmt.Sprintf("[文件: %s]\n%s", name, md))
+				}
+			} else {
+				textParts = append(textParts, fmt.Sprintf("[文件: %s, 大小: %s]", name, humanReadableSize(int64(len(data)))))
+			}
+
+		case "video":
+			textParts = append(textParts, "[视频消息: 暂不支持]")
+
+		default:
+			if name := strings.TrimSpace(att.FileName); name != "" {
+				textParts = append(textParts, fmt.Sprintf("[附件: %s, 类型: %s]", name, category))
+			} else {
+				textParts = append(textParts, fmt.Sprintf("[附件消息: 类型=%s]", category))
+			}
+		}
+	}
+
+	result.Text = strings.TrimSpace(strings.Join(textParts, "\n"))
+	return result
+}
+
+func loadChannelAttachmentData(ctx context.Context, att channels.ChannelAttachment) ([]byte, string, error) {
+	if len(att.Data) > 0 {
+		return att.Data, strings.TrimSpace(att.MimeType), nil
+	}
+
+	mimeType := strings.TrimSpace(att.MimeType)
+	source := strings.TrimSpace(att.DataURL)
+	if source == "" {
+		source = strings.TrimSpace(att.FileKey)
+	}
+	if source == "" {
+		return nil, mimeType, fmt.Errorf("attachment payload missing")
+	}
+
+	if strings.HasPrefix(strings.ToLower(source), "data:") {
+		data, dataMime, err := decodeDataURLPayload(source)
+		if err != nil {
+			return nil, mimeType, err
+		}
+		if mimeType == "" {
+			mimeType = dataMime
+		}
+		return data, mimeType, nil
+	}
+
+	if isRemoteHTTPURL(source) {
+		data, remoteMime, err := fetchRemoteAttachmentData(ctx, source, channels.ChatAttachmentFileMaxBytes)
+		if err != nil {
+			return nil, mimeType, err
+		}
+		if mimeType == "" {
+			mimeType = remoteMime
+		}
+		if mimeType == "" && len(data) > 0 {
+			mimeType = strings.ToLower(http.DetectContentType(data))
+		}
+		return data, mimeType, nil
+	}
+
+	return nil, mimeType, fmt.Errorf("attachment payload unavailable")
+}
+
+func decodeDataURLPayload(raw string) ([]byte, string, error) {
+	commaIdx := strings.Index(raw, ",")
+	if commaIdx < 0 {
+		return nil, "", fmt.Errorf("invalid data URL")
+	}
+	meta := raw[len("data:"):commaIdx]
+	payload := raw[commaIdx+1:]
+
+	mimeType := "application/octet-stream"
+	parts := strings.Split(meta, ";")
+	if len(parts) > 0 && strings.TrimSpace(parts[0]) != "" {
+		mimeType = strings.TrimSpace(parts[0])
+	}
+	isBase64 := false
+	for _, p := range parts[1:] {
+		if strings.EqualFold(strings.TrimSpace(p), "base64") {
+			isBase64 = true
+			break
+		}
+	}
+	if !isBase64 {
+		decoded, err := url.QueryUnescape(payload)
+		if err != nil {
+			return nil, "", err
+		}
+		return []byte(decoded), mimeType, nil
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, mimeType, nil
+}
+
+func isRemoteHTTPURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "http" || u.Scheme == "https"
+}
+
+func fetchRemoteAttachmentData(ctx context.Context, rawURL string, maxBytes int) ([]byte, string, error) {
+	if err := validateRemoteAttachmentURL(rawURL); err != nil {
+		return nil, "", fmt.Errorf("remote attachment rejected: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			return validateRemoteAttachmentURL(req.URL.String())
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, "", fmt.Errorf("remote fetch status=%d body=%s", resp.StatusCode, string(body))
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxBytes)+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(data) > maxBytes {
+		return nil, "", fmt.Errorf("remote attachment too large (max %d bytes)", maxBytes)
+	}
+	return data, strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type"))), nil
+}
+
+func validateRemoteAttachmentURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("unsupported scheme %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("missing host")
+	}
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("resolve host %q failed: %w", host, err)
+	}
+	for _, ipText := range ips {
+		ip := net.ParseIP(ipText)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("URL resolves to private/loopback address %s", ipText)
+		}
+	}
+	return nil
 }
 
 // detectImageMediaType 从图片数据的 magic bytes 检测 MIME 类型

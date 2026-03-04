@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime"
@@ -21,8 +22,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/internal/sandbox"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/sandbox"
 )
 
 // SandboxExecOptions 原生沙箱执行选项（options struct 模式，未来扩展不破坏接口）。
@@ -71,6 +72,7 @@ type MediaSubsystemForAgent interface {
 type ToolExecParams struct {
 	WorkspaceDir string
 	SessionID    string // 当前 session 标识（用于合约 issuedBy 等）
+	RunID        string // 当前运行标识（用于 agent event 广播）
 	TimeoutMs    int64
 	// 权限守卫
 	AllowWrite   bool // 是否允许写文件
@@ -295,12 +297,18 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 		return executeSpawnMediaAgent(ctx, inputJSON, params)
 	case "request_help":
 		return ExecuteRequestHelp(inputJSON, params.AgentChannel)
+	case "report_progress":
+		return executeReportProgress(inputJSON, params)
 	case "web_search":
 		return executeWebSearch(ctx, inputJSON, params)
 	case "browser":
 		return executeBrowserTool(ctx, inputJSON, params)
 	case "send_media":
 		return executeSendMedia(ctx, inputJSON, params)
+	case "memory_search":
+		return executeMemorySearch(ctx, inputJSON, params)
+	case "memory_get":
+		return executeMemoryGet(ctx, inputJSON, params)
 	case "trending_topics", "content_compose", "media_publish", "social_interact":
 		if params.MediaSubsystem != nil {
 			return params.MediaSubsystem.ExecuteTool(ctx, name, inputJSON)
@@ -320,6 +328,53 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 		}
 		return fmt.Sprintf("[Tool %q is not yet implemented]", name), nil
 	}
+}
+
+// ---------- report_progress ----------
+
+// executeReportProgress 执行 report_progress 工具——广播中间进度事件到前端和远程渠道。
+func executeReportProgress(inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	var input struct {
+		Summary string `json:"summary"`
+		Percent int    `json:"percent"`
+		Phase   string `json:"phase"`
+	}
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return "", fmt.Errorf("invalid report_progress input: %w", err)
+	}
+	if input.Summary == "" {
+		return "Error: summary is required", nil
+	}
+
+	// 截断过长的摘要
+	summaryRunes := []rune(input.Summary)
+	if len(summaryRunes) > 300 {
+		input.Summary = string(summaryRunes[:300]) + "..."
+	}
+
+	// 构建进度事件数据
+	progressData := map[string]interface{}{
+		"summary": input.Summary,
+	}
+	if input.Percent > 0 && input.Percent <= 100 {
+		progressData["percent"] = input.Percent
+	}
+	if input.Phase != "" {
+		progressData["phase"] = input.Phase
+	}
+
+	// 广播 agent.progress 事件
+	if params.RunID != "" {
+		infra.EmitAgentEvent(params.RunID, "agent.progress", progressData, "")
+	}
+
+	slog.Debug("report_progress emitted",
+		"summary", input.Summary,
+		"percent", input.Percent,
+		"phase", input.Phase,
+	)
+
+	return "Progress reported successfully.", nil
 }
 
 // ---------- Process group management ----------
@@ -1771,7 +1826,7 @@ func executeSendMedia(ctx context.Context, inputJSON json.RawMessage, params Too
 	)
 
 	if err := params.MediaSender.SendMedia(ctx, channelID, to, data, mimeType, input.Message); err != nil {
-		return fmt.Sprintf("[send_media] Failed to send: %v", err), nil
+		return formatSendMediaDeliveryError(err), nil
 	}
 
 	// 保存本地副本，供 Web 端显示（内联实现，避免循环依赖）。
@@ -1824,6 +1879,56 @@ func executeSendMedia(ctx context.Context, inputJSON json.RawMessage, params Too
 	return string(statusJSON), nil
 }
 
+type sendMediaDeliveryErrorInfo interface {
+	SendCode() string
+	SendChannel() string
+	SendOperation() string
+	SendRetryable() bool
+	SendUserMessage() string
+}
+
+func formatSendMediaDeliveryError(err error) string {
+	if err == nil {
+		return "[send_media] Failed to send: unknown error"
+	}
+
+	var sendErr sendMediaDeliveryErrorInfo
+	if errors.As(err, &sendErr) && sendErr != nil {
+		baseMessage := strings.TrimSpace(sendErr.SendUserMessage())
+		if baseMessage == "" {
+			baseMessage = strings.TrimSpace(err.Error())
+		}
+
+		var metaParts []string
+		sendCode := strings.TrimSpace(sendErr.SendCode())
+		metaParts = append(metaParts, "sendCode="+sendCode)
+		if channel := strings.TrimSpace(sendErr.SendChannel()); channel != "" {
+			metaParts = append(metaParts, "channel="+channel)
+		}
+		if op := strings.TrimSpace(sendErr.SendOperation()); op != "" {
+			metaParts = append(metaParts, "op="+op)
+		}
+		if sendErr.SendRetryable() {
+			metaParts = append(metaParts, "retryable=true")
+		}
+
+		msg := "[send_media] Delivery failed (" + strings.Join(metaParts, ", ") + "): " + baseMessage
+		switch sendCode {
+		case "payload_too_large":
+			msg += ". 建议压缩文件或降低分辨率后重试。"
+		case "unsupported_feature":
+			msg += ". 当前通道暂不支持该媒体能力，可改为发送文本说明或公网媒体链接。"
+		case "unauthorized":
+			msg += ". 请检查通道凭证和授权状态。"
+		case "unavailable", "upstream_error":
+			msg += ". 通道暂时不可用，可稍后重试。"
+		}
+		return msg
+	}
+
+	return fmt.Sprintf("[send_media] Failed to send: %v", err)
+}
+
 // parseSendMediaTarget 解析 target 为 channelID + to。
 // target 格式: "channel:id"（按第一个 ":" 分割）。
 // 空值时 fallback 到 sessionKey。
@@ -1865,4 +1970,80 @@ func detectMimeType(filePath string) string {
 	}
 
 	return "application/octet-stream"
+}
+
+// ---------- memory tools (UHMS 记忆系统) ----------
+
+type memorySearchInput struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type memoryGetInput struct {
+	ID string `json:"id"`
+}
+
+// executeMemorySearch 通过 UHMS Bridge 搜索长期记忆。
+func executeMemorySearch(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	if params.UHMSBridge == nil {
+		return "[memory_search unavailable: memory system not configured]", nil
+	}
+
+	var input memorySearchInput
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return fmt.Sprintf("[memory_search input error: %v]", err), nil
+	}
+	if input.Query == "" {
+		return "[memory_search error: query is required]", nil
+	}
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	results, err := params.UHMSBridge.SearchMemories(ctx, input.Query, limit)
+	if err != nil {
+		return fmt.Sprintf("[memory_search error: %v]", err), nil
+	}
+	if len(results) == 0 {
+		return "No memories found matching the query.", nil
+	}
+
+	out, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Sprintf("[memory_search marshal error: %v]", err), nil
+	}
+	return string(out), nil
+}
+
+// executeMemoryGet 通过 UHMS Bridge 获取单条记忆详情。
+func executeMemoryGet(ctx context.Context, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	if params.UHMSBridge == nil {
+		return "[memory_get unavailable: memory system not configured]", nil
+	}
+
+	var input memoryGetInput
+	if err := json.Unmarshal(inputJSON, &input); err != nil {
+		return fmt.Sprintf("[memory_get input error: %v]", err), nil
+	}
+	if input.ID == "" {
+		return "[memory_get error: id is required]", nil
+	}
+
+	hit, err := params.UHMSBridge.GetMemory(ctx, input.ID)
+	if err != nil {
+		return fmt.Sprintf("[memory_get error: %v]", err), nil
+	}
+	if hit == nil {
+		return fmt.Sprintf("No memory found with id: %s", input.ID), nil
+	}
+
+	out, err := json.Marshal(hit)
+	if err != nil {
+		return fmt.Sprintf("[memory_get marshal error: %v]", err), nil
+	}
+	return string(out), nil
 }

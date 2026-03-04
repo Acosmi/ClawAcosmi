@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 const (

@@ -4,16 +4,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/argus"
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
-	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/argus"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Handler 类型定义 (移植自 server-methods/types.ts) ----------
@@ -168,6 +168,9 @@ var (
 		"contract.list", "contract.get", "contract.audit", // Phase 8: 合约生命周期
 		"media.trending.fetch", "media.trending.sources", // Phase 5: 媒体热点
 		"media.drafts.list", "media.drafts.get", // Phase 5: 媒体草稿 (读)
+		"wizard.v2.providers.list", // Wizard V2 provider 目录 (只读)
+		"subagent.list",            // 子智能体状态查询
+		"argus.permission.check",   // Argus TCC 权限检查
 	)
 
 	writeMethods = newStringSet(
@@ -182,6 +185,7 @@ var (
 		"memory.uhms.llm.set",                                                                           // UHMS 独立 LLM 配置设置
 		"memory.delete", "memory.compress", "memory.commit", "memory.decay.run", "memory.import.skills", // memory.* 直接操作 (写)
 		"media.drafts.delete", // Phase 5: 媒体草稿 (写)
+		"subagent.ctl",        // 子智能体控制
 	)
 
 	approvalMethods = newStringSet(

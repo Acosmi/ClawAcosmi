@@ -6,7 +6,7 @@ package runner
 // 内置危险命令拦截规则，防止智能体执行高风险操作。
 // 这些规则 IsPreset=true，用户不可删除。
 
-import "github.com/openacosmi/claw-acismi/internal/infra"
+import "github.com/Acosmi/ClawAcosmi/internal/infra"
 
 // PresetCommandRules 内置安全规则集（不可变）。
 // 按 deny → ask → allow 分组，每组内按优先级排序。

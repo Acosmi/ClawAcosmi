@@ -3,6 +3,7 @@ import { truncateText } from "./format.ts";
 const TOOL_STREAM_LIMIT = 50;
 const TOOL_STREAM_THROTTLE_MS = 80;
 const TOOL_OUTPUT_CHAR_LIMIT = 120_000;
+const AGENT_PROGRESS_STALE_MS = 120_000; // 2 min
 
 export type AgentEventPayload = {
   runId: string;
@@ -32,6 +33,8 @@ type ToolStreamHost = {
   toolStreamOrder: string[];
   chatToolMessages: Record<string, unknown>[];
   toolStreamSyncTimer: number | null;
+  agentProgress: AgentProgress | null;
+  agentProgressClearTimer: number | null;
 };
 
 function extractToolOutputText(value: unknown): string | null {
@@ -158,6 +161,11 @@ export function resetToolStream(host: ToolStreamHost) {
   host.toolStreamById.clear();
   host.toolStreamOrder = [];
   host.chatToolMessages = [];
+  host.agentProgress = null;
+  if (host.agentProgressClearTimer != null) {
+    window.clearTimeout(host.agentProgressClearTimer);
+    host.agentProgressClearTimer = null;
+  }
   flushToolStreamSync(host);
 }
 
@@ -165,6 +173,13 @@ export type CompactionStatus = {
   active: boolean;
   startedAt: number | null;
   completedAt: number | null;
+};
+
+export type AgentProgress = {
+  summary: string;
+  percent?: number;
+  phase?: string;
+  ts: number;
 };
 
 type CompactionHost = ToolStreamHost & {
@@ -212,6 +227,28 @@ export function handleAgentEvent(host: ToolStreamHost, payload?: AgentEventPaylo
   // Handle compaction events
   if (payload.stream === "compaction") {
     handleCompactionEvent(host as CompactionHost, payload);
+    return;
+  }
+
+  // Handle agent progress events (from report_progress tool)
+  if (payload.stream === "agent.progress") {
+    const data = payload.data ?? {};
+    const summary = typeof data.summary === "string" ? data.summary : "";
+    if (!summary) return;
+    host.agentProgress = {
+      summary,
+      percent: typeof data.percent === "number" ? data.percent : undefined,
+      phase: typeof data.phase === "string" ? data.phase : undefined,
+      ts: typeof payload.ts === "number" ? payload.ts : Date.now(),
+    };
+    // 超过 2 分钟无新进度事件则自动清除横幅
+    if (host.agentProgressClearTimer != null) {
+      window.clearTimeout(host.agentProgressClearTimer);
+    }
+    host.agentProgressClearTimer = window.setTimeout(() => {
+      host.agentProgress = null;
+      host.agentProgressClearTimer = null;
+    }, AGENT_PROGRESS_STALE_MS);
     return;
   }
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/openacosmi/claw-acismi/internal/cli"
+	"github.com/Acosmi/ClawAcosmi/internal/cli"
 )
 
 // 对应 TS src/commands/status.command.ts + status-all.ts

@@ -10,9 +10,9 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Discord 监控入口 — 继承自 src/discord/monitor/provider.ts (690L) + listeners.ts (322L)

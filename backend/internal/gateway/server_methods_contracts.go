@@ -4,7 +4,7 @@ package gateway
 // Phase 8: 合约生命周期仪表盘 RPC。
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
 )
 
 // ContractHandlers 返回合约方法映射。

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // OpenAIImageDescriber OpenAI 兼容图片理解实现

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Mock ConfigSource ----------

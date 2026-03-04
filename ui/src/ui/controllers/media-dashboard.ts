@@ -103,6 +103,42 @@ export async function deleteDraft(state: AppViewState, id: string): Promise<bool
   }
 }
 
+// ---------- 发布历史 ----------
+
+export interface PublishRecord {
+  id: string;
+  draft_id: string;
+  title: string;
+  platform: string;
+  post_id?: string;
+  url?: string;
+  status: string;
+  published_at: string;
+}
+
+export async function loadPublishHistory(state: AppViewState): Promise<void> {
+  if (!state.client || !state.connected) return;
+  state.mediaPublishLoading = true;
+  try {
+    const res = await state.client.request<{
+      records: PublishRecord[];
+      count: number;
+    }>("media.publish.list");
+
+    if (res) {
+      state.mediaPublishRecords = res.records || [];
+    }
+  } catch {
+    state.mediaPublishRecords = [];
+  } finally {
+    state.mediaPublishLoading = false;
+  }
+}
+
 export async function loadMediaDashboard(state: AppViewState): Promise<void> {
-  await Promise.all([loadTrendingSources(state), loadDraftsList(state)]);
+  await Promise.all([
+    loadTrendingSources(state),
+    loadDraftsList(state),
+    loadPublishHistory(state),
+  ]);
 }

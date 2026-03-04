@@ -349,7 +349,10 @@ export class GatewayBrowserClient {
           pending.resolve(res.payload);
         }
       } else {
-        pending.reject(new Error(res.error?.message ?? "request failed"));
+        const errObj = new Error(res.error?.message ?? "request failed");
+        // 附加结构化错误详情（如 ArgusStartError 的 phase/reason/recovery）
+        (errObj as any).details = res.error?.details;
+        pending.reject(errObj);
       }
       return;
     }

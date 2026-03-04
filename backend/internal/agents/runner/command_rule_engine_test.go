@@ -6,7 +6,7 @@ package runner
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // ============================================================================

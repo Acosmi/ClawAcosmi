@@ -3,7 +3,7 @@ package models
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func intPtr(i int) *int { return &i }

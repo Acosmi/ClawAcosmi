@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/get-reply-run.ts (435L)
@@ -137,6 +137,7 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 			TimeoutMs:         params.TimeoutMs,
 			BlockReplyBreak:   params.BlockStreamingBreak,
 			ExtraSystemPrompt: resolveExtraSystemPrompt(msgCtx),
+			RunID:             resolveRunID(params.Opts),
 		},
 	}
 
@@ -174,6 +175,14 @@ func resolveExtraSystemPrompt(ctx *autoreply.MsgContext) string {
 		return ""
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// resolveRunID 安全提取 RunID（nil-safe）。
+func resolveRunID(opts *autoreply.GetReplyOptions) string {
+	if opts != nil {
+		return opts.RunID
+	}
+	return ""
 }
 
 func generateSessionID() string {

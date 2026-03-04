@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // UpdateChannel 更新渠道类型

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
 )
 
 // TS 对照: auto-reply/reply/session.ts (394L)

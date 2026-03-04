@@ -6,7 +6,7 @@ package config
 //
 // 依赖: pkg/types
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 // MergeConfigSection 合并配置段。
 // patch 中非 nil 值会覆盖 base 中的对应键。

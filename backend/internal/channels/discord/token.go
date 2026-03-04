@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Discord Token 解析 — 继承自 src/discord/token.ts (52L)

@@ -11,8 +11,8 @@
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     animation: wizardV2FadeIn 0.3s ease-out;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
 }
@@ -87,10 +87,59 @@
 }
 
 .wizard-v2-step-label {
-    font-size: 12px;
-    color: #999;
-    font-weight: 500;
-    white-space: nowrap;
+    font-size: 13px;
+    color: #888;
+    margin-top: 8px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+@keyframes wizardV2FadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Spinner Animation */
+.wizard-v2-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(24, 144, 255, 0.2);
+    border-top-color: #1890FF;
+    border-radius: 50%;
+    animation: wizardV2Spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes wizardV2Spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Advantage Text Animation */
+.wizard-v2-advantage-text {
+    font-size: 15px;
+    color: #1890FF;
+    animation: wizardV2SlideUpFade 0.5s ease-out forwards;
+}
+
+@keyframes wizardV2SlideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .wizard-v2-step.active .wizard-v2-step-label,
@@ -115,6 +164,7 @@
     overflow-y: auto;
     padding: 32px 48px;
     background: #fff;
+    animation: slideFadeIn 0.3s ease-out forwards;
 }
 
 .wizard-v2-title {
@@ -144,11 +194,41 @@
 }
 
 .wizard-v2-provider-card {
+    position: relative;
     border: 1px solid #f0f0f0;
     border-radius: 8px;
     padding: 20px;
     background: #fafafa;
     transition: all 0.2s ease;
+}
+
+.wizard-v2-provider-card-selected {
+    background: #FFF1F0;
+    border-color: #FF4D4F;
+    box-shadow: 0 4px 12px rgba(255, 77, 79, 0.1);
+}
+
+.wizard-v2-provider-selected-badge {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 32px 32px 0;
+    border-color: transparent #FF4D4F transparent transparent;
+    border-top-right-radius: 8px;
+    z-index: 1;
+}
+
+.wizard-v2-provider-selected-badge::after {
+    content: "✓";
+    position: absolute;
+    top: 2px;
+    right: -26px;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
 }
 
 .wizard-v2-provider-card:hover {
@@ -264,7 +344,7 @@
     font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border: none;
 }
 
@@ -285,8 +365,8 @@
     box-shadow: 0 2px 0 rgba(255, 77, 79, 0.2);
 }
 
-.wizard-v2-btn-primary:hover {
-    background: #ff7875;
+.wizard-v2-btn-primary:active:not(:disabled) {
+    transform: scale(0.96);
 }
 
 /* ─── Dark Mode Support ─── */
@@ -359,6 +439,11 @@
     background: #262626;
 }
 
+[data-theme="dark"] .wizard-v2-provider-card-selected {
+    background: rgba(255, 77, 79, 0.1);
+    border-color: #FF4D4F;
+}
+
 [data-theme="dark"] .wizard-v2-provider-name {
     color: #fff;
 }
@@ -400,5 +485,17 @@
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes slideFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 // DefaultWorkspace 默认 workspace 目录名。

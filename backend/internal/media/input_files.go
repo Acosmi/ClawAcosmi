@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/security"
+	"github.com/Acosmi/ClawAcosmi/internal/security"
 	pdfcpuApi "github.com/pdfcpu/pdfcpu/pkg/api"
 	pdfcpuModel "github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )

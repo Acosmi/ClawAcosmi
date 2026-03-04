@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 // Signal 发送者身份解析 — 继承自 src/signal/identity.ts (136L)

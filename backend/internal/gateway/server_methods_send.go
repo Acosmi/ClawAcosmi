@@ -12,10 +12,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // ChannelOutboundSender DI 接口 — 频道消息发送。
@@ -144,15 +146,24 @@ func handleSend(ctx *MethodHandlerContext) {
 
 	// base64 媒体路径：解码后通过 ChannelMgr 直接发送到频道插件
 	if mediaBase64 != "" && ctx.Context.ChannelMgr != nil && channelID != "chat" {
-		const maxMediaBase64Size = 10 * 1024 * 1024 // 10 MB（匹配飞书 image API 限制）
 		mediaData, err := base64.StdEncoding.DecodeString(mediaBase64)
 		if err != nil {
 			ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "invalid mediaBase64: "+err.Error()))
 			return
 		}
+
+		effectiveMimeType := strings.TrimSpace(strings.ToLower(mediaMimeType))
+		if effectiveMimeType == "" && len(mediaData) > 0 {
+			effectiveMimeType = strings.ToLower(http.DetectContentType(mediaData))
+		}
+		if effectiveMimeType == "" {
+			effectiveMimeType = "application/octet-stream"
+		}
+		maxMediaBase64Size := channels.MaxOutboundMediaBytesForMime(effectiveMimeType)
 		if len(mediaData) > maxMediaBase64Size {
 			ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest,
-				fmt.Sprintf("mediaBase64 decoded size %d exceeds %d byte limit", len(mediaData), maxMediaBase64Size)))
+				fmt.Sprintf("mediaBase64 decoded size %d exceeds %d byte limit for mime=%s",
+					len(mediaData), maxMediaBase64Size, effectiveMimeType)))
 			return
 		}
 		result, err := ctx.Context.ChannelMgr.SendMessage(channels.ChannelID(channelID), channels.OutboundSendParams{
@@ -164,8 +175,7 @@ func handleSend(ctx *MethodHandlerContext) {
 			MediaMimeType: mediaMimeType,
 		})
 		if err != nil {
-			slog.Warn("send: base64 media delivery failed", "error", err)
-			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			respondSendDeliveryError(ctx, "base64_media_delivery", channelID, to, err)
 			return
 		}
 		payload := map[string]interface{}{
@@ -206,8 +216,7 @@ func handleSend(ctx *MethodHandlerContext) {
 			Mirror:         mirror,
 		})
 		if err != nil {
-			slog.Warn("send: delivery failed", "error", err)
-			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			respondSendDeliveryError(ctx, "pipeline_delivery", channelID, to, err)
 			return
 		}
 
@@ -230,8 +239,7 @@ func handleSend(ctx *MethodHandlerContext) {
 			media = append(media, map[string]interface{}{"url": u})
 		}
 		if err := ctx.Context.ChannelSender.SendOutbound(channelID, accountId, to, message, media); err != nil {
-			slog.Warn("send: outbound failed", "error", err)
-			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			respondSendDeliveryError(ctx, "legacy_channel_sender", channelID, to, err)
 			return
 		}
 		payload := map[string]interface{}{
@@ -258,8 +266,7 @@ func handleSend(ctx *MethodHandlerContext) {
 			MediaURL:  mediaURL,
 		})
 		if err != nil {
-			slog.Warn("send: ChannelMgr fallback failed", "error", err)
-			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			respondSendDeliveryError(ctx, "channel_mgr_fallback", channelID, to, err)
 			return
 		}
 		payload := map[string]interface{}{
@@ -346,8 +353,8 @@ func handlePoll(ctx *MethodHandlerContext) {
 	if pipe := ctx.Context.OutboundPipe; pipe != nil {
 		result, err := pipe.SendPoll(channelID, question, options, to)
 		if err != nil {
-			slog.Warn("poll: delivery failed", "error", err)
-			ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, err.Error()))
+			slog.Warn("poll: delivery failed", "channel", channelID, "to", truncateStr(to, 40), "error", err)
+			ctx.Respond(false, nil, mapSendErrorToShape(err))
 			return
 		}
 		payload := map[string]interface{}{
@@ -369,4 +376,93 @@ func handlePoll(ctx *MethodHandlerContext) {
 		"stub":    true,
 		"note":    "poll requires channel plugin sendPoll support",
 	}, nil)
+}
+
+func respondSendDeliveryError(
+	ctx *MethodHandlerContext,
+	stage, channelID, to string,
+	err error,
+) {
+	shape := mapSendErrorToShape(err)
+	logSendDeliveryError(stage, channelID, to, err, shape)
+	ctx.Respond(false, nil, shape)
+}
+
+func logSendDeliveryError(stage, channelID, to string, err error, shape *ErrorShape) {
+	if sendErr, ok := channels.AsSendError(err); ok {
+		slog.Warn("send: delivery failed",
+			"stage", stage,
+			"channel", channelID,
+			"to", truncateStr(to, 40),
+			"sendCode", sendErr.Code,
+			"operation", sendErr.Operation,
+			"retryable", sendErr.Retryable,
+			"gatewayCode", shape.Code,
+			"error", err,
+		)
+		return
+	}
+	slog.Warn("send: delivery failed",
+		"stage", stage,
+		"channel", channelID,
+		"to", truncateStr(to, 40),
+		"gatewayCode", shape.Code,
+		"error", err,
+	)
+}
+
+func mapSendErrorToShape(err error) *ErrorShape {
+	if err == nil {
+		return NewErrorShape(ErrCodeInternalError, "unknown send error")
+	}
+
+	sendErr, ok := channels.AsSendError(err)
+	if !ok || sendErr == nil {
+		return NewErrorShape(ErrCodeInternalError, err.Error())
+	}
+
+	message := strings.TrimSpace(sendErr.Message)
+	if message == "" {
+		message = err.Error()
+	}
+
+	code := ErrCodeInternalError
+	switch sendErr.Code {
+	case channels.SendErrInvalidRequest, channels.SendErrInvalidTarget:
+		code = ErrCodeBadRequest
+	case channels.SendErrUnsupportedFeature:
+		code = ErrCodeUnsupportedFeature
+	case channels.SendErrPayloadTooLarge:
+		code = ErrCodePayloadTooLarge
+	case channels.SendErrUnauthorized:
+		code = ErrCodeUnauthorized
+	case channels.SendErrUnavailable, channels.SendErrUpstream:
+		code = ErrCodeServiceUnavailable
+	default:
+		code = ErrCodeInternalError
+	}
+
+	shape := NewErrorShape(code, message)
+	details := map[string]interface{}{
+		"sendCode": string(sendErr.Code),
+	}
+	if sendErr.Channel != "" {
+		details["channel"] = string(sendErr.Channel)
+	}
+	if sendErr.Operation != "" {
+		details["operation"] = sendErr.Operation
+	}
+	if len(sendErr.Details) > 0 {
+		for k, v := range sendErr.Details {
+			if strings.TrimSpace(k) == "" {
+				continue
+			}
+			details[k] = v
+		}
+	}
+	shape.WithDetails(details)
+	if sendErr.Retryable {
+		shape.WithRetryable(2000)
+	}
+	return shape
 }

@@ -11,7 +11,7 @@ package config
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // normalizeCapabilities 规范化能力列表

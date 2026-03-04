@@ -9,7 +9,7 @@ package argus
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/mcpclient"
+	"github.com/Acosmi/ClawAcosmi/internal/mcpclient"
 )
 
 // ArgusSkillEntry 与 gateway skillStatusEntry JSON 格式兼容的 Argus 技能条目。

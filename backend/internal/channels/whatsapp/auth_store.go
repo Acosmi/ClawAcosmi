@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 // WhatsApp 认证存储 — 继承自 src/web/auth-store.ts (202L)

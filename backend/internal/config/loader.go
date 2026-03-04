@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/log"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/log"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 	"github.com/tailscale/hujson"
 )
 
@@ -312,8 +312,18 @@ func (l *ConfigLoader) WriteConfigFile(cfg *types.OpenAcosmiConfig) error {
 	// F12: applyModelDefaults — 对应 TS io.ts:498
 	applyModelDefaults(stamped)
 
-	// 序列化
-	data, err := json.MarshalIndent(stamped, "", "  ")
+	// [NEW] 抽出敏感数据存入 OS Keyring，获取安全的占位符副本
+	safeMap, err := MapStructToMapForKeyring(stamped)
+	if err != nil {
+		return fmt.Errorf("failed to convert config for keyring: %w", err)
+	}
+	safeConfigData, err := StoreSensitiveToKeyring(safeMap)
+	if err != nil {
+		return fmt.Errorf("keyring storage failed: %w", err)
+	}
+
+	// 序列化安全副本
+	data, err := json.MarshalIndent(safeConfigData, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -446,6 +456,13 @@ func (l *ConfigLoader) applyConfigPipeline(data []byte) (*types.OpenAcosmiConfig
 	// F5: warnOnConfigMiskeys — 对应 TS io.ts:122-135
 	if isMap {
 		warnOnConfigMiskeys(parsedMap, l.logger)
+	}
+
+	// [NEW] 反序列化成结构体之前，从 OS Keyring 还原敏感明文被替换进去
+	if isMap {
+		if err := RestoreFromKeyring(parsedMap); err != nil {
+			l.logger.Warn("Failed to restore some sensitive keys from OS Keyring", "error", err)
+		}
 	}
 
 	// Step 3: 路径归一化 (~/ 展开) — 在 raw map 上先执行一次

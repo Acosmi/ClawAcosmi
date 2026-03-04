@@ -6,7 +6,7 @@ package models
 // Copilot 模型 ID 因 plan/org 不同可能变化。列表故意宽泛；
 // 如果某模型不可用，Copilot 会返回错误，用户可从配置中移除。
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 const (
 	copilotDefaultContextWindow = 128_000
@@ -15,6 +15,8 @@ const (
 
 // defaultCopilotModelIDs 默认 Copilot 模型 ID 列表。
 var defaultCopilotModelIDs = []string{
+	"claude-sonnet-4.6",
+	"claude-sonnet-4.5",
 	"gpt-4o",
 	"gpt-4.1",
 	"gpt-4.1-mini",

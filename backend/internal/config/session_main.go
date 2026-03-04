@@ -4,7 +4,7 @@ package config
 // TS 参考: src/config/sessions/main-session.ts
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
 )
 
 // ---------- 主会话 key 推断 ----------

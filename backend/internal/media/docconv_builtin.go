@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // BuiltinDocConverter 内置文档转换器
@@ -113,14 +113,20 @@ func (c *BuiltinDocConverter) hasPandoc() bool {
 
 // pandocConvert 通过 pandoc CLI 转换
 func (c *BuiltinDocConverter) pandocConvert(ctx context.Context, data []byte, inputFormat, fileName string) (string, error) {
-	tmpDir := os.TempDir()
 	ext := filepath.Ext(fileName)
-	if ext == "" {
-		ext = ".bin"
+	tmpHandle, err := os.CreateTemp("", "pandoc-input-*"+normalizeTempExtension(ext))
+	if err != nil {
+		return "", fmt.Errorf("docconv/builtin: create temp: %w", err)
 	}
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("pandoc_input_%d%s", os.Getpid(), ext))
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	tmpFile := tmpHandle.Name()
+	if _, err := tmpHandle.Write(data); err != nil {
+		_ = tmpHandle.Close()
+		_ = os.Remove(tmpFile)
 		return "", fmt.Errorf("docconv/builtin: write temp: %w", err)
+	}
+	if err := tmpHandle.Close(); err != nil {
+		_ = os.Remove(tmpFile)
+		return "", fmt.Errorf("docconv/builtin: close temp: %w", err)
 	}
 	defer os.Remove(tmpFile)
 

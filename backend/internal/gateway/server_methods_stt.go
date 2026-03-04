@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // STTHandlers 返回 STT RPC 方法处理器。

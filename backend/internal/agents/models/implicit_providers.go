@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 隐式供应商自动发现 ----------
@@ -25,16 +25,8 @@ type ImplicitProviderSpec struct {
 var implicitProviderSpecs = []ImplicitProviderSpec{
 	{ID: "minimax", EnvVars: []string{"MINIMAX_API_KEY"}, BaseURL: "https://api.minimax.chat/v1"},
 	{ID: "moonshot", EnvVars: []string{"MOONSHOT_API_KEY"}, BaseURL: "https://api.moonshot.ai/v1"},
-	{ID: "synthetic", EnvVars: []string{"SYNTHETIC_API_KEY"}, BaseURL: "https://api.synthetic.computer/v1"},
-	{ID: "venice", EnvVars: []string{"VENICE_API_KEY"}, BaseURL: "https://api.venice.ai/api/v1"},
 	{ID: "qwen-portal", EnvVars: []string{"DASHSCOPE_API_KEY"}, BaseURL: "https://portal.qwen.ai/v1"},
-	{ID: "xiaomi", EnvVars: []string{"TIZI_API_KEY"}, BaseURL: "https://api.xiaomimimo.com/anthropic", API: types.ModelAPIAnthropicMessages},
 	{ID: "ollama", EnvVars: []string{"OLLAMA_API_KEY", "OLLAMA_HOST"}, BaseURL: "http://127.0.0.1:11434/v1"},
-	{ID: "qianfan", EnvVars: []string{"QIANFAN_API_KEY"}, BaseURL: "https://qianfan.baidubce.com/v2"},
-	{ID: "cerebras", EnvVars: []string{"CEREBRAS_API_KEY"}, BaseURL: "https://api.cerebras.ai/v1"},
-	{ID: "openrouter", EnvVars: []string{"OPENROUTER_API_KEY"}, BaseURL: "https://openrouter.ai/api/v1"},
-	{ID: "chutes", EnvVars: []string{"CHUTES_API_KEY"}, BaseURL: "https://llm.chutes.ai/v1"},
-	{ID: "deepgram", EnvVars: []string{"DEEPGRAM_API_KEY"}, BaseURL: "https://api.deepgram.com/v1/listen"},
 }
 
 // ResolveImplicitProviders 检测环境变量并自动发现隐式供应商。
@@ -82,14 +74,7 @@ func ResolveImplicitProviders(explicit map[string]*types.ModelProviderConfig) ma
 		result[spec.ID] = providerCfg
 	}
 
-	// Bedrock 隐式发现 (stub — 完整实现依赖 AWS SDK)
-	if _, ok := explicit["bedrock"]; !ok {
-		if bedrockProvider := resolveImplicitBedrockProvider(); bedrockProvider != nil {
-			result["bedrock"] = bedrockProvider
-		}
-	}
-
-	// Copilot 隐式发现 (stub — 完整实现依赖 OAuth)
+	// Copilot 隐式发现
 	if _, ok := explicit["github-copilot"]; !ok {
 		if copilotProvider := resolveImplicitCopilotProvider(); copilotProvider != nil {
 			result["github-copilot"] = copilotProvider
@@ -97,31 +82,6 @@ func ResolveImplicitProviders(explicit map[string]*types.ModelProviderConfig) ma
 	}
 
 	return result
-}
-
-// resolveImplicitBedrockProvider AWS Bedrock 隐式发现。
-// P4-NEW5: stub — 完整实现依赖 AWS SDK credentials chain。
-func resolveImplicitBedrockProvider() *types.ModelProviderConfig {
-	// 检测 AWS credentials
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = os.Getenv("AWS_DEFAULT_REGION")
-	}
-	if region == "" {
-		return nil
-	}
-	// 需要 AWS SDK credentials（显式 key 或 IAM role）
-	hasKey := os.Getenv("AWS_ACCESS_KEY_ID") != ""
-	hasProfile := os.Getenv("AWS_PROFILE") != ""
-	if !hasKey && !hasProfile {
-		return nil
-	}
-
-	return &types.ModelProviderConfig{
-		BaseURL: "https://bedrock-runtime." + region + ".amazonaws.com",
-		Auth:    types.ModelAuthAWS,
-		API:     types.ModelAPIBedrockConverse,
-	}
 }
 
 // resolveImplicitCopilotProvider GitHub Copilot 隐式发现。

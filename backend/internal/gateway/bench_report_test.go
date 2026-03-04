@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
 )
 
 // ============================================================================

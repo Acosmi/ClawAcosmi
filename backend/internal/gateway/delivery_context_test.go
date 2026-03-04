@@ -3,7 +3,7 @@ package gateway
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
 )
 
 // TS 对照: delivery-context.ts 单元测试

@@ -17,7 +17,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // DefaultAgentID 默认 agent ID

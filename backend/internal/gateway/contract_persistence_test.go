@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
 )
 
 func newTestPersistence(t *testing.T) *VFSContractPersistence {

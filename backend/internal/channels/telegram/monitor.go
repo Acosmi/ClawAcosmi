@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram Monitor — 继承自 src/telegram/monitor.ts (216L)

@@ -5,7 +5,7 @@ package gateway
 // WebSocket RPC: result.approve.resolve — 前端回调结果签收决策
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
 )
 
 // ResultApprovalHandlers 返回结果签收相关的 RPC 处理器。

@@ -257,11 +257,24 @@ func (m *Manager) SendMessage(channelID ChannelID, params OutboundSendParams) (*
 	plugin, ok := m.plugins[channelID]
 	m.mu.Unlock()
 	if !ok {
-		return nil, fmt.Errorf("channel %s: plugin not registered", channelID)
+		return nil, NewSendError(channelID, SendErrUnavailable,
+			fmt.Sprintf("channel %s: plugin not registered", channelID)).
+			WithOperation("manager.resolve_plugin")
 	}
 	sender, ok := plugin.(MessageSender)
 	if !ok {
-		return nil, fmt.Errorf("channel %s: does not support SendMessage", channelID)
+		return nil, NewSendError(channelID, SendErrUnsupportedFeature,
+			fmt.Sprintf("channel %s: does not support SendMessage", channelID)).
+			WithOperation("manager.resolve_sender")
 	}
-	return sender.SendMessage(params)
+	result, err := sender.SendMessage(params)
+	if err != nil {
+		if _, ok := AsSendError(err); ok {
+			return nil, err
+		}
+		return nil, WrapSendError(channelID, SendErrUpstream, "manager.send",
+			fmt.Sprintf("channel %s: send failed", channelID), err).
+			WithRetryable(true)
+	}
+	return result, nil
 }

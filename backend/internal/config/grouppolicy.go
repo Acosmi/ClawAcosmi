@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ChannelGroupConfig 频道群组配置

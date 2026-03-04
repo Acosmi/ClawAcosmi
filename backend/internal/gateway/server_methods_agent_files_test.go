@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/workspace"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/workspace"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- agents.files.list ----------

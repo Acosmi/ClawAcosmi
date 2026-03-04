@@ -20,7 +20,7 @@ import {
 } from "./i18n.ts";
 import { loadMediaConfig } from "./views/media-config.ts";
 
-export function renderTab(state: AppViewState, tab: Tab) {
+export function renderTab(state: AppViewState, tab: Tab, badge?: number) {
   const href = pathForTab(tab, state.basePath);
   return html`
     <a
@@ -44,6 +44,9 @@ export function renderTab(state: AppViewState, tab: Tab) {
     >
       <span class="nav-item__icon" aria-hidden="true">${icons[iconForTab(tab)]}</span>
       <span class="nav-item__text">${titleForTab(tab)}</span>
+      ${badge && badge > 0 ? html`
+        <span class="nav-item__badge">${badge > 99 ? '99+' : badge}</span>
+      ` : nothing}
     </a>
   `;
 }
@@ -56,9 +59,7 @@ export function renderChatControls(state: AppViewState) {
     mainSessionKey
   );
   const disableThinkingToggle = state.onboarding;
-  const disableFocusToggle = state.onboarding;
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
-  const focusActive = state.onboarding ? true : state.settings.chatFocusMode;
   // Refresh icon
   const refreshIcon = html`
     <svg
@@ -73,24 +74,6 @@ export function renderChatControls(state: AppViewState) {
     >
       <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
       <path d="M21 3v5h-5"></path>
-    </svg>
-  `;
-  const focusIcon = html`
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    >
-      <path d="M4 7V4h3"></path>
-      <path d="M20 7V4h-3"></path>
-      <path d="M4 17v3h3"></path>
-      <path d="M20 17v3h-3"></path>
-      <circle cx="12" cy="12" r="3"></circle>
     </svg>
   `;
   const app = state as unknown as OpenAcosmiApp;
@@ -151,20 +134,10 @@ export function renderChatControls(state: AppViewState) {
       const targetKey = memoryKey || coderSession.key;
       channelSessions.set("coder", { key: targetKey, name: "智能体" });
     }
-    // 任务频道：扫描 task: 前缀的 session
-    const taskSession = state.sessionsResult.sessions.find(s => s.key.startsWith("task:"));
-    if (taskSession) {
-      const memoryKey = state.settings.lastSessionByChannel?.["task"];
-      const targetKey = memoryKey || taskSession.key;
-      channelSessions.set("task", { key: targetKey, name: "任务" });
-    }
   }
-  // 当前 session 是 coder/task 时也确保对应频道可见
+  // 当前 session 是 coder 时确保对应频道可见
   if (state.sessionKey.startsWith("coder:") && !channelSessions.has("coder")) {
     channelSessions.set("coder", { key: state.sessionKey, name: "智能体" });
-  }
-  if (state.sessionKey.startsWith("task:") && !channelSessions.has("task")) {
-    channelSessions.set("task", { key: state.sessionKey, name: "任务" });
   }
 
   const totalUnread = Object.values(app.channelUnreadCounts || {}).reduce((a, b) => a + b, 0);
@@ -244,6 +217,20 @@ export function renderChatControls(state: AppViewState) {
   };
 
   const applySessionSwitch = (sessionKey: string) => {
+    // 修复：切换频道前，把当前 sessionKey 保存到 lastSessionByChannel
+    // 以便切回时能恢复到之前的会话，而非 fallback 到 mainSessionKey
+    const currentKey = state.sessionKey;
+    if (currentKey && currentKey !== sessionKey) {
+      const curPrefixMatch = currentKey.match(/^([a-z]+):/);
+      const curPrefix = (curPrefixMatch && curPrefixMatch[1] !== "global" && curPrefixMatch[1] !== "unknown")
+        ? curPrefixMatch[1]
+        : "user";
+      const updatedLastSessionByChannel = {
+        ...(state.settings.lastSessionByChannel || {}),
+        [curPrefix]: currentKey,
+      };
+      state.settings = { ...state.settings, lastSessionByChannel: updatedLastSessionByChannel };
+    }
     state.sessionKey = sessionKey;
     state.chatMessage = "";
     state.chatStream = null;
@@ -304,6 +291,8 @@ export function renderChatControls(state: AppViewState) {
         margin-right: 8px;
         position: relative;
         transition: all 0.3s ease;
+        min-width: 0;
+        max-width: 100%;
       }
       
       .split-capsule.is-thinking {
@@ -349,19 +338,47 @@ export function renderChatControls(state: AppViewState) {
         font-size: 13px;
         font-weight: 500;
         transition: background 0.15s ease;
+        min-width: 0;
       }
       .split-capsule-btn:hover { background: rgba(128,128,128,0.08); }
       .split-capsule-btn:active { background: rgba(128,128,128,0.15); }
+      .switch-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: #fff;
+        background: linear-gradient(120deg, #ef4444 0%, #f59e0b 35%, #22c55e 68%, #3b82f6 100%);
+        box-shadow: 0 1px 4px rgba(59, 130, 246, 0.25);
+        flex-shrink: 0;
+      }
+      .switch-current {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .switch-unread-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 0 2px var(--bg-body), 0 0 6px rgba(239, 68, 68, 0.45);
+        flex-shrink: 0;
+      }
       .capsule-left {
         border-right: 1px solid var(--border-color);
         border-radius: 8px 0 0 8px;
         position: relative;
         overflow: hidden;
-        min-width: 120px;
+        min-width: 96px;
       }
       .capsule-right {
         border-radius: 0 8px 8px 0;
-        width: 160px;
+        width: clamp(120px, 22vw, 220px);
         overflow: hidden;
       }
       .cross-channel-badge {
@@ -401,6 +418,7 @@ export function renderChatControls(state: AppViewState) {
         box-shadow: 0 8px 30px rgba(0,0,0,0.15);
         z-index: 99999 !important; /* Forces dropdown above all chat layers */
         min-width: 200px;
+        max-width: min(92vw, 360px);
         max-height: 350px;
         overflow-y: auto;
         display: flex;
@@ -411,6 +429,10 @@ export function renderChatControls(state: AppViewState) {
       .mac-dropdown.right-aligned {
         left: unset;
         right: 0;
+      }
+      .mac-dropdown--session {
+        min-width: 220px;
+        width: min(360px, calc(100vw - 24px));
       }
       @keyframes mac-dropdown-fade {
         from { opacity: 0; transform: translateY(-4px) scale(0.98); }
@@ -445,7 +467,9 @@ export function renderChatControls(state: AppViewState) {
         background: #2563eb;
       }
       .session-name-truncate {
-        max-width: 160px;
+        min-width: 0;
+        max-width: 100%;
+        flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -457,14 +481,13 @@ export function renderChatControls(state: AppViewState) {
         <!-- Channel Selector -->
         <div style="position: relative;">
           <button class="split-capsule-btn capsule-left" @click=${toggleChannelDropdown} title="切换频道">
-            <span style="color: #ef4444; font-weight: 700; font-size: 12px; flex-shrink: 0;">切换</span>
-            <span style="display: flex; opacity: 0.8; position: relative;">
-              ${icons.smartphone}
-              ${(!app.crossChannelNotificationActive && totalUnread > 0) ? html`
-                <span style="position: absolute; top: -2px; right: -4px; width: 6px; height: 6px; background: #ef4444; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg-body);"></span>
-              ` : nothing}
+            <span class="switch-tag">切换</span>
+            <span class="switch-current">
+              <span>${currentChannelName}</span>
+              ${(!app.crossChannelNotificationActive && totalUnread > 0)
+      ? html`<span class="switch-unread-dot"></span>`
+      : nothing}
             </span>
-            <span>${currentChannelName}</span>
             <div class="cross-channel-badge ${app.crossChannelNotificationActive ? 'show' : ''}">
               <span class="statusDot pulse" style="background: white; flex-shrink: 0; margin-right: 4px; width: 6px; height: 6px;"></span>
               <span>${app.crossChannelNotificationText}</span>
@@ -475,9 +498,9 @@ export function renderChatControls(state: AppViewState) {
             <div class="mac-dropdown">
               <div style="padding: 4px 8px; font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">频道列表</div>
               ${Array.from(channelSessions.entries()).map(([prefix, info]) => {
-    const unreadCount = app.channelUnreadCounts?.[prefix] || 0;
-    const isActive = state.sessionKey === info.key || state.sessionKey.startsWith(prefix === "web" ? "user:" : `${prefix}:`);
-    return html`
+        const unreadCount = app.channelUnreadCounts?.[prefix] || 0;
+        const isActive = state.sessionKey === info.key || state.sessionKey.startsWith(prefix === "web" ? "user:" : `${prefix}:`);
+        return html`
                   <button class="mac-dropdown-item ${isActive ? 'active' : ''}" @click=${handleChannelSwitch(prefix, info.key)}>
                     <div style="display: flex; align-items: center; gap: 8px;">
                       <span>${info.name}</span>
@@ -490,7 +513,7 @@ export function renderChatControls(state: AppViewState) {
                     ` : nothing}
                   </button>
                 `;
-  })}
+      })}
             </div>
           ` : nothing}
         </div>
@@ -503,7 +526,7 @@ export function renderChatControls(state: AppViewState) {
           </button>
 
           ${app.isSessionDropdownOpen && state.connected ? html`
-            <div class="mac-dropdown right-aligned" style="min-width: 260px;">
+            <div class="mac-dropdown right-aligned mac-dropdown--session">
               <div style="padding: 4px 8px; font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">历史会话记录</div>
               ${sessionOptions.length === 0 ? html`
                 <div style="padding: 8px 12px; font-size: 12px; color: var(--text-dim);">无更多历史记录</div>
@@ -521,73 +544,6 @@ export function renderChatControls(state: AppViewState) {
           ` : nothing}
         </div>
       </div>
-
-      <button
-        class="btn btn--sm btn--icon"
-        ?disabled=${state.chatLoading || !state.connected}
-        @click=${async () => {
-      const app = state as unknown as OpenAcosmiApp;
-      app.chatManualRefreshInFlight = true;
-      app.chatNewMessagesBelow = false;
-      await app.updateComplete;
-      app.resetToolStream();
-      try {
-        await refreshChat(state as unknown as Parameters<typeof refreshChat>[0], {
-          scheduleScroll: false,
-        });
-        app.scrollToBottom({ smooth: true });
-      } finally {
-        requestAnimationFrame(() => {
-          app.chatManualRefreshInFlight = false;
-          app.chatNewMessagesBelow = false;
-        });
-      }
-    }}
-        title="${t("helpers.refreshChat")}"
-      >
-        ${refreshIcon}
-      </button>
-      <span class="chat-controls__separator">|</span>
-      <button
-        class="btn btn--sm btn--icon"
-        @click=${() => {
-      state.memoryPanel = "media";
-      state.setTab("memory");
-      loadMediaConfig(state);
-    }}
-        title=${t("media.configTitle")}
-      >
-        ${icons.mic}
-      </button>
-      <button
-        class="btn btn--sm btn--icon"
-        @click=${() => {
-      state.setTab("memory");
-    }}
-        title=${t("memory.memoryManagement")}
-      >
-        ${icons.brainMemory}
-      </button>
-      <button
-        class="btn btn--sm btn--icon ${focusActive ? "active" : ""}"
-        ?disabled=${disableFocusToggle}
-        @click=${() => {
-      if (disableFocusToggle) {
-        return;
-      }
-      state.applySettings({
-        ...state.settings,
-        chatFocusMode: !state.settings.chatFocusMode,
-      });
-    }}
-        aria-pressed=${focusActive}
-        title=${disableFocusToggle
-      ? t("helpers.disabledOnboarding")
-      : t("helpers.toggleFocus")
-    }
-      >
-        ${focusIcon}
-      </button>
     </div>
   `;
 }

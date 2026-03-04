@@ -6,8 +6,8 @@ package runner
 // ============================================================================
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // EnvModelResolver 基于环境变量的简单模型解析器。

@@ -14,7 +14,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // Publisher 公众号发布器。

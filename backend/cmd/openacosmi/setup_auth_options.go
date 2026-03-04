@@ -6,8 +6,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
 )
 
 // ---------- 分组定义 ----------
@@ -22,23 +22,16 @@ type authChoiceGroupDef struct {
 
 // AUTH_CHOICE_GROUP_DEFS 所有认证分组（对应 TS AUTH_CHOICE_GROUP_DEFS）。
 var authChoiceGroupDefs = []authChoiceGroupDef{
-	{GroupOpenAI, "OpenAI", "Codex OAuth + API key", []AuthChoice{AuthChoiceOpenAICodex, AuthChoiceOpenAIApiKey}},
+	{GroupOpenAI, "OpenAI", "API key", []AuthChoice{AuthChoiceOpenAIApiKey}},
 	{GroupAnthropic, "Anthropic", "setup-token + API key", []AuthChoice{AuthChoiceToken, AuthChoiceApiKey}},
 	{GroupMinimax, "MiniMax", "M2.1 (recommended)", []AuthChoice{AuthChoiceMinimaxPortal, AuthChoiceMinimaxApi, AuthChoiceMinimaxApiLightning}},
-	{GroupMoonshot, "Moonshot AI (Kimi K2.5)", "Kimi K2.5 + Kimi Coding", []AuthChoice{AuthChoiceMoonshotApiKey, AuthChoiceMoonshotApiKeyCn, AuthChoiceKimiCodeApiKey}},
+	{GroupMoonshot, "Moonshot AI (Kimi)", "Kimi K2.5 API key", []AuthChoice{AuthChoiceMoonshotApiKey, AuthChoiceMoonshotApiKeyCn}},
 	{GroupGoogle, "Google", "Gemini API key + OAuth", []AuthChoice{AuthChoiceGeminiApiKey, AuthChoiceGoogleAntigravity, AuthChoiceGoogleGeminiCli}},
 	{GroupXAI, "xAI (Grok)", "API key", []AuthChoice{AuthChoiceXAIApiKey}},
-	{GroupOpenRouter, "OpenRouter", "API key", []AuthChoice{AuthChoiceOpenRouterApiKey}},
 	{GroupQwen, "Qwen", "OAuth", []AuthChoice{AuthChoiceQwenPortal}},
-	{GroupZAI, "Z.AI (GLM 4.7)", "API key", []AuthChoice{AuthChoiceZaiApiKey}},
-	{GroupQianfan, "Qianfan", "API key", []AuthChoice{AuthChoiceQianfanApiKey}},
-	{GroupCopilot, "Copilot", "GitHub + local proxy", []AuthChoice{AuthChoiceGitHubCopilot, AuthChoiceCopilotProxy}},
-	{GroupAIGateway, "Vercel AI Gateway", "API key", []AuthChoice{AuthChoiceAIGatewayApiKey}},
+	{GroupZAI, "Z.AI (GLM)", "API key", []AuthChoice{AuthChoiceZaiApiKey}},
+	{GroupCopilot, "GitHub Copilot", "GitHub device login", []AuthChoice{AuthChoiceGitHubCopilot}},
 	{GroupAcosmiZen, "OpenAcosmi Zen", "API key", []AuthChoice{AuthChoiceAcosmiZen}},
-	{GroupXiaomi, "Xiaomi", "API key", []AuthChoice{AuthChoiceXiaomiApiKey}},
-	{GroupSynthetic, "Synthetic", "Anthropic-compatible (multi-model)", []AuthChoice{AuthChoiceSyntheticApiKey}},
-	{GroupVenice, "Venice AI", "Privacy-focused (uncensored models)", []AuthChoice{AuthChoiceVeniceApiKey}},
-	{GroupCloudflareAIGateway, "Cloudflare AI Gateway", "Account ID + Gateway ID + API key", []AuthChoice{AuthChoiceCloudflareAIGatewayKey}},
 }
 
 // ---------- 选项构建 ----------
@@ -46,32 +39,21 @@ var authChoiceGroupDefs = []authChoiceGroupDef{
 // allAuthChoiceOptionDefs 完整选项列表（对应 TS buildAuthChoiceOptions）。
 var allAuthChoiceOptionDefs = []AuthChoiceOption{
 	{AuthChoiceToken, "Anthropic token (paste setup-token)", "run `claude setup-token` elsewhere, then paste the token here"},
-	{AuthChoiceOpenAICodex, "OpenAI Codex (ChatGPT OAuth)", ""},
-	{AuthChoiceChutes, "Chutes (OAuth)", ""},
+	{AuthChoiceApiKey, "Anthropic API key", ""},
 	{AuthChoiceOpenAIApiKey, "OpenAI API key", ""},
 	{AuthChoiceXAIApiKey, "xAI (Grok) API key", ""},
-	{AuthChoiceQianfanApiKey, "Qianfan API key", ""},
-	{AuthChoiceOpenRouterApiKey, "OpenRouter API key", ""},
-	{AuthChoiceAIGatewayApiKey, "Vercel AI Gateway API key", ""},
-	{AuthChoiceCloudflareAIGatewayKey, "Cloudflare AI Gateway", "Account ID + Gateway ID + API key"},
 	{AuthChoiceMoonshotApiKey, "Kimi API key (.ai)", ""},
 	{AuthChoiceMoonshotApiKeyCn, "Kimi API key (.cn)", ""},
-	{AuthChoiceKimiCodeApiKey, "Kimi Code API key (subscription)", ""},
-	{AuthChoiceSyntheticApiKey, "Synthetic API key", ""},
-	{AuthChoiceVeniceApiKey, "Venice AI API key", "Privacy-focused inference (uncensored models)"},
 	{AuthChoiceGitHubCopilot, "GitHub Copilot (GitHub device login)", "Uses GitHub device flow"},
 	{AuthChoiceGeminiApiKey, "Google Gemini API key", ""},
 	{AuthChoiceGoogleAntigravity, "Google Antigravity OAuth", "Uses the bundled Antigravity auth plugin"},
 	{AuthChoiceGoogleGeminiCli, "Google Gemini CLI OAuth", "Uses the bundled Gemini CLI auth plugin"},
-	{AuthChoiceZaiApiKey, "Z.AI (GLM 4.7) API key", ""},
-	{AuthChoiceXiaomiApiKey, "Xiaomi API key", ""},
-	{AuthChoiceMinimaxPortal, "MiniMax OAuth", "Oauth plugin for MiniMax"},
-	{AuthChoiceQwenPortal, "Qwen OAuth", ""},
-	{AuthChoiceCopilotProxy, "Copilot Proxy (local)", "Local proxy for VS Code Copilot models"},
-	{AuthChoiceApiKey, "Anthropic API key", ""},
-	{AuthChoiceAcosmiZen, "OpenAcosmi Zen (multi-model proxy)", "Claude, GPT, Gemini via openacosmi.com/zen"},
+	{AuthChoiceZaiApiKey, "Z.AI (GLM) API key", ""},
+	{AuthChoiceMinimaxPortal, "MiniMax OAuth", "OAuth plugin for MiniMax"},
 	{AuthChoiceMinimaxApi, "MiniMax M2.1", ""},
 	{AuthChoiceMinimaxApiLightning, "MiniMax M2.1 Lightning", "Faster, higher output cost"},
+	{AuthChoiceQwenPortal, "Qwen OAuth", ""},
+	{AuthChoiceAcosmiZen, "OpenAcosmi Zen (multi-model proxy)", "Claude, GPT, Gemini via openacosmi.com/zen"},
 }
 
 // BuildAuthChoiceOptions 构建完整选项列表。

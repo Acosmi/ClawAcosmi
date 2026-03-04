@@ -17,13 +17,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/prompt"
-	"github.com/openacosmi/claw-acismi/internal/agents/session"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/prompt"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/session"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	goproviders_common "github.com/Acosmi/ClawAcosmi/internal/goproviders/common"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Argus 视觉子智能体接口（agent 侧） ----------
@@ -66,7 +67,8 @@ type RemoteMCPBridgeForAgent interface {
 
 const (
 	// maxToolLoopIterations 防止无限工具调用循环。
-	maxToolLoopIterations = 30
+	// Bug#11: 从 30 降到 15 — 审计中 6 轮已过多，30 完全不合理。
+	maxToolLoopIterations = 15
 	// maxConsecutivePermDeniedRounds 连续全部权限拒绝的最大轮次。
 	// 超过此数则提前退出工具循环，避免浪费 LLM 调用并防止用户等待过久。
 	maxConsecutivePermDeniedRounds = 3
@@ -94,6 +96,32 @@ type UHMSBridgeForAgent interface {
 	SearchSkillsVFS(ctx context.Context, query string, topK int) ([]SkillSearchHit, error)
 	// ReadSkillVFS 从 VFS 读取技能 L2 完整内容。
 	ReadSkillVFS(ctx context.Context, category, name string) (string, error)
+
+	// --- Bug#11: 记忆搜索/获取工具接口 ---
+
+	// SearchMemories 在记忆系统中搜索与 query 相关的记忆条目。
+	SearchMemories(ctx context.Context, query string, limit int) ([]MemorySearchHit, error)
+	// GetMemory 根据 ID 获取单条记忆的完整内容。
+	GetMemory(ctx context.Context, id string) (*MemoryHit, error)
+}
+
+// MemorySearchHit 记忆搜索命中结果。
+type MemorySearchHit struct {
+	ID       string  `json:"id"`
+	Content  string  `json:"content"`
+	Category string  `json:"category,omitempty"`
+	Type     string  `json:"type,omitempty"`
+	Score    float64 `json:"score,omitempty"`
+}
+
+// MemoryHit 单条记忆完整内容。
+type MemoryHit struct {
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Category  string `json:"category,omitempty"`
+	Type      string `json:"type,omitempty"`
+	CreatedAt int64  `json:"createdAt,omitempty"`
+	UpdatedAt int64  `json:"updatedAt,omitempty"`
 }
 
 // SkillSearchHit 技能搜索命中结果。
@@ -245,7 +273,8 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 
 	// 5a.1 Transcript 持久化保障: 使用 defer 确保即使 LLM 失败/超时也能持久化用户消息。
 	// 正常完成时 messages 包含 user+assistant，失败时至少包含 user。
-	transcriptPersisted := false
+	// Bug#11: SuppressTranscript 在 model fallback 场景下跳过持久化，避免失败 attempt 污染 transcript。
+	transcriptPersisted := params.SuppressTranscript
 	defer func() {
 		if !transcriptPersisted {
 			r.persistToTranscript(params, messages, log)
@@ -258,6 +287,8 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 	if params.AgentChannel != nil {
 		tools = append(tools, RequestHelpToolDef())
 	}
+	// Fix D5-4: report_progress 工具 — 允许智能体主动汇报中间进度
+	tools = append(tools, ReportProgressToolDef())
 	// 媒体子智能体: 注入媒体专属工具（主智能体只见 spawn_media_agent 入口）
 	if params.AgentType == "media" && r.MediaSubsystem != nil {
 		for _, name := range r.MediaSubsystem.ToolNames() {
@@ -348,6 +379,7 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 	// 工具失败计数: 跟踪每个工具的累计失败/错误次数（含交替调用场景）
 	toolFailureCounts := make(map[string]int)
 	const maxToolFailures = 3 // 单个工具累计失败超过此值注入指导消息
+	const maxToolHardStop = 5 // Bug#11: 单个工具累计失败超过此值强制终止循环
 	totalToolFailures := 0
 	// 全局工具失败预算: 净失败数（失败+1、成功-1、下限0）超过此值终止循环。
 	// 使用净值而非单调累加，避免长会话中偶发失败的无害积累误触发断路。
@@ -399,6 +431,7 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 			ThinkLevel:   params.ThinkLevel,
 			TimeoutMs:    params.TimeoutMs,
 			APIKey:       apiKey,
+			AuthMode:     r.resolveAuthMode(params.Provider),
 			BaseURL:      baseURL,
 		}, func(evt llmclient.StreamEvent) {
 			switch evt.Type {
@@ -632,6 +665,26 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 			}
 		}
 
+		// --- Bug#11: L2 硬停 — 单个工具累计失败 >= maxToolHardStop 时强制终止循环 ---
+		hardStopTool := ""
+		for tName, tCount := range toolFailureCounts {
+			if tCount >= maxToolHardStop {
+				hardStopTool = tName
+				break
+			}
+		}
+		if hardStopTool != "" {
+			log.Warn("tool hard stop triggered",
+				"tool", hardStopTool,
+				"failCount", toolFailureCounts[hardStopTool],
+				"iteration", iteration,
+			)
+			assistantTexts = append(assistantTexts, fmt.Sprintf(
+				"⚠️ Tool %s failed %d times. Forced loop termination to avoid resource waste.",
+				hardStopTool, toolFailureCounts[hardStopTool]))
+			break
+		}
+
 		// --- 全局工具失败预算耗尽: 终止循环 ---
 		if totalToolFailures >= maxTotalToolFailures {
 			log.Warn("global tool failure budget exhausted, terminating loop",
@@ -799,11 +852,9 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 					)
 				}
 			}()
-			// 本地单用户场景: 用 sessionKey 作为 userID 代理
-			uid := params.SessionKey
-			if uid == "" {
-				uid = "default"
-			}
+			// 本地单用户场景: 统一使用 "default" 作为 userID，
+			// 与 server_methods_memory.go 的查询路径保持一致 (Bug#11 P0 修复)。
+			uid := "default"
 			commitErr := r.UHMSBridge.CommitChatSession(
 				context.Background(), uid, params.SessionID, messages)
 			if commitErr != nil {
@@ -844,6 +895,10 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 		"durationMs", durationMs,
 		"assistantCount", len(assistantTexts),
 		"toolCount", len(toolMetas),
+		"provider", params.Provider,
+		"model", params.ModelID,
+		"inputTokens", totalUsage.InputTokens,
+		"outputTokens", totalUsage.OutputTokens,
 	)
 
 	return result, nil
@@ -855,12 +910,20 @@ func (r *EmbeddedAttemptRunner) resolveAPIKey(params AttemptParams) (string, err
 	if r.AuthStore == nil {
 		// 优先从配置文件读取 API key（向导保存的值）
 		if r.Config != nil && r.Config.Models != nil && r.Config.Models.Providers != nil {
-			if pc := r.Config.Models.Providers[strings.ToLower(params.Provider)]; pc != nil && pc.APIKey != "" {
-				return pc.APIKey, nil
+			pc := r.Config.Models.Providers[strings.ToLower(params.Provider)]
+			if pc == nil {
+				pc = r.Config.Models.Providers[params.Provider]
 			}
-			// 也尝试原始 provider 名称（大小写可能不同）
-			if pc := r.Config.Models.Providers[params.Provider]; pc != nil && pc.APIKey != "" {
-				return pc.APIKey, nil
+			if pc != nil {
+				// OAuth 模式: 从 auth-profiles.json 读取 token（API Key 字段为空）
+				if pc.Auth == types.ModelAuthOAuth {
+					if token := loadOAuthTokenFromAuthProfiles(params.Provider); token != "" {
+						return token, nil
+					}
+				}
+				if pc.APIKey != "" {
+					return pc.APIKey, nil
+				}
 			}
 		}
 		// 尝试从环境变量读取
@@ -909,6 +972,55 @@ func (r *EmbeddedAttemptRunner) resolveAPIKey(params AttemptParams) (string, err
 		return "", fmt.Errorf("no API key resolved for %s", params.Provider)
 	}
 	return info.ApiKey, nil
+}
+
+// resolveAuthMode 从配置中获取 provider 的认证模式。
+// 返回 "oauth" | "" (默认 API key)。
+func (r *EmbeddedAttemptRunner) resolveAuthMode(provider string) string {
+	if r.Config == nil || r.Config.Models == nil || r.Config.Models.Providers == nil {
+		return ""
+	}
+	if pc := r.Config.Models.Providers[strings.ToLower(provider)]; pc != nil {
+		return string(pc.Auth)
+	}
+	if pc := r.Config.Models.Providers[provider]; pc != nil {
+		return string(pc.Auth)
+	}
+	return ""
+}
+
+// loadOAuthTokenFromAuthProfiles 从 auth-profiles.json 中读取 OAuth token。
+// 当 AuthStore 不可用且 provider 使用 OAuth 认证时作为回退。
+func loadOAuthTokenFromAuthProfiles(provider string) string {
+	authProfilePath := goproviders_common.ResolveAuthStorePath("")
+	data, err := os.ReadFile(authProfilePath)
+	if err != nil {
+		return ""
+	}
+
+	var store struct {
+		Profiles map[string]map[string]interface{} `json:"profiles"`
+	}
+	if json.Unmarshal(data, &store) != nil || store.Profiles == nil {
+		return ""
+	}
+
+	// 搜索匹配 provider 的 profile（格式: "provider:email" 或 "provider:default"）
+	providerLower := strings.ToLower(provider)
+	for profileID, creds := range store.Profiles {
+		parts := strings.SplitN(profileID, ":", 2)
+		if len(parts) < 1 {
+			continue
+		}
+		profileProvider := strings.ToLower(parts[0])
+		if profileProvider == providerLower || profileProvider == providerLower+"-portal" {
+			if access, ok := creds["access"].(string); ok && access != "" {
+				return access
+			}
+		}
+	}
+
+	return ""
 }
 
 func (r *EmbeddedAttemptRunner) buildSystemPrompt(params AttemptParams, sessionState prompt.SessionState, tier intentTier) string {
@@ -1165,6 +1277,22 @@ Also supports: navigate, screenshot, evaluate JS, wait_for, go_back/forward, get
 		}
 	}
 
+	// Bug#11: memory_search / memory_get 记忆工具注入（仅在 UHMS Bridge 可用时）
+	if r.UHMSBridge != nil {
+		tools = append(tools,
+			llmclient.ToolDef{
+				Name:        "memory_search",
+				Description: "Search long-term memories by keyword or topic. Returns matching memory entries with relevance scores. Use this to recall past conversations, user preferences, or learned facts.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"Search query (keywords or topic)"},"limit":{"type":"integer","description":"Max results (default 5)"}},"required":["query"]}`),
+			},
+			llmclient.ToolDef{
+				Name:        "memory_get",
+				Description: "Get a specific memory entry by ID. Use after memory_search to read full details of a memory.",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"Memory ID from memory_search results"}},"required":["id"]}`),
+			},
+		)
+	}
+
 	// 注入工具绑定的技能描述
 	if len(r.toolBindings) > 0 {
 		for i := range tools {
@@ -1200,6 +1328,7 @@ func (r *EmbeddedAttemptRunner) buildToolExecParams(params AttemptParams, secLvl
 	tep := ToolExecParams{
 		WorkspaceDir:           params.WorkspaceDir,
 		SessionID:              params.SessionID,
+		RunID:                  params.RunID,
 		SessionKey:             params.SessionKey,
 		TimeoutMs:              params.TimeoutMs,
 		AllowWrite:             secLvl == "full" || secLvl == "sandboxed" || secLvl == "allowlist",
@@ -1254,9 +1383,21 @@ func isToolSoftError(toolName, output string) bool {
 
 	switch toolName {
 	case "bash":
-		// bash: "[bash] Resource budget exhausted" 或 "[Command blocked..."
-		return strings.HasPrefix(output, "[bash]") || strings.HasPrefix(output, "[Command blocked") ||
-			strings.HasPrefix(output, "[Command denied") || strings.HasPrefix(output, "[Write operation approval error")
+		// bash 前置拦截: "[bash] Resource budget exhausted" 或 "[Command blocked..."
+		if strings.HasPrefix(output, "[bash]") || strings.HasPrefix(output, "[Command blocked") ||
+			strings.HasPrefix(output, "[Command denied") || strings.HasPrefix(output, "[Write operation approval error") {
+			return true
+		}
+		// Bug#11 修复: bash 后执行失败 — 非零 exit code
+		// bash 输出格式: "stdout\n[exit code: N]" 或 "stdout\n[sandbox exit code: N]"
+		trimmed := strings.TrimSpace(output)
+		if strings.Contains(output, "\n[exit code:") && !strings.HasSuffix(trimmed, "[exit code: 0]") {
+			return true
+		}
+		if strings.Contains(output, "\n[sandbox exit code:") && !strings.HasSuffix(trimmed, "[sandbox exit code: 0]") {
+			return true
+		}
+		return false
 	case "send_media":
 		return strings.HasPrefix(output, "[send_media]")
 	case "browser":

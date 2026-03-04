@@ -20,9 +20,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 	"github.com/google/uuid"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // OpenAIChatHandlerConfig OpenAI 兼容 API 处理器配置。
@@ -264,18 +264,20 @@ func handleStreaming(
 		}
 	})
 
+	// 先创建可取消 context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
 	// 客户端断开时清理
 	notify := r.Context().Done()
 	go func() {
 		<-notify
+		cancel() // 取消推理
 		if atomic.CompareAndSwapInt32(&closed, 0, 1) {
 			unsubscribe()
 		}
 	}()
 
 	// 异步运行管线
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-
 	go func() {
 		defer cancel()
 		defer func() {

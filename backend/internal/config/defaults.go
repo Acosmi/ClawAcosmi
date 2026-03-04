@@ -14,7 +14,7 @@ import (
 
 	"log"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ModelRef 解析后的模型引用

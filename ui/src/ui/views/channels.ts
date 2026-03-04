@@ -96,7 +96,7 @@ export function renderChannels(props: ChannelsProps) {
   };
 
   return html`
-    <section class="grid grid-cols-2">
+    <section class="channels-grid">
       ${orderedChannels.map((channel) =>
     renderChannelCard(channel.key, props, data, requestUpdate, () => props.onConfigReload()),
   )}

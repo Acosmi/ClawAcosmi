@@ -14,7 +14,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/tools"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/tools"
 )
 
 // ---------- 常量 ----------

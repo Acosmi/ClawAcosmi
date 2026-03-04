@@ -45,7 +45,7 @@ func TestCreateTrendingTool_FetchAll(t *testing.T) {
 		},
 	)
 
-	tool := CreateTrendingTool(agg)
+	tool := CreateTrendingTool(agg, nil)
 	if tool.ToolName != ToolTrendingTopics {
 		t.Fatalf("name: got %q, want %q", tool.ToolName, ToolTrendingTopics)
 	}
@@ -78,7 +78,7 @@ func TestCreateTrendingTool_FetchBySource(t *testing.T) {
 		},
 	)
 
-	tool := CreateTrendingTool(agg)
+	tool := CreateTrendingTool(agg, nil)
 	result, err := tool.ToolExecute(context.Background(), "test-call", map[string]any{
 		"action": "fetch",
 		"source": "weibo",
@@ -99,7 +99,7 @@ func TestCreateTrendingTool_ListSources(t *testing.T) {
 		&toolMockSource{name: "zhihu"},
 	)
 
-	tool := CreateTrendingTool(agg)
+	tool := CreateTrendingTool(agg, nil)
 	result, err := tool.ToolExecute(context.Background(), "test-call", map[string]any{
 		"action": "list_sources",
 	})
@@ -122,7 +122,7 @@ func TestCreateTrendingTool_Analyze(t *testing.T) {
 		},
 	)
 
-	tool := CreateTrendingTool(agg)
+	tool := CreateTrendingTool(agg, nil)
 	result, err := tool.ToolExecute(context.Background(), "test-call", map[string]any{
 		"action":   "analyze",
 		"category": "tech",
@@ -137,7 +137,7 @@ func TestCreateTrendingTool_Analyze(t *testing.T) {
 
 func TestCreateTrendingTool_UnknownAction(t *testing.T) {
 	agg := NewTrendingAggregator()
-	tool := CreateTrendingTool(agg)
+	tool := CreateTrendingTool(agg, nil)
 
 	_, err := tool.ToolExecute(context.Background(), "test-call", map[string]any{
 		"action": "invalid_action",
@@ -148,7 +148,7 @@ func TestCreateTrendingTool_UnknownAction(t *testing.T) {
 }
 
 func TestCreateTrendingTool_NilAggregator(t *testing.T) {
-	tool := CreateTrendingTool(nil)
+	tool := CreateTrendingTool(nil, nil)
 
 	// fetch should fail.
 	_, err := tool.ToolExecute(context.Background(), "test-call", map[string]any{

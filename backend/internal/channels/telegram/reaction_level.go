@@ -1,6 +1,6 @@
 package telegram
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 // Telegram 反应级别解析 — 继承自 src/telegram/reaction-level.ts (65L)
 

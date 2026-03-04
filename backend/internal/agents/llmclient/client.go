@@ -20,19 +20,43 @@ func StreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamEvent))
 	provider := strings.ToLower(req.Provider)
 
 	switch provider {
+	// Anthropic 原生协议
 	case "anthropic":
 		return anthropicStreamChat(ctx, req, onEvent)
+
+	// OpenAI 原生协议
 	case "openai":
 		return openaiStreamChat(ctx, req, onEvent)
-	case "deepseek", "deepseek-reasoner":
-		return openaiStreamChat(ctx, req, onEvent)
+
+	// Ollama 本地 LLM
 	case "ollama":
 		return ollamaStreamChat(ctx, req, onEvent)
+
+	// Google Gemini 原生协议
 	case "gemini", "google", "google-gemini", "google-gemini-cli",
 		"google-generative-ai", "google-antigravity":
 		return geminiStreamChat(ctx, req, onEvent)
+
+	// OpenAI 兼容协议（直连）
+	case "deepseek", "deepseek-reasoner",
+		"moonshot", "kimi",
+		"xai",
+		"qwen", "qwen-portal",
+		"minimax",
+		"zai", "zhipu",
+		"doubao":
+		return openaiStreamChat(ctx, req, onEvent)
+
+	// Anthropic 兼容协议
+	case "minimax-portal":
+		return anthropicStreamChat(ctx, req, onEvent)
+
 	default:
-		// 尝试检测 API 兼容类型
+		// 自定义 OpenAI 兼容端点（custom-<name> 前缀）
+		if strings.HasPrefix(provider, "custom-") {
+			return openaiStreamChat(ctx, req, onEvent)
+		}
+		// 尝试通过 BaseURL 检测 API 兼容类型（通用兜底）
 		if isAnthropicCompatible(req.BaseURL) {
 			return anthropicStreamChat(ctx, req, onEvent)
 		}

@@ -3,7 +3,7 @@ package reply
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/get-reply-inline-actions.ts (385L)

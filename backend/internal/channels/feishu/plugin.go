@@ -18,8 +18,9 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // FeishuPlugin 飞书频道插件
@@ -28,7 +29,7 @@ type FeishuPlugin struct {
 	mu     sync.Mutex
 
 	clients     map[string]*FeishuClient
-	senders     map[string]*FeishuSender
+	senders     map[string]feishuMessageSender
 	dispatchers map[string]*dispatcher.EventDispatcher
 	wsClients   map[string]*larkws.Client
 	wsCancel    map[string]context.CancelFunc
@@ -48,12 +49,21 @@ type FeishuPlugin struct {
 	CardActionFunc CardActionHandler
 }
 
+type feishuMessageSender interface {
+	SendText(ctx context.Context, receiveID, idType, text string) error
+	SendCardWithID(ctx context.Context, receiveID, idType, cardJSON string) (string, error)
+	PatchCard(ctx context.Context, messageID, cardJSON string) error
+	SendImage(ctx context.Context, receiveID, idType, imageKey string) error
+	SendAudio(ctx context.Context, receiveID, idType, fileKey string) error
+	SendFile(ctx context.Context, receiveID, idType, fileKey string) error
+}
+
 // NewFeishuPlugin 创建飞书插件
 func NewFeishuPlugin(cfg *types.OpenAcosmiConfig) *FeishuPlugin {
 	return &FeishuPlugin{
 		config:      cfg,
 		clients:     make(map[string]*FeishuClient),
-		senders:     make(map[string]*FeishuSender),
+		senders:     make(map[string]feishuMessageSender),
 		dispatchers: make(map[string]*dispatcher.EventDispatcher),
 		wsClients:   make(map[string]*larkws.Client),
 		wsCancel:    make(map[string]context.CancelFunc),
@@ -98,6 +108,11 @@ func (p *FeishuPlugin) Start(accountID string) error {
 
 	if err := ValidateFeishuConfig(acct.Config); err != nil {
 		return fmt.Errorf("feishu config validation: %w", err)
+	}
+
+	// Sentinel 检测：keyring 恢复失败时凭证可能残留占位符
+	if acct.Config.AppSecret == config.KeyringSentinel || acct.Config.AppID == config.KeyringSentinel {
+		return fmt.Errorf("feishu account %q: credentials contain keyring sentinel (keyring restore failed); please reconfigure via Wizard", accountID)
 	}
 
 	if !channels.IsAccountEnabled(acct.Config.Enabled) {
@@ -182,29 +197,41 @@ func (p *FeishuPlugin) Start(accountID string) error {
 				var embeddedImageKeys []string
 
 				// 处理媒体回复：图片类型上传后嵌入结果卡片，其他类型独立发送
-				if len(dispatchReply.MediaData) > 0 && client != nil {
-					mediaCategory := detectMediaCategory(dispatchReply.MediaMimeType, dispatchReply.MediaData)
+				processMedia := func(data []byte, mimeType string) {
+					if len(data) == 0 || client == nil {
+						return
+					}
+					mediaCategory := detectMediaCategory(mimeType, data)
 					if mediaCategory == "image" {
 						// 图片：上传拿 image_key，后续嵌入结果卡片
-						imageKey, uploadErr := client.UploadImage(context.Background(), dispatchReply.MediaData, "message")
+						imageKey, uploadErr := client.UploadImage(context.Background(), data, "message")
 						if uploadErr != nil {
 							slog.Warn("feishu: upload image for card failed, sending as separate message",
 								"account", capturedAccountID, "chat_id", chatID, "error", uploadErr)
 							// 降级：独立消息发送
 							_ = p.sendMediaData(context.Background(), client, sender, chatID, idType,
-								dispatchReply.MediaData, dispatchReply.MediaMimeType)
+								data, mimeType)
 						} else {
 							embeddedImageKeys = append(embeddedImageKeys, imageKey)
 						}
 					} else {
 						// 非图片（音频/文件）：独立消息发送
 						mediaErr := p.sendMediaData(context.Background(), client, sender, chatID, idType,
-							dispatchReply.MediaData, dispatchReply.MediaMimeType)
+							data, mimeType)
 						if mediaErr != nil {
 							slog.Warn("feishu: auto-reply media send failed",
 								"account", capturedAccountID, "chat_id", chatID, "error", mediaErr)
 						}
 					}
+				}
+
+				if len(dispatchReply.MediaItems) > 0 {
+					for _, mediaItem := range dispatchReply.MediaItems {
+						processMedia(mediaItem.Data, mediaItem.MimeType)
+					}
+				} else if len(dispatchReply.MediaData) > 0 {
+					// 兼容旧字段
+					processMedia(dispatchReply.MediaData, dispatchReply.MediaMimeType)
 				}
 
 				// 文本+图片回复：优先 Patch 卡片，失败则降级 SendText
@@ -272,9 +299,10 @@ func (p *FeishuPlugin) Start(accountID string) error {
 			"app_id", acct.Config.AppID,
 		)
 		if err := wsClient.Start(wsCtx); err != nil {
-			slog.Error("feishu: WebSocket connection error",
+			slog.Error("feishu: WebSocket connection FAILED — messages will NOT be received",
 				"account", capturedAccountID,
 				"error", err,
+				"hint", "Check AppID/AppSecret validity and keyring status",
 			)
 		}
 	}()
@@ -311,7 +339,7 @@ func (p *FeishuPlugin) Stop(accountID string) error {
 }
 
 // GetSender 获取指定账号的消息发送器
-func (p *FeishuPlugin) GetSender(accountID string) *FeishuSender {
+func (p *FeishuPlugin) GetSender(accountID string) feishuMessageSender {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if accountID == "" {
@@ -340,7 +368,11 @@ func (p *FeishuPlugin) SendMessage(params channels.OutboundSendParams) (*channel
 	}
 	sender := p.GetSender(accountID)
 	if sender == nil {
-		return nil, fmt.Errorf("feishu sender not available for account %s", accountID)
+		return nil, channels.NewSendError(channels.ChannelFeishu, channels.SendErrUnavailable,
+			fmt.Sprintf("feishu sender not available for account %s", accountID)).
+			WithOperation("send.init").
+			WithRetryable(true).
+			WithDetails(map[string]interface{}{"accountId": accountID})
 	}
 	client := p.GetClient(accountID)
 
@@ -354,17 +386,25 @@ func (p *FeishuPlugin) SendMessage(params channels.OutboundSendParams) (*channel
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	outboundText := params.Text
+	var mediaSendErr error
 
 	// 如有 MediaData（base64 解码的二进制），直接上传发送（跳过 HTTP 下载和 SSRF 校验）
 	if len(params.MediaData) > 0 && client != nil {
 		mediaErr := p.sendMediaData(ctx, client, sender, params.To, idType, params.MediaData, params.MediaMimeType)
 		if mediaErr != nil {
+			mediaSendErr = mediaErr
 			slog.Warn("feishu: binary media send failed, falling back to text",
 				"mimeType", params.MediaMimeType, "dataLen", len(params.MediaData), "error", mediaErr)
 			// fallthrough 到文字发送
 		} else {
-			if params.Text != "" {
-				_ = sender.SendText(ctx, params.To, idType, params.Text)
+			if strings.TrimSpace(outboundText) != "" {
+				if err := sender.SendText(ctx, params.To, idType, outboundText); err != nil {
+					return nil, channels.WrapSendError(channels.ChannelFeishu, channels.SendErrUpstream,
+						"send.text", "feishu text send failed", err).
+						WithRetryable(true).
+						WithDetails(map[string]interface{}{"to": params.To})
+				}
 			}
 			return &channels.OutboundSendResult{
 				Channel: string(channels.ChannelFeishu),
@@ -377,13 +417,19 @@ func (p *FeishuPlugin) SendMessage(params channels.OutboundSendParams) (*channel
 	if params.MediaURL != "" && client != nil {
 		mediaErr := p.sendMediaMessage(ctx, client, sender, params.To, idType, params.MediaURL)
 		if mediaErr != nil {
+			mediaSendErr = mediaErr
 			slog.Warn("feishu: media send failed, falling back to text",
 				"mediaURL", params.MediaURL, "error", mediaErr)
 			// fallthrough 到文字发送
 		} else {
 			// 如果同时有文字，追加发送
-			if params.Text != "" {
-				_ = sender.SendText(ctx, params.To, idType, params.Text)
+			if strings.TrimSpace(outboundText) != "" {
+				if err := sender.SendText(ctx, params.To, idType, outboundText); err != nil {
+					return nil, channels.WrapSendError(channels.ChannelFeishu, channels.SendErrUpstream,
+						"send.text", "feishu text send failed", err).
+						WithRetryable(true).
+						WithDetails(map[string]interface{}{"to": params.To})
+				}
 			}
 			return &channels.OutboundSendResult{
 				Channel: string(channels.ChannelFeishu),
@@ -392,8 +438,32 @@ func (p *FeishuPlugin) SendMessage(params channels.OutboundSendParams) (*channel
 		}
 	}
 
-	if err := sender.SendText(ctx, params.To, idType, params.Text); err != nil {
-		return nil, err
+	if strings.TrimSpace(outboundText) == "" {
+		if mediaSendErr != nil {
+			return nil, channels.WrapSendError(channels.ChannelFeishu, channels.SendErrUpstream,
+				"send.media", "feishu media send failed and no fallback text provided", mediaSendErr).
+				WithRetryable(true).
+				WithDetails(map[string]interface{}{
+					"to":       params.To,
+					"mediaURL": strings.TrimSpace(params.MediaURL) != "",
+					"hasMedia": len(params.MediaData) > 0,
+				})
+		}
+		return nil, channels.NewSendError(channels.ChannelFeishu, channels.SendErrInvalidRequest,
+			"feishu: empty outbound message").
+			WithOperation("send.validate").
+			WithDetails(map[string]interface{}{
+				"to":       params.To,
+				"mediaURL": strings.TrimSpace(params.MediaURL) != "",
+				"hasMedia": len(params.MediaData) > 0,
+			})
+	}
+
+	if err := sender.SendText(ctx, params.To, idType, outboundText); err != nil {
+		return nil, channels.WrapSendError(channels.ChannelFeishu, channels.SendErrUpstream,
+			"send.text", "feishu text send failed", err).
+			WithRetryable(true).
+			WithDetails(map[string]interface{}{"to": params.To})
 	}
 	return &channels.OutboundSendResult{
 		Channel: string(channels.ChannelFeishu),
@@ -405,7 +475,7 @@ func (p *FeishuPlugin) SendMessage(params channels.OutboundSendParams) (*channel
 func (p *FeishuPlugin) sendMediaMessage(
 	ctx context.Context,
 	client *FeishuClient,
-	sender *FeishuSender,
+	sender feishuMessageSender,
 	receiveID, idType, mediaURL string,
 ) error {
 	// 下载媒体
@@ -415,7 +485,7 @@ func (p *FeishuPlugin) sendMediaMessage(
 	}
 	defer resp.Body.Close()
 
-	const maxMediaSize = 30 * 1024 * 1024
+	const maxMediaSize = channels.FeishuFileMaxBytes
 	data, err := readLimited(resp.Body, maxMediaSize)
 	if err != nil {
 		return fmt.Errorf("read media body: %w", err)
@@ -456,7 +526,7 @@ func (p *FeishuPlugin) sendMediaMessage(
 func (p *FeishuPlugin) sendMediaData(
 	ctx context.Context,
 	client *FeishuClient,
-	sender *FeishuSender,
+	sender feishuMessageSender,
 	receiveID, idType string,
 	data []byte,
 	mimeType string,

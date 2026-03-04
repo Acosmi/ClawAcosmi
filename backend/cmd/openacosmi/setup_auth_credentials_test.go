@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // newTempAuthStore 创建临时 auth store 用于测试。
@@ -57,27 +57,6 @@ func TestSetGeminiApiKey(t *testing.T) {
 	}
 }
 
-func TestSetCloudflareAiGatewayCredential(t *testing.T) {
-	store := newTempAuthStore(t)
-	err := SetCloudflareAiGatewayCredential(store, "  acct-123  ", "gw-456", "  sk-cf-key  ")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	cred := store.GetProfile("cloudflare-ai-gateway:default")
-	if cred == nil {
-		t.Fatal("profile not found")
-	}
-	if cred.Key != "sk-cf-key" {
-		t.Errorf("expected trimmed key, got %q", cred.Key)
-	}
-	if cred.Metadata["accountId"] != "acct-123" {
-		t.Errorf("expected trimmed accountId, got %q", cred.Metadata["accountId"])
-	}
-	if cred.Metadata["gatewayId"] != "gw-456" {
-		t.Errorf("expected gatewayId gw-456, got %q", cred.Metadata["gatewayId"])
-	}
-}
-
 func TestWriteOAuthCredentials(t *testing.T) {
 	store := newTempAuthStore(t)
 	err := WriteOAuthCredentials(store, "anthropic", " user@test.com ", "access-tok", "refresh-tok")
@@ -115,10 +94,8 @@ func TestAllSetApiKeyFunctions_NilStore(t *testing.T) {
 	// 应该都返回 nil 而不是 panic
 	fns := []func(*auth.AuthStore, string) error{
 		SetAnthropicApiKey, SetGeminiApiKey, SetMinimaxApiKey,
-		SetMoonshotApiKey, SetKimiCodingApiKey, SetSyntheticApiKey,
-		SetVeniceApiKey, SetZaiApiKey, SetXiaomiApiKey,
-		SetOpenrouterApiKey, SetVercelAiGatewayApiKey,
-		SetAcosmiZenApiKey, SetQianfanApiKey, SetXaiApiKey, SetOpenAIApiKey,
+		SetMoonshotApiKey, SetZaiApiKey, SetAcosmiZenApiKey,
+		SetXaiApiKey, SetOpenAIApiKey,
 	}
 	for i, fn := range fns {
 		if err := fn(nil, "test-key"); err != nil {
@@ -141,15 +118,8 @@ func TestAllSetApiKeyFunctions_Persistence(t *testing.T) {
 		{SetGeminiApiKey, "google"},
 		{SetMinimaxApiKey, "minimax"},
 		{SetMoonshotApiKey, "moonshot"},
-		{SetKimiCodingApiKey, "kimi-coding"},
-		{SetSyntheticApiKey, "synthetic"},
-		{SetVeniceApiKey, "venice"},
 		{SetZaiApiKey, "zai"},
-		{SetXiaomiApiKey, "xiaomi"},
-		{SetOpenrouterApiKey, "openrouter"},
-		{SetVercelAiGatewayApiKey, "vercel-ai-gateway"},
 		{SetAcosmiZenApiKey, "openacosmi"},
-		{SetQianfanApiKey, "qianfan"},
 		{SetXaiApiKey, "xai"},
 		{SetOpenAIApiKey, "openai"},
 	}
@@ -261,7 +231,7 @@ func TestBuildProviderModelCatalog_Unknown(t *testing.T) {
 }
 
 func TestBuildProviderModelCatalog_AllProviders(t *testing.T) {
-	providers := []string{"anthropic", "openai", "google", "moonshot", "minimax", "xai", "zai", "openrouter", "qianfan"}
+	providers := []string{"anthropic", "openai", "google", "moonshot", "minimax", "xai", "zai"}
 	for _, p := range providers {
 		catalog := BuildProviderModelCatalog(p)
 		if len(catalog) == 0 {

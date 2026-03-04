@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/route-reply.ts (163L)

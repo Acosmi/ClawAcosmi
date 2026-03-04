@@ -78,13 +78,21 @@ func geminiStreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamE
 	}
 
 	// ===== 诊断日志：请求大小 =====
-	fmt.Fprintf(os.Stderr, "[GEMINI-DIAG] endpoint=%s bodySize=%d systemPromptLen=%d messageCount=%d toolCount=%d model=%s\n",
-		endpoint, len(bodyBytes), len(req.SystemPrompt), len(req.Messages), len(req.Tools), req.Model)
+	// Bug#11: fmt.Fprintf → slog.Debug，避免与 slog 输出并发交错
+	slog.Debug("gemini request",
+		"subsystem", "gemini-diag",
+		"endpoint", endpoint,
+		"bodySize", len(bodyBytes),
+		"systemPromptLen", len(req.SystemPrompt),
+		"messageCount", len(req.Messages),
+		"toolCount", len(req.Tools),
+		"model", req.Model,
+	)
 	// 写请求体到临时文件（方便离线检查）
 	if tmpFile, tmpErr := os.CreateTemp("", "gemini-req-*.json"); tmpErr == nil {
 		tmpFile.Write(bodyBytes)
 		tmpFile.Close()
-		fmt.Fprintf(os.Stderr, "[GEMINI-DIAG] request body dumped to: %s\n", tmpFile.Name())
+		slog.Debug("gemini request body dumped", "subsystem", "gemini-diag", "path", tmpFile.Name())
 	}
 
 	timeout := time.Duration(req.TimeoutMs) * time.Millisecond
@@ -98,7 +106,7 @@ func geminiStreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamE
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			retryDelay := time.Duration(attempt) * 2 * time.Second
-			fmt.Fprintf(os.Stderr, "[GEMINI-DIAG] retry %d/%d after %v (prev error: %v)\n", attempt, maxRetries, retryDelay, lastErr)
+			slog.Debug("gemini retry", "subsystem", "gemini-diag", "attempt", attempt, "maxRetries", maxRetries, "delay", retryDelay, "prevError", lastErr)
 			select {
 			case <-ctx.Done():
 				return nil, fmt.Errorf("llmclient: gemini request cancelled: %w", ctx.Err())
@@ -114,12 +122,17 @@ func geminiStreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamE
 			return nil, fmt.Errorf("llmclient: create gemini request: %w", err)
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("x-goog-api-key", req.APIKey)
+		// OAuth token 使用 Bearer 认证; API key 使用 x-goog-api-key header
+		if req.AuthMode == "oauth" {
+			httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+		} else {
+			httpReq.Header.Set("x-goog-api-key", req.APIKey)
+		}
 
 		resp, err := http.DefaultClient.Do(httpReq)
 		if err != nil {
 			attemptCancel()
-			fmt.Fprintf(os.Stderr, "[GEMINI-DIAG] HTTP error (attempt %d): %v\n", attempt, err)
+			slog.Debug("gemini HTTP error", "subsystem", "gemini-diag", "attempt", attempt, "error", err)
 			// 判断是否为可重试的瞬时错误
 			errStr := err.Error()
 			if strings.Contains(errStr, "unexpected EOF") ||
@@ -132,7 +145,7 @@ func geminiStreamChat(ctx context.Context, req ChatRequest, onEvent func(StreamE
 			return nil, fmt.Errorf("llmclient: gemini HTTP error: %w", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "[GEMINI-DIAG] HTTP status: %d (attempt %d)\n", resp.StatusCode, attempt)
+		slog.Debug("gemini HTTP status", "subsystem", "gemini-diag", "status", resp.StatusCode, "attempt", attempt)
 
 		if resp.StatusCode != http.StatusOK {
 			apiErr := parseGeminiError(resp)

@@ -1,6 +1,6 @@
-import { html, nothing } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 import { t } from "../i18n.ts";
-import type { SubAgentEntry, SubAgentsState } from "../controllers/subagents.ts";
+import type { SubAgentEntry } from "../controllers/subagents.ts";
 
 // ---------- SubAgents View ----------
 
@@ -9,6 +9,9 @@ export type SubAgentsProps = {
     agents: SubAgentEntry[];
     error: string | null;
     busyKey: string | null;
+    activeTab: string;
+    onTabChange: (tabId: string) => void;
+    renderMediaTab: () => TemplateResult;
     onToggle: (agentId: string, enabled: boolean) => void;
     onSetInterval: (agentId: string, ms: number) => void;
     onSetGoal: (agentId: string, goal: string) => void;
@@ -26,6 +29,12 @@ const VLA_MODELS = [
 ];
 
 export function renderSubAgents(props: SubAgentsProps) {
+    const hasActiveAgent = props.agents.some((agent) => agent.id === props.activeTab);
+    const activeTab = hasActiveAgent || props.activeTab === "media"
+        ? props.activeTab
+        : props.agents[0]?.id ?? "media";
+    const activeAgent = props.agents.find((agent) => agent.id === activeTab);
+
     return html`
     <section class="card">
       <div class="row" style="justify-content: space-between;">
@@ -44,11 +53,32 @@ export function renderSubAgents(props: SubAgentsProps) {
             ? html`<div class="callout danger" style="margin-top: 12px;">${props.error}</div>`
             : nothing}
 
-      <div class="subagents-list" style="margin-top: 16px;">
-        ${props.agents.length === 0
-            ? html`<div class="muted">${t("subagents.empty")}</div>`
-            : props.agents.map((agent) => renderSubAgentCard(agent, props))}
+      <div class="agent-tabs" style="margin-top: 16px;">
+        ${props.agents.map(
+            (agent) => html`
+            <button
+              class="agent-tab ${activeTab === agent.id ? "active" : ""}"
+              @click=${() => props.onTabChange(agent.id)}
+            >
+              ${agent.label}
+            </button>
+          `,
+        )}
+        <button
+          class="agent-tab ${activeTab === "media" ? "active" : ""}"
+          @click=${() => props.onTabChange("media")}
+        >
+          ${t("nav.tab.media")}
+        </button>
       </div>
+
+      ${activeTab === "media"
+            ? html`<div style="margin-top: 16px;">${props.renderMediaTab()}</div>`
+            : props.agents.length === 0
+                ? html`<div class="muted" style="margin-top: 16px;">${t("subagents.empty")}</div>`
+                : activeAgent
+                    ? html`<div class="subagents-list" style="margin-top: 16px;">${renderSubAgentCard(activeAgent, props)}</div>`
+                    : html`<div class="muted" style="margin-top: 16px;">${t("subagents.empty")}</div>`}
     </section>
   `;
 }

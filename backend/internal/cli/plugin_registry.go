@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/plugins"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/plugins"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // 对应 TS src/cli/plugin-registry.ts — 插件注册表 singleton

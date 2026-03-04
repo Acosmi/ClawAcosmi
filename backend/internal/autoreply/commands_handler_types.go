@@ -53,6 +53,11 @@ type HandleCommandsParams struct {
 	Provider string
 	Model    string
 
+	// CompactFn 会话压缩回调 (Bug#11 P1)。
+	// 参数: ctx, sessionKey, mode ("default"|"full"|"summary")
+	// 返回: (原始消息数, 压缩后消息数, error)
+	CompactFn func(ctx context.Context, sessionKey, mode string) (originalCount int, compressedCount int, err error)
+
 	// DI — 外部依赖通过接口注入
 	GatewayCaller  GatewayCaller
 	SessionUpdater SessionStoreUpdater

@@ -15,35 +15,35 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/tools"
+	"github.com/Acosmi/ClawAcosmi/internal/argus"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply/reply"
+	"github.com/Acosmi/ClawAcosmi/internal/browser"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/dingtalk"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/feishu"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/website"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/wechat_mp"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/wecom"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/xiaohongshu"
+	"github.com/Acosmi/ClawAcosmi/internal/cli"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/cron"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms/vectoradapter"
+	"github.com/Acosmi/ClawAcosmi/internal/sandbox"
+	applog "github.com/Acosmi/ClawAcosmi/pkg/log"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
+	types "github.com/Acosmi/ClawAcosmi/pkg/types"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/agents/tools"
-	"github.com/openacosmi/claw-acismi/internal/argus"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
-	"github.com/openacosmi/claw-acismi/internal/browser"
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/channels/dingtalk"
-	"github.com/openacosmi/claw-acismi/internal/channels/feishu"
-	"github.com/openacosmi/claw-acismi/internal/channels/website"
-	"github.com/openacosmi/claw-acismi/internal/channels/wechat_mp"
-	"github.com/openacosmi/claw-acismi/internal/channels/wecom"
-	"github.com/openacosmi/claw-acismi/internal/channels/xiaohongshu"
-	"github.com/openacosmi/claw-acismi/internal/cli"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/cron"
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms/vectoradapter"
-	"github.com/openacosmi/claw-acismi/internal/sandbox"
-	applog "github.com/openacosmi/claw-acismi/pkg/log"
-	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
-	types "github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // ---------- 网关启动编排 ----------
@@ -505,6 +505,50 @@ func (a *uhmsBridgeAdapter) SearchSkillsVFS(ctx context.Context, query string, t
 
 func (a *uhmsBridgeAdapter) ReadSkillVFS(_ context.Context, category, name string) (string, error) {
 	return a.mgr.VFS().ReadSystemL2("skills", category, name)
+}
+
+// --- Bug#11: 记忆搜索/获取工具适配 ---
+
+func (a *uhmsBridgeAdapter) SearchMemories(ctx context.Context, query string, limit int) ([]runner.MemorySearchHit, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	hits, err := a.mgr.SearchMemories(ctx, "default", query, uhms.SearchOptions{
+		TopK:          limit,
+		IncludeVector: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]runner.MemorySearchHit, 0, len(hits))
+	for _, h := range hits {
+		results = append(results, runner.MemorySearchHit{
+			ID:       h.Memory.ID,
+			Content:  h.Memory.Content,
+			Category: string(h.Memory.Category),
+			Type:     string(h.Memory.MemoryType),
+			Score:    h.Score,
+		})
+	}
+	return results, nil
+}
+
+func (a *uhmsBridgeAdapter) GetMemory(ctx context.Context, id string) (*runner.MemoryHit, error) {
+	mem, err := a.mgr.GetMemory(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if mem == nil {
+		return nil, nil
+	}
+	return &runner.MemoryHit{
+		ID:        mem.ID,
+		Content:   mem.Content,
+		Category:  string(mem.Category),
+		Type:      string(mem.MemoryType),
+		CreatedAt: mem.CreatedAt.UnixMilli(),
+		UpdatedAt: mem.UpdatedAt.UnixMilli(),
+	}, nil
 }
 
 // chatMessagesToUHMS converts llmclient.ChatMessage slice to uhms.Message slice.
@@ -1053,6 +1097,7 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 	registry.RegisterAll(ImageHandlers())          // Phase E: 图片理解 Fallback 方法
 	registry.RegisterAll(MediaHandlers())          // Phase 5+6: 媒体子系统方法
 	registry.RegisterAll(PluginsHandlers())        // 插件中心
+	registry.RegisterAll(TaskKanbanHandlers())     // 任务看板
 	if state.ArgusBridge() != nil {
 		RegisterArgusDynamicMethods(registry, state.ArgusBridge()) // Argus 动态工具方法
 	}
@@ -1169,6 +1214,13 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 		State:        state,
 	}))
 
+	// 注册 Wizard V2 配置应用方法
+	registry.Register("wizard.v2.providers.list", WizardV2ProvidersListHandler())
+	registry.Register("wizard.v2.apply", WizardV2ApplyHandler())
+	registry.Register("wizard.v2.oauth", WizardV2OAuthHandler())
+	registry.Register("wizard.v2.oauth.device.start", WizardV2OAuthDeviceStartHandler())
+	registry.Register("wizard.v2.oauth.device.poll", WizardV2OAuthDevicePollHandler())
+
 	// ---------- 4b. Batch C 基础设施 ----------
 	presenceStore := NewSystemPresenceStore()
 	heartbeatState := NewHeartbeatState()
@@ -1245,6 +1297,31 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 				"vectorMode", uhmsCfg.VectorMode,
 				"vfsPath", uhmsCfg.ResolvedVFSPath(),
 			)
+
+			// 异步健康检查: 验证 UHMS LLM API Key 有效性（不阻塞启动）
+			if llmProvider != nil {
+				healthLLM := llmProvider // capture for goroutine
+				healthCfg := loadedCfg.Memory.UHMS
+				go func() {
+					hctx, hcancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer hcancel()
+					_, err := healthLLM.Complete(hctx, "You are a test.", "Reply with OK.")
+					if err != nil {
+						slog.Error("gateway: UHMS LLM health check FAILED — memory extraction will use heuristic fallback",
+							"error", err,
+							"provider", healthCfg.LLMProvider,
+							"model", healthCfg.LLMModel,
+							"baseURL", healthCfg.LLMBaseURL,
+							"action", "update API key via Wizard or config file",
+						)
+					} else {
+						slog.Info("gateway: UHMS LLM health check passed",
+							"provider", healthCfg.LLMProvider,
+							"model", healthCfg.LLMModel,
+						)
+					}
+				}()
+			}
 		}
 	}
 
@@ -1285,15 +1362,17 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 
 	// 浏览器控制器初始化（CDP 直连模式）
 	var browserControllerForAgent tools.BrowserController
-	browserEvaluateEnabled := true // 默认允许 JS 执行
+	var browserCDPTools browser.PlaywrightTools // P0-3: 提升到外层供 XHS 注入
+	var browserCDPURL string                    // P0-3: CDP WebSocket 地址
+	browserEvaluateEnabled := true              // 默认允许 JS 执行
 	if loadedCfg != nil && loadedCfg.Browser != nil {
 		enabled := loadedCfg.Browser.Enabled == nil || *loadedCfg.Browser.Enabled
 		if enabled {
-			cdpURL := resolveBrowserCdpURL(loadedCfg.Browser)
-			if cdpURL != "" {
-				cdpTools := browser.NewCDPPlaywrightTools(cdpURL, slog.Default())
-				browserControllerForAgent = browser.NewPlaywrightBrowserController(cdpTools, cdpURL)
-				slog.Info("browser controller configured for agent", "cdpURL", cdpURL)
+			browserCDPURL = resolveBrowserCdpURL(loadedCfg.Browser)
+			if browserCDPURL != "" {
+				browserCDPTools = browser.NewCDPPlaywrightTools(browserCDPURL, slog.Default())
+				browserControllerForAgent = browser.NewPlaywrightBrowserController(browserCDPTools, browserCDPURL)
+				slog.Info("browser controller configured for agent", "cdpURL", browserCDPURL)
 			}
 		}
 		if loadedCfg.Browser.EvaluateEnabled != nil {
@@ -1875,13 +1954,14 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 			// feishuDispatchResult 飞书分发结果（文本 + 可选媒体）。
 			type feishuDispatchResult struct {
 				Text          string
+				MediaItems    []ReplyMediaItem
 				MediaBase64   string
 				MediaMimeType string
 			}
 
 			// 公共飞书消息分发逻辑（DispatchFunc 和 DispatchMultimodalFunc 共用）
-			// imageBase64/imageMimeType: 附件图片数据（仅 DispatchMultimodalFunc 传入）
-			feishuDispatch := func(channel, accountID, chatID, userID, text, imageBase64, imageMimeType string) feishuDispatchResult {
+			// images: 附件图片数据（仅 DispatchMultimodalFunc 传入；支持多图）
+			feishuDispatch := func(channel, accountID, chatID, userID, text string, images []PreprocessImage) feishuDispatchResult {
 				// 持久化飞书目标 ID，确保重启后审批通知仍可送达
 				if rn := state.RemoteApprovalNotifier(); rn != nil && chatID != "" {
 					rn.UpdateLastKnownFeishuTarget(chatID, userID)
@@ -1937,9 +2017,24 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 						"ts":         ts,
 					}
 					// 附加图片数据（飞书发来的图片，前端可直接显示）
-					if imageBase64 != "" {
-						userPayload["mediaBase64"] = imageBase64
-						userPayload["mediaMimeType"] = imageMimeType
+					if len(images) > 0 {
+						// 兼容字段：保留第一张图
+						userPayload["mediaBase64"] = images[0].Base64
+						userPayload["mediaMimeType"] = images[0].MimeType
+						// 新字段：完整图片列表
+						items := make([]map[string]string, 0, len(images))
+						for _, img := range images {
+							if img.Base64 == "" {
+								continue
+							}
+							items = append(items, map[string]string{
+								"mediaBase64":   img.Base64,
+								"mediaMimeType": img.MimeType,
+							})
+						}
+						if len(items) > 0 {
+							userPayload["mediaItems"] = items
+						}
 					}
 					bc.Broadcast("chat.message", userPayload, nil)
 
@@ -1961,16 +2056,19 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 				})
 
 				var replyText string
+				var mediaItems []ReplyMediaItem
 				var mediaB64, mediaMime string
 				if result.Error != nil {
 					slog.Error("feishu dispatch error", "error", result.Error, "chatID", chatID)
 					replyText = fmt.Sprintf("⚠️ 处理失败: %s", result.Error.Error())
 				} else {
 					replyText = CombineReplyPayloads(result.Replies)
-					mediaB64, mediaMime = ExtractMediaFromReplies(result.Replies)
-					if mediaB64 != "" {
+					mediaItems = ExtractMediaListFromReplies(result.Replies)
+					if len(mediaItems) > 0 {
+						mediaB64 = mediaItems[0].Base64Data
+						mediaMime = mediaItems[0].MimeType
 						slog.Info("feishuDispatch: media extracted from replies",
-							"mimeType", mediaMime, "base64Len", len(mediaB64))
+							"count", len(mediaItems), "firstMimeType", mediaMime)
 					} else {
 						slog.Debug("feishuDispatch: no media in replies", "replyCount", len(result.Replies))
 					}
@@ -1979,7 +2077,7 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 				// AI 回复 transcript 由 attempt_runner.persistToTranscript 写入，此处不再双写
 
 				// 广播 AI 回复到前端
-				if bc != nil && (replyText != "" || mediaB64 != "") {
+				if bc != nil && (replyText != "" || len(mediaItems) > 0) {
 					chatPayload := map[string]interface{}{
 						"sessionKey": sessionKey,
 						"channel":    "feishu",
@@ -1991,6 +2089,21 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 					if mediaB64 != "" {
 						chatPayload["mediaBase64"] = mediaB64
 						chatPayload["mediaMimeType"] = mediaMime
+					}
+					if len(mediaItems) > 0 {
+						items := make([]map[string]string, 0, len(mediaItems))
+						for _, item := range mediaItems {
+							if item.Base64Data == "" {
+								continue
+							}
+							items = append(items, map[string]string{
+								"mediaBase64":   item.Base64Data,
+								"mediaMimeType": item.MimeType,
+							})
+						}
+						if len(items) > 0 {
+							chatPayload["mediaItems"] = items
+						}
 					}
 					bc.Broadcast("chat.message", chatPayload, nil)
 				}
@@ -2007,63 +2120,64 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 
 				return feishuDispatchResult{
 					Text:          replyText,
+					MediaItems:    mediaItems,
 					MediaBase64:   mediaB64,
 					MediaMimeType: mediaMime,
 				}
 			}
 
 			feishuPlugin.DispatchFunc = func(ctx context.Context, channel, accountID, chatID, userID, text string) string {
-				return feishuDispatch(channel, accountID, chatID, userID, text, "", "").Text
+				return feishuDispatch(channel, accountID, chatID, userID, text, nil).Text
 			}
 
-			// 多模态分发：预处理附件（STT 转录 + 文档转换 + 图片下载），然后走公共分发
-			feishuPreprocessor := &MultimodalPreprocessor{}
-			if loadedCfg.STT != nil && loadedCfg.STT.Provider != "" {
-				if prov, err := media.NewSTTProvider(loadedCfg.STT); err == nil {
-					feishuPreprocessor.STTProvider = prov
-					slog.Info("multimodal: STT provider loaded", "provider", prov.Name())
-				} else {
-					slog.Warn("multimodal: STT provider init failed (non-fatal)", "error", err)
-				}
-			}
-			if loadedCfg.DocConv != nil && loadedCfg.DocConv.Provider != "" {
-				if conv, err := media.NewDocConverter(loadedCfg.DocConv); err == nil {
-					feishuPreprocessor.DocConverter = conv
-					slog.Info("multimodal: DocConv provider loaded", "provider", conv.Name())
-				} else {
-					slog.Warn("multimodal: DocConv provider init failed (non-fatal)", "error", err)
-				}
-			}
-			if loadedCfg.ImageUnderstanding != nil && loadedCfg.ImageUnderstanding.Provider != "" {
-				if desc, err := media.NewImageDescriber(loadedCfg.ImageUnderstanding); err == nil {
-					feishuPreprocessor.ImageDescriber = desc
-					slog.Info("multimodal: ImageDescriber provider loaded", "provider", desc.Name())
-				} else {
-					slog.Warn("multimodal: ImageDescriber provider init failed (non-fatal)", "error", err)
-				}
-			}
+			if config.IsMultimodalChannelEnabled("feishu") {
+				// 多模态分发：运行态解析 provider（带短 TTL 缓存），确保配置修改后快速生效。
+				feishuPreprocessorResolver := NewMultimodalPreprocessorResolver(cfgLoader, loadedCfg, 10*time.Second)
 
-			feishuPlugin.DispatchMultimodalFunc = func(channel, accountID, chatID, userID string, msg *channels.ChannelMessage) *channels.DispatchReply {
-				// M-01: 添加超时，防止 STT/DocConv 无限挂起
-				preprocessCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-				defer cancel()
-				client := feishuPlugin.GetClient(accountID)
-				preprocessResult := feishuPreprocessor.ProcessFeishuMessage(preprocessCtx, client, msg)
-				dr := feishuDispatch(channel, accountID, chatID, userID, preprocessResult.Text, preprocessResult.ImageBase64, preprocessResult.ImageMimeType)
-				if dr.Text == "" && dr.MediaBase64 == "" {
-					return nil
-				}
-				reply := &channels.DispatchReply{Text: dr.Text}
-				if dr.MediaBase64 != "" {
-					data, err := base64.StdEncoding.DecodeString(dr.MediaBase64)
-					if err == nil {
-						reply.MediaData = data
-						reply.MediaMimeType = dr.MediaMimeType
-					} else {
-						slog.Warn("feishu: media base64 decode failed", "error", err)
+				feishuPlugin.DispatchMultimodalFunc = func(channel, accountID, chatID, userID string, msg *channels.ChannelMessage) *channels.DispatchReply {
+					// M-01: 添加超时，防止 STT/DocConv 无限挂起
+					preprocessCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+					defer cancel()
+					client := feishuPlugin.GetClient(accountID)
+					preprocessor := feishuPreprocessorResolver.Get()
+					preprocessResult := preprocessor.ProcessFeishuMessage(preprocessCtx, client, msg)
+					dr := feishuDispatch(channel, accountID, chatID, userID, preprocessResult.Text, preprocessResult.Images)
+					if dr.Text == "" && len(dr.MediaItems) == 0 && dr.MediaBase64 == "" {
+						return nil
 					}
+					reply := &channels.DispatchReply{Text: dr.Text}
+					for _, item := range dr.MediaItems {
+						if item.Base64Data == "" {
+							continue
+						}
+						data, err := base64.StdEncoding.DecodeString(item.Base64Data)
+						if err != nil {
+							slog.Warn("feishu: media item base64 decode failed", "error", err)
+							continue
+						}
+						reply.MediaItems = append(reply.MediaItems, channels.ChannelMediaItem{
+							Data:     data,
+							MimeType: item.MimeType,
+						})
+					}
+					if len(reply.MediaItems) > 0 {
+						// 兼容字段：保留第一项
+						reply.MediaData = reply.MediaItems[0].Data
+						reply.MediaMimeType = reply.MediaItems[0].MimeType
+					} else if dr.MediaBase64 != "" {
+						data, err := base64.StdEncoding.DecodeString(dr.MediaBase64)
+						if err == nil {
+							reply.MediaData = data
+							reply.MediaMimeType = dr.MediaMimeType
+						} else {
+							slog.Warn("feishu: media base64 decode failed", "error", err)
+						}
+					}
+					return reply
 				}
-				return reply
+				slog.Info("gateway: multimodal dispatch enabled", "channel", "feishu", "switch", config.MultimodalChannelsSwitch)
+			} else {
+				slog.Warn("gateway: multimodal dispatch disabled, fallback to text dispatch", "channel", "feishu", "switch", config.MultimodalChannelsSwitch)
 			}
 
 			// 注入卡片回传交互回调（审批按钮点击，走 WebSocket 长连接）
@@ -2082,7 +2196,17 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 		}
 		if loadedCfg.Channels.DingTalk != nil {
 			dingtalkPlugin := dingtalk.NewDingTalkPlugin(loadedCfg)
-			dingtalkPlugin.DispatchFunc = func(ctx context.Context, channel, accountID, chatID, userID, text string) string {
+			type dingtalkDispatchResult struct {
+				Text          string
+				MediaItems    []ReplyMediaItem
+				MediaBase64   string
+				MediaMimeType string
+			}
+
+			dingtalkDispatch := func(ctx context.Context, channel, accountID, chatID, userID, text string) dingtalkDispatchResult {
+				if ctx == nil {
+					ctx = context.Background()
+				}
 				sessionKey := fmt.Sprintf("dingtalk:%s", chatID)
 
 				// 步骤 1: session 注册
@@ -2107,15 +2231,7 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 					})
 				}
 
-				// 步骤 2: 持久化用户消息
-				if resolvedSessionId != "" {
-					AppendUserTranscriptMessage(AppendTranscriptParams{
-						Message:         text,
-						SessionID:       resolvedSessionId,
-						StorePath:       storePath,
-						CreateIfMissing: true,
-					})
-				}
+				// 用户消息 transcript 由 attempt_runner.persistToTranscript 写入，此处不再双写。
 
 				msgCtx := &autoreply.MsgContext{
 					Body:        text,
@@ -2148,27 +2264,24 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 				})
 
 				var reply string
+				var dtMediaItems []ReplyMediaItem
 				var dtMediaB64, dtMediaMime string
 				if result.Error != nil {
 					slog.Error("dingtalk dispatch error", "error", result.Error, "chatID", chatID)
 					reply = fmt.Sprintf("⚠️ 处理失败: %s", result.Error.Error())
 				} else {
 					reply = CombineReplyPayloads(result.Replies)
-					dtMediaB64, dtMediaMime = ExtractMediaFromReplies(result.Replies)
+					dtMediaItems = ExtractMediaListFromReplies(result.Replies)
+					if len(dtMediaItems) > 0 {
+						dtMediaB64 = dtMediaItems[0].Base64Data
+						dtMediaMime = dtMediaItems[0].MimeType
+					}
 				}
 
-				// 步骤 4: 持久化 AI 回复
-				if resolvedSessionId != "" && reply != "" {
-					AppendAssistantTranscriptMessage(AppendTranscriptParams{
-						Message:         reply,
-						SessionID:       resolvedSessionId,
-						StorePath:       storePath,
-						CreateIfMissing: true,
-					})
-				}
+				// AI 回复 transcript 由 attempt_runner.persistToTranscript 写入，此处不再双写。
 
 				// 广播 AI 回复到前端
-				if bc != nil && (reply != "" || dtMediaB64 != "") {
+				if bc != nil && (reply != "" || dtMediaB64 != "" || len(dtMediaItems) > 0) {
 					dtPayload := map[string]interface{}{
 						"sessionKey": sessionKey,
 						"channel":    "dingtalk",
@@ -2181,17 +2294,120 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 						dtPayload["mediaBase64"] = dtMediaB64
 						dtPayload["mediaMimeType"] = dtMediaMime
 					}
+					if len(dtMediaItems) > 0 {
+						items := make([]map[string]string, 0, len(dtMediaItems))
+						for _, item := range dtMediaItems {
+							if item.Base64Data == "" {
+								continue
+							}
+							items = append(items, map[string]string{
+								"mediaBase64":   item.Base64Data,
+								"mediaMimeType": item.MimeType,
+							})
+						}
+						if len(items) > 0 {
+							dtPayload["mediaItems"] = items
+						}
+					}
 					bc.Broadcast("chat.message", dtPayload, nil)
 				}
 
-				return reply
+				return dingtalkDispatchResult{
+					Text:          reply,
+					MediaItems:    dtMediaItems,
+					MediaBase64:   dtMediaB64,
+					MediaMimeType: dtMediaMime,
+				}
+			}
+
+			dingtalkPlugin.DispatchFunc = func(ctx context.Context, channel, accountID, chatID, userID, text string) string {
+				return dingtalkDispatch(ctx, channel, accountID, chatID, userID, text).Text
+			}
+
+			if config.IsMultimodalChannelEnabled("dingtalk") {
+				dingtalkPreprocessorResolver := NewMultimodalPreprocessorResolver(cfgLoader, loadedCfg, 10*time.Second)
+				dingtalkPlugin.DispatchMultimodalFunc = func(channel, accountID, chatID, userID string, msg *channels.ChannelMessage) *channels.DispatchReply {
+					var text string
+					if msg != nil {
+						preprocessCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+						preprocessor := dingtalkPreprocessorResolver.Get()
+						preResult := preprocessor.ProcessGenericChannelMessage(preprocessCtx, msg)
+						cancel()
+						text = strings.TrimSpace(preResult.Text)
+						if text == "" && len(msg.Attachments) > 0 {
+							var parts []string
+							for _, att := range msg.Attachments {
+								category := att.Category
+								if category == "" {
+									category = "附件"
+								}
+								if att.FileName != "" {
+									parts = append(parts, fmt.Sprintf("[%s:%s]", category, att.FileName))
+								} else if att.FileKey != "" {
+									parts = append(parts, fmt.Sprintf("[%s:%s]", category, att.FileKey))
+								} else {
+									parts = append(parts, fmt.Sprintf("[%s消息]", category))
+								}
+							}
+							text = strings.Join(parts, "\n")
+						}
+					}
+
+					dispatch := dingtalkDispatch(context.Background(), channel, accountID, chatID, userID, text)
+					if dispatch.Text == "" && len(dispatch.MediaItems) == 0 && dispatch.MediaBase64 == "" {
+						return nil
+					}
+
+					reply := &channels.DispatchReply{
+						Text: dispatch.Text,
+					}
+					for _, item := range dispatch.MediaItems {
+						if item.Base64Data == "" {
+							continue
+						}
+						data, err := base64.StdEncoding.DecodeString(item.Base64Data)
+						if err != nil {
+							slog.Warn("dingtalk: media item base64 decode failed", "error", err)
+							continue
+						}
+						reply.MediaItems = append(reply.MediaItems, channels.ChannelMediaItem{
+							Data:     data,
+							MimeType: item.MimeType,
+						})
+					}
+					if len(reply.MediaItems) > 0 {
+						reply.MediaData = reply.MediaItems[0].Data
+						reply.MediaMimeType = reply.MediaItems[0].MimeType
+					} else if dispatch.MediaBase64 != "" {
+						if data, err := base64.StdEncoding.DecodeString(dispatch.MediaBase64); err == nil {
+							reply.MediaData = data
+							reply.MediaMimeType = dispatch.MediaMimeType
+						} else {
+							slog.Warn("dingtalk: media base64 decode failed", "error", err)
+						}
+					}
+					return reply
+				}
+				slog.Info("gateway: multimodal dispatch enabled", "channel", "dingtalk", "switch", config.MultimodalChannelsSwitch)
+			} else {
+				slog.Warn("gateway: multimodal dispatch disabled, fallback to text dispatch", "channel", "dingtalk", "switch", config.MultimodalChannelsSwitch)
 			}
 			channelMgr.RegisterPlugin(dingtalkPlugin)
 			slog.Info("channel: dingtalk plugin registered")
 		}
 		if loadedCfg.Channels.WeCom != nil {
 			wecomPlugin := wecom.NewWeComPlugin(loadedCfg)
-			wecomPlugin.DispatchFunc = func(ctx context.Context, channel, accountID, chatID, userID, text string) string {
+			type wecomDispatchResult struct {
+				Text          string
+				MediaItems    []ReplyMediaItem
+				MediaBase64   string
+				MediaMimeType string
+			}
+
+			wecomDispatch := func(ctx context.Context, channel, accountID, chatID, userID, text string) wecomDispatchResult {
+				if ctx == nil {
+					ctx = context.Background()
+				}
 				sessionKey := fmt.Sprintf("wecom:%s", chatID)
 
 				// 步骤 1: session 注册
@@ -2216,15 +2432,7 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 					})
 				}
 
-				// 步骤 2: 持久化用户消息
-				if resolvedSessionId != "" {
-					AppendUserTranscriptMessage(AppendTranscriptParams{
-						Message:         text,
-						SessionID:       resolvedSessionId,
-						StorePath:       storePath,
-						CreateIfMissing: true,
-					})
-				}
+				// 用户消息 transcript 由 attempt_runner.persistToTranscript 写入，此处不再双写。
 
 				msgCtx := &autoreply.MsgContext{
 					Body:        text,
@@ -2257,27 +2465,24 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 				})
 
 				var reply string
+				var wcMediaItems []ReplyMediaItem
 				var wcMediaB64, wcMediaMime string
 				if result.Error != nil {
 					slog.Error("wecom dispatch error", "error", result.Error, "chatID", chatID)
 					reply = fmt.Sprintf("⚠️ 处理失败: %s", result.Error.Error())
 				} else {
 					reply = CombineReplyPayloads(result.Replies)
-					wcMediaB64, wcMediaMime = ExtractMediaFromReplies(result.Replies)
+					wcMediaItems = ExtractMediaListFromReplies(result.Replies)
+					if len(wcMediaItems) > 0 {
+						wcMediaB64 = wcMediaItems[0].Base64Data
+						wcMediaMime = wcMediaItems[0].MimeType
+					}
 				}
 
-				// 步骤 4: 持久化 AI 回复
-				if resolvedSessionId != "" && reply != "" {
-					AppendAssistantTranscriptMessage(AppendTranscriptParams{
-						Message:         reply,
-						SessionID:       resolvedSessionId,
-						StorePath:       storePath,
-						CreateIfMissing: true,
-					})
-				}
+				// AI 回复 transcript 由 attempt_runner.persistToTranscript 写入，此处不再双写。
 
 				// 广播 AI 回复到前端
-				if bc != nil && (reply != "" || wcMediaB64 != "") {
+				if bc != nil && (reply != "" || wcMediaB64 != "" || len(wcMediaItems) > 0) {
 					wcPayload := map[string]interface{}{
 						"sessionKey": sessionKey,
 						"channel":    "wecom",
@@ -2290,10 +2495,145 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 						wcPayload["mediaBase64"] = wcMediaB64
 						wcPayload["mediaMimeType"] = wcMediaMime
 					}
+					if len(wcMediaItems) > 0 {
+						items := make([]map[string]string, 0, len(wcMediaItems))
+						for _, item := range wcMediaItems {
+							if item.Base64Data == "" {
+								continue
+							}
+							items = append(items, map[string]string{
+								"mediaBase64":   item.Base64Data,
+								"mediaMimeType": item.MimeType,
+							})
+						}
+						if len(items) > 0 {
+							wcPayload["mediaItems"] = items
+						}
+					}
 					bc.Broadcast("chat.message", wcPayload, nil)
 				}
 
-				return reply
+				return wecomDispatchResult{
+					Text:          reply,
+					MediaItems:    wcMediaItems,
+					MediaBase64:   wcMediaB64,
+					MediaMimeType: wcMediaMime,
+				}
+			}
+
+			wecomPlugin.DispatchFunc = func(ctx context.Context, channel, accountID, chatID, userID, text string) string {
+				return wecomDispatch(ctx, channel, accountID, chatID, userID, text).Text
+			}
+
+			if config.IsMultimodalChannelEnabled("wecom") {
+				hydrateWeComAttachmentData := func(ctx context.Context, accountID string, msg *channels.ChannelMessage) *channels.ChannelMessage {
+					if msg == nil || len(msg.Attachments) == 0 {
+						return msg
+					}
+					client := wecomPlugin.GetClient(accountID)
+					if client == nil {
+						return msg
+					}
+
+					cloned := *msg
+					cloned.Attachments = append([]channels.ChannelAttachment(nil), msg.Attachments...)
+					for i, att := range cloned.Attachments {
+						if len(att.Data) > 0 {
+							continue
+						}
+						if strings.TrimSpace(att.DataURL) != "" {
+							continue
+						}
+						fileKey := strings.TrimSpace(att.FileKey)
+						if fileKey == "" || isRemoteHTTPURL(fileKey) {
+							continue
+						}
+
+						data, mimeType, err := client.DownloadMedia(ctx, fileKey)
+						if err != nil {
+							slog.Warn("wecom: download inbound media failed",
+								"account", accountID,
+								"fileKey", fileKey,
+								"category", att.Category,
+								"error", err,
+							)
+							continue
+						}
+						cloned.Attachments[i].Data = data
+						if strings.TrimSpace(cloned.Attachments[i].MimeType) == "" {
+							cloned.Attachments[i].MimeType = strings.TrimSpace(mimeType)
+						}
+					}
+					return &cloned
+				}
+
+				wecomPreprocessorResolver := NewMultimodalPreprocessorResolver(cfgLoader, loadedCfg, 10*time.Second)
+				wecomPlugin.DispatchMultimodalFunc = func(channel, accountID, chatID, userID string, msg *channels.ChannelMessage) *channels.DispatchReply {
+					var text string
+					if msg != nil {
+						preprocessCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+						preprocessor := wecomPreprocessorResolver.Get()
+						hydratedMsg := hydrateWeComAttachmentData(preprocessCtx, accountID, msg)
+						preResult := preprocessor.ProcessGenericChannelMessage(preprocessCtx, hydratedMsg)
+						cancel()
+						text = strings.TrimSpace(preResult.Text)
+						if text == "" && len(msg.Attachments) > 0 {
+							var parts []string
+							for _, att := range msg.Attachments {
+								category := att.Category
+								if category == "" {
+									category = "附件"
+								}
+								if att.FileName != "" {
+									parts = append(parts, fmt.Sprintf("[%s:%s]", category, att.FileName))
+								} else if att.FileKey != "" {
+									parts = append(parts, fmt.Sprintf("[%s:%s]", category, att.FileKey))
+								} else {
+									parts = append(parts, fmt.Sprintf("[%s消息]", category))
+								}
+							}
+							text = strings.Join(parts, "\n")
+						}
+					}
+
+					dispatch := wecomDispatch(context.Background(), channel, accountID, chatID, userID, text)
+					if dispatch.Text == "" && len(dispatch.MediaItems) == 0 && dispatch.MediaBase64 == "" {
+						return nil
+					}
+
+					reply := &channels.DispatchReply{
+						Text: dispatch.Text,
+					}
+					for _, item := range dispatch.MediaItems {
+						if item.Base64Data == "" {
+							continue
+						}
+						data, err := base64.StdEncoding.DecodeString(item.Base64Data)
+						if err != nil {
+							slog.Warn("wecom: media item base64 decode failed", "error", err)
+							continue
+						}
+						reply.MediaItems = append(reply.MediaItems, channels.ChannelMediaItem{
+							Data:     data,
+							MimeType: item.MimeType,
+						})
+					}
+					if len(reply.MediaItems) > 0 {
+						reply.MediaData = reply.MediaItems[0].Data
+						reply.MediaMimeType = reply.MediaItems[0].MimeType
+					} else if dispatch.MediaBase64 != "" {
+						if data, err := base64.StdEncoding.DecodeString(dispatch.MediaBase64); err == nil {
+							reply.MediaData = data
+							reply.MediaMimeType = dispatch.MediaMimeType
+						} else {
+							slog.Warn("wecom: media base64 decode failed", "error", err)
+						}
+					}
+					return reply
+				}
+				slog.Info("gateway: multimodal dispatch enabled", "channel", "wecom", "switch", config.MultimodalChannelsSwitch)
+			} else {
+				slog.Warn("gateway: multimodal dispatch disabled, fallback to text dispatch", "channel", "wecom", "switch", config.MultimodalChannelsSwitch)
 			}
 			channelMgr.RegisterPlugin(wecomPlugin)
 			slog.Info("channel: wecom plugin registered")
@@ -2313,6 +2653,12 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 			} else {
 				channelMgr.RegisterPlugin(wmpPlugin)
 				slog.Info("channel: wechat_mp plugin registered")
+				// P0-1: 注入发布器到 MediaSubsystem
+				if mediaSub != nil {
+					if pub := wmpPlugin.GetPublisher(channels.DefaultAccountID); pub != nil {
+						mediaSub.RegisterPublisher(media.PlatformWeChat, pub)
+					}
+				}
 			}
 		}
 		if loadedCfg.Channels.Xiaohongshu != nil && loadedCfg.Channels.Xiaohongshu.Enabled {
@@ -2329,6 +2675,25 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 			} else {
 				channelMgr.RegisterPlugin(xhsPlugin)
 				slog.Info("channel: xiaohongshu plugin registered")
+				// P0-3: 注入浏览器驱动到 XHS RPA 客户端
+				if browserCDPTools != nil {
+					if client := xhsPlugin.GetClient(channels.DefaultAccountID); client != nil {
+						client.SetBrowserFromPlaywright(browserCDPTools, browserCDPURL, xhsCfg.ErrorScreenshotDir)
+						if err := client.LoadCookiesIfAvailable(); err != nil {
+							slog.Warn("channel: xiaohongshu cookie load failed (non-fatal)", "error", err)
+						}
+						slog.Info("channel: xiaohongshu browser driver injected")
+					}
+				}
+				// P0-1: 注入发布器 + 互动器到 MediaSubsystem
+				if mediaSub != nil {
+					if client := xhsPlugin.GetClient(channels.DefaultAccountID); client != nil {
+						mediaSub.RegisterPublisher(media.PlatformXiaohongshu, client)
+					}
+					if mgr := xhsPlugin.GetInteractionManager(channels.DefaultAccountID); mgr != nil {
+						mediaSub.RegisterInteractor(mgr)
+					}
+				}
 			}
 		}
 		if loadedCfg.Channels.Website != nil && loadedCfg.Channels.Website.Enabled {
@@ -2347,6 +2712,12 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 			} else {
 				channelMgr.RegisterPlugin(wsPlugin)
 				slog.Info("channel: website plugin registered")
+				// P0-1: 注入发布器到 MediaSubsystem
+				if mediaSub != nil {
+					if client := wsPlugin.GetClient(channels.DefaultAccountID); client != nil {
+						mediaSub.RegisterPublisher(media.PlatformWebsite, client)
+					}
+				}
 			}
 		}
 
@@ -2614,6 +2985,13 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 	if config.SkipProviders {
 		slog.Info("gateway: OPENACOSMI_SKIP_PROVIDERS set — provider initialization skipped")
 	}
+	mmSwitch := strings.TrimSpace(config.MultimodalChannelsSwitch)
+	if mmSwitch == "" {
+		mmSwitch = "all (default)"
+	}
+	slog.Info("gateway: multimodal rollout switch",
+		"env", "OPENACOSMI_MULTIMODAL_CHANNELS",
+		"value", mmSwitch)
 
 	// ---------- 5b. 启动维护计时器（gateway.tick 广播） ----------
 	// 对齐 TS server-maintenance.ts: 每 30s 广播 tick 事件
@@ -2626,17 +3004,27 @@ func StartGatewayServer(port int, opts GatewayServerOptions) (*GatewayRuntime, e
 	}
 
 	// 启动 HTTP 监听
+	listenErrCh := make(chan error, 1)
 	go func() {
 		listenAddr := fmt.Sprintf("%s:%d", serverCfg.Host, serverCfg.Port)
 		slog.Info("🦜 Gateway listening", "addr", listenAddr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("gateway: http server error", "error", err)
-			os.Exit(1)
+			listenErrCh <- err
+			return
 		}
+		listenErrCh <- nil
 	}()
 
-	// 等待服务器就绪
-	time.Sleep(100 * time.Millisecond)
+	// 等待服务器就绪或失败
+	select {
+	case err := <-listenErrCh:
+		if err != nil {
+			return nil, fmt.Errorf("gateway: http listen failed: %w", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		// 未报错 = 正常监听中
+	}
+
 	state.SetPhase(BootPhaseReady)
 	slog.Info("gateway: ready", "port", port)
 
@@ -2761,6 +3149,8 @@ func buildFeishuCardActionHandler(state *GatewayState) feishu.CardActionHandler 
 		switch cardType {
 		case "coder_confirm":
 			return handleFeishuCoderConfirmAction(state, cardID, actionStr)
+		case "plan_confirm":
+			return handleFeishuPlanConfirmAction(state, cardID, actionStr)
 		default:
 			// 向后兼容：无 type 字段视为 escalation 审批
 			return handleFeishuEscalationAction(state, cardID, actionStr, value)
@@ -2861,5 +3251,53 @@ func handleFeishuCoderConfirmAction(state *GatewayState, confirmID, actionStr st
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "❌ 操作已拒绝"},
+	}, nil
+}
+
+// handleFeishuPlanConfirmAction 处理方案确认卡片回调。
+func handleFeishuPlanConfirmAction(state *GatewayState, confirmID, actionStr string) (*callback.CardActionTriggerResponse, error) {
+	planMgr := state.PlanConfirmMgr()
+	if planMgr == nil {
+		slog.Warn("feishu card action: plan confirm manager not available")
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "error", Content: "确认系统未初始化"},
+		}, nil
+	}
+
+	// 映射 action → decision
+	var decision runner.PlanDecision
+	switch actionStr {
+	case "approve":
+		decision = runner.PlanDecision{Action: "approve"}
+	case "reject":
+		decision = runner.PlanDecision{Action: "reject", Feedback: "rejected via feishu"}
+	default:
+		slog.Warn("feishu card action: unknown plan_confirm action", "action", actionStr)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "error", Content: "未知操作: " + actionStr},
+		}, nil
+	}
+
+	if err := planMgr.ResolvePlanConfirmation(confirmID, decision); err != nil {
+		slog.Warn("feishu card action: plan confirm resolve failed", "id", confirmID, "error", err)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "确认失败: " + err.Error()},
+		}, nil
+	}
+
+	slog.Info("feishu card action: plan confirm resolved", "id", confirmID, "decision", actionStr)
+
+	// 推送结果卡片
+	if notifier := state.RemoteApprovalNotifier(); notifier != nil {
+		notifier.NotifyPlanConfirmResult(confirmID, actionStr)
+	}
+
+	if actionStr == "approve" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "✅ 方案已批准"},
+		}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "❌ 方案已拒绝"},
 	}, nil
 }

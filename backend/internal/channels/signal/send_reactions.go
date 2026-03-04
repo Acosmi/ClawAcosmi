@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/utils"
+	"github.com/Acosmi/ClawAcosmi/pkg/utils"
 )
 
 // Signal 反应发送/移除 — 继承自 src/signal/send-reactions.ts (216L)

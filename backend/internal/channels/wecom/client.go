@@ -11,9 +11,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 const (
@@ -131,4 +135,114 @@ func (c *WeComClient) DoAPIRequest(ctx context.Context, method, path string, bod
 		return respBody, fmt.Errorf("wecom API HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 	return respBody, nil
+}
+
+// UploadMedia 上传临时素材，返回 media_id。
+// mediaType: image | voice | file | video
+func (c *WeComClient) UploadMedia(ctx context.Context, mediaType, fileName string, data []byte) (string, error) {
+	if len(data) == 0 {
+		return "", fmt.Errorf("wecom upload media: empty payload")
+	}
+	if mediaType == "" {
+		mediaType = "file"
+	}
+	if fileName == "" {
+		fileName = "upload"
+	}
+	// 企业微信要求文件名通常带扩展，避免服务端类型识别异常。
+	if filepath.Ext(fileName) == "" {
+		fileName += ".bin"
+	}
+
+	token, err := c.GetAccessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("media", fileName)
+	if err != nil {
+		return "", fmt.Errorf("wecom upload media: create form file: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", fmt.Errorf("wecom upload media: write payload: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("wecom upload media: close form: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/cgi-bin/media/upload?access_token=%s&type=%s", WeComBaseURL, token, mediaType)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
+	if err != nil {
+		return "", fmt.Errorf("wecom upload media: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("wecom upload media: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("wecom upload media HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+		MediaID string `json:"media_id"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("wecom upload media: decode response: %w", err)
+	}
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("wecom upload media error: code=%d msg=%s", result.ErrCode, result.ErrMsg)
+	}
+	if result.MediaID == "" {
+		return "", fmt.Errorf("wecom upload media: empty media_id")
+	}
+	return result.MediaID, nil
+}
+
+// DownloadMedia 下载企业微信临时素材（二进制）。
+// 仅用于入站多模态预处理链路。
+func (c *WeComClient) DownloadMedia(ctx context.Context, mediaID string) ([]byte, string, error) {
+	if mediaID == "" {
+		return nil, "", fmt.Errorf("wecom download media: empty media_id")
+	}
+
+	token, err := c.GetAccessToken(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	url := fmt.Sprintf("%s/cgi-bin/media/get?access_token=%s&media_id=%s", WeComBaseURL, token, mediaID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("wecom download media: create request: %w", err)
+	}
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("wecom download media: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, "", fmt.Errorf("wecom download media HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	const maxMediaDownloadBytes = channels.ChatAttachmentFileMaxBytes
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMediaDownloadBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("wecom download media: read body: %w", err)
+	}
+	if len(data) > maxMediaDownloadBytes {
+		return nil, "", fmt.Errorf("wecom download media: too large (max %d bytes)", maxMediaDownloadBytes)
+	}
+	return data, resp.Header.Get("Content-Type"), nil
 }

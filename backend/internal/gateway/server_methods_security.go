@@ -7,7 +7,7 @@ package gateway
 // 写入操作复用 exec.approvals.set API。
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // SecurityHandlers 返回 security.* 方法处理器映射。

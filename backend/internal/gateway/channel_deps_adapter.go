@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/channels/discord"
-	"github.com/openacosmi/claw-acismi/internal/channels/slack"
-	"github.com/openacosmi/claw-acismi/internal/channels/telegram"
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/discord"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/slack"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/telegram"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
 )
 
 // ChannelDepsContext 网关子系统集合，由 server.go 构造后传入。

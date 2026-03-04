@@ -88,6 +88,7 @@ import {
 import {
   resetToolStream as resetToolStreamInternal,
   type ToolStreamEntry,
+  type AgentProgress,
   type CompactionStatus,
 } from "./app-tool-stream.ts";
 import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
@@ -129,6 +130,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() settings: UiSettings = loadSettings();
   @state() password = "";
   @state() tab: Tab = "chat";
+  @state() overviewPanel: "dashboard" | "instances" | "usage" = "dashboard";
   @state() onboarding = resolveOnboardingMode();
   @state() wizardOpen = false;
   @state() wizardV2Open = false;
@@ -142,6 +144,8 @@ export class OpenAcosmiApp extends LitElement {
   private eventLogBuffer: EventLogEntry[] = [];
   private toolStreamSyncTimer: number | null = null;
   private sidebarCloseTimer: number | null = null;
+  private processingCardTickInterval: number | null = null;
+  private processingCardTickTimeout: number | null = null;
 
   @state() assistantName = injectedAssistantIdentity.name;
   @state() assistantAvatar = injectedAssistantIdentity.avatar;
@@ -157,6 +161,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() chatStreamStartedAt: number | null = null;
   @state() chatRunId: string | null = null;
   @state() compactionStatus: CompactionStatus | null = null;
+  @state() agentProgress: AgentProgress | null = null;
   @state() chatAvatarUrl: string | null = null;
   @state() chatThinkingLevel: string | null = null;
   @state() chatQueue: ChatQueueItem[] = [];
@@ -319,6 +324,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() usageError: string | null = null;
   @state() usageStartDate = (() => {
     const d = new Date();
+    d.setDate(d.getDate() - 29);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   })();
   @state() usageEndDate = (() => {
@@ -434,7 +440,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() memorySearching = false;
 
   // Plugins & Tools
-  @state() pluginsPanel: "plugins" | "tools" = "plugins";
+  @state() pluginsPanel: "plugins" | "tools" | "skills" = "plugins";
   @state() pluginsLoading = false;
   @state() pluginsList: import("./types.js").PluginInfo[] = [];
   @state() pluginsError: string | null = null;
@@ -463,6 +469,7 @@ export class OpenAcosmiApp extends LitElement {
   @state() subagentsList: import("./controllers/subagents.js").SubAgentEntry[] = [];
   @state() subagentsError: string | null = null;
   @state() subagentsBusyKey: string | null = null;
+  @state() subagentsActiveTab = "media";
 
   // Task Kanban
   @state() taskKanbanState: import("./controllers/task-kanban.js").TaskKanbanState = { tasks: new Map(), sortedIds: [] };
@@ -487,6 +494,53 @@ export class OpenAcosmiApp extends LitElement {
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
 
+  private isProcessingCardActive(): boolean {
+    return this.tab === "chat" && this.chatStream !== null && this.chatStreamStartedAt !== null;
+  }
+
+  private startProcessingCardTicker() {
+    if (this.processingCardTickInterval != null || this.processingCardTickTimeout != null) {
+      return;
+    }
+    const startedAt = this.chatStreamStartedAt ?? Date.now();
+    const elapsed = Math.max(0, Date.now() - startedAt);
+    const remainder = elapsed % 1000;
+    const delay = remainder === 0 ? 1000 : 1000 - remainder;
+    this.processingCardTickTimeout = window.setTimeout(() => {
+      this.processingCardTickTimeout = null;
+      if (!this.isProcessingCardActive()) {
+        return;
+      }
+      this.requestUpdate();
+      this.processingCardTickInterval = window.setInterval(() => {
+        if (!this.isProcessingCardActive()) {
+          this.stopProcessingCardTicker();
+          return;
+        }
+        this.requestUpdate();
+      }, 1000);
+    }, delay);
+  }
+
+  private stopProcessingCardTicker() {
+    if (this.processingCardTickTimeout != null) {
+      window.clearTimeout(this.processingCardTickTimeout);
+      this.processingCardTickTimeout = null;
+    }
+    if (this.processingCardTickInterval != null) {
+      window.clearInterval(this.processingCardTickInterval);
+      this.processingCardTickInterval = null;
+    }
+  }
+
+  private syncProcessingCardTicker() {
+    if (this.isProcessingCardActive()) {
+      this.startProcessingCardTicker();
+      return;
+    }
+    this.stopProcessingCardTicker();
+  }
+
   createRenderRoot() {
     return this;
   }
@@ -503,12 +557,17 @@ export class OpenAcosmiApp extends LitElement {
   }
 
   disconnectedCallback() {
+    this.stopProcessingCardTicker();
     handleDisconnected(this as unknown as Parameters<typeof handleDisconnected>[0]);
     super.disconnectedCallback();
   }
 
   protected updated(changed: Map<PropertyKey, unknown>) {
     handleUpdated(this as unknown as Parameters<typeof handleUpdated>[0], changed);
+    if (changed.has("chatStreamStartedAt")) {
+      this.stopProcessingCardTicker();
+    }
+    this.syncProcessingCardTicker();
   }
 
   connect() {
@@ -796,8 +855,8 @@ export class OpenAcosmiApp extends LitElement {
     await startWizardInternal(this as unknown as AppViewState);
   }
 
-  handleStartWizardV2() {
-    startWizardV2Internal(this as unknown as AppViewState);
+  async handleStartWizardV2() {
+    await startWizardV2Internal(this as unknown as AppViewState);
   }
 
   async handleCancelWizard() {

@@ -101,7 +101,7 @@ func buildDocsSection(docsPath string, isMinimal bool) string {
 	}
 	return fmt.Sprintf("## Documentation\n"+
 		"OpenAcosmi docs: %s\n"+
-		"Source: https://github.com/Acosmi/Claw-Acosmi\n"+
+		"Source: https://github.com/Acosmi/ClawAcosmi\n"+
 		"For OpenAcosmi behavior, commands, config, or architecture: consult local docs first.\n"+
 		"When diagnosing issues, run `openacosmi status` yourself when possible; only ask the user if you lack access (e.g., sandboxed).", dp)
 }

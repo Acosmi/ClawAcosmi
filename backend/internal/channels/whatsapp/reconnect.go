@@ -3,7 +3,7 @@ package whatsapp
 import (
 	"math"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // WhatsApp 重连策略 — 继承自 src/web/reconnect.ts (54L)

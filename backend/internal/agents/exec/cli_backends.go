@@ -8,8 +8,8 @@ package exec
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ResolvedCliBackend 已解析的 CLI 后端配置。

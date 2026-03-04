@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Discord 审计 — 继承自 src/discord/audit.ts (140L)

@@ -13,7 +13,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ---------- 等待短语（对标 TS tui-waiting.ts）----------
