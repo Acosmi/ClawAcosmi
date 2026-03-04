@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 	"github.com/go-playground/validator/v10"
-	"github.com/openacosmi/claw-acismi/pkg/types"
 )
 
 // validate 全局验证器实例（只初始化一次）

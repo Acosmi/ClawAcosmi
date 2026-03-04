@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/retry"
+	"github.com/Acosmi/ClawAcosmi/pkg/retry"
 )
 
 // ── Types ──

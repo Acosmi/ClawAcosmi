@@ -58,20 +58,19 @@ func (c *OAuthProviderConfig) toOAuth2Config(redirectURL string) *oauth2.Config 
 // OAuthProviderRegistry 各 provider OAuth 配置注册表。
 var OAuthProviderRegistry = map[string]*OAuthProviderConfig{
 	"google": {
-		Provider: "google",
-		Label:    "Google Gemini OAuth",
-		AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
-		TokenURL: "https://oauth2.googleapis.com/token",
-		Scopes:   []string{"openid", "email"},
-		UsePKCE:  true,
-	},
-	"openai-codex": {
-		Provider: "openai-codex",
-		Label:    "OpenAI Codex OAuth",
-		AuthURL:  "https://auth.openai.com/authorize",
-		TokenURL: "https://auth.openai.com/oauth/token",
-		Scopes:   []string{"openid", "profile"},
-		UsePKCE:  true,
+		Provider:     "google",
+		Label:        "Google Gemini OAuth",
+		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL:     "https://oauth2.googleapis.com/token",
+		ClientID:     GeminiOAuthClientID,     // 来自 gemini-cli（Apache-2.0）
+		ClientSecret: GeminiOAuthClientSecret, // Google Desktop OAuth 必须提供（非机密）
+		Scopes: []string{
+			GeminiOAuthScope, // cloud-platform
+			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		UsePKCE: true,
 	},
 	"minimax-portal": {
 		Provider: "minimax-portal",
@@ -279,6 +278,10 @@ func GetOAuthProviderConfig(provider string) *OAuthProviderConfig {
 	// Qwen 使用内置 ClientID
 	if provider == "qwen-portal" && resolved.ClientID == "" {
 		resolved.ClientID = QwenOAuthClientID
+	}
+	// Google 使用 gemini-cli 内置 ClientID（Apache-2.0）
+	if provider == "google" && resolved.ClientID == "" {
+		resolved.ClientID = GeminiOAuthClientID
 	}
 
 	return &resolved

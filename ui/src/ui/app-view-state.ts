@@ -1,5 +1,5 @@
 import type { EventLogEntry } from "./app-events.ts";
-import type { CompactionStatus } from "./app-tool-stream.ts";
+import type { AgentProgress, CompactionStatus } from "./app-tool-stream.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { CoderConfirmRequest } from "./controllers/coder-confirmation.ts";
 import type { EscalationState } from "./controllers/escalation.ts";
@@ -47,6 +47,7 @@ export type AppViewState = {
   settings: UiSettings;
   password: string;
   tab: Tab;
+  overviewPanel: "dashboard" | "instances" | "usage";
   onboarding: boolean;
   wizardOpen: boolean;
   wizardV2Open: boolean;
@@ -257,6 +258,7 @@ export type AppViewState = {
   subagentsList: import("./controllers/subagents.js").SubAgentEntry[];
   subagentsError: string | null;
   subagentsBusyKey: string | null;
+  subagentsActiveTab: string;
   debugLoading: boolean;
   debugStatus: StatusSummary | null;
   debugHealth: HealthSnapshot | null;
@@ -385,12 +387,15 @@ export type AppViewState = {
   mediaDrafts: import("./controllers/media-dashboard.js").DraftEntry[];
   mediaDraftsLoading: boolean;
   mediaDraftsSelectedPlatform: string;
+  mediaPublishRecords: import("./controllers/media-dashboard.js").PublishRecord[];
+  mediaPublishLoading: boolean;
+  agentProgress: AgentProgress | null;
 
   // Task Kanban
   taskKanbanState: import("./controllers/task-kanban.js").TaskKanbanState;
 
   // Plugins & Tools
-  pluginsPanel: "plugins" | "tools";
+  pluginsPanel: "plugins" | "tools" | "skills";
   pluginsLoading: boolean;
   pluginsList: PluginInfo[];
   pluginsError: string | null;

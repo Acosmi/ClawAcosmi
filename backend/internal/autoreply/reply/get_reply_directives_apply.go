@@ -1,7 +1,7 @@
 package reply
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/get-reply-directives-apply.ts (315L)

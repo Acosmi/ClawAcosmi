@@ -19,11 +19,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Provider 定义 ----------

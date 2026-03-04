@@ -39,10 +39,13 @@ const (
 
 // CreateMediaPublishTool 创建平台发布工具。
 // store 提供草稿存取，publishers 按 Platform 注册各平台发布器。
+// history 可为 nil，非 nil 时发布成功后自动写入历史。
 func CreateMediaPublishTool(
 	store DraftStore,
 	publishers map[Platform]MediaPublisher,
+	history PublishHistoryStore,
 ) *MediaTool {
+	historyStore := history
 	return &MediaTool{
 		ToolName:  ToolMediaPublish,
 		ToolLabel: "Media Publish",
@@ -78,7 +81,7 @@ func CreateMediaPublishTool(
 			case PublishActionApprove:
 				return executePublishApprove(store, args)
 			case PublishActionPublish:
-				return executePublishPublish(ctx, store, publishers, args)
+				return executePublishPublish(ctx, store, publishers, historyStore, args)
 			case PublishActionStatus:
 				return executePublishStatus(store, args)
 			default:
@@ -130,6 +133,7 @@ func executePublishPublish(
 	ctx context.Context,
 	store DraftStore,
 	publishers map[Platform]MediaPublisher,
+	history PublishHistoryStore,
 	args map[string]any,
 ) (*MediaToolResult, error) {
 	if store == nil {
@@ -173,6 +177,24 @@ func executePublishPublish(
 			"draft_id", draftID,
 			"error", err,
 		)
+	}
+
+	// P0-4: 写入发布历史
+	if history != nil {
+		record := &PublishRecord{
+			DraftID:  draftID,
+			Title:    draft.Title,
+			Platform: result.Platform,
+			PostID:   result.PostID,
+			URL:      result.URL,
+			Status:   result.Status,
+		}
+		if saveErr := history.Save(record); saveErr != nil {
+			slog.Warn("failed to save publish history",
+				"draft_id", draftID,
+				"error", saveErr,
+			)
+		}
 	}
 
 	return jsonMediaResult(map[string]any{

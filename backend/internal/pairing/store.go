@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
 )
 
 // ---------- 常量 ----------

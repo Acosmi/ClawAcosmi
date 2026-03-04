@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func strPtr(s string) *string { return &s }

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // ---------- P0-安全: Slack 域名白名单验证 ----------

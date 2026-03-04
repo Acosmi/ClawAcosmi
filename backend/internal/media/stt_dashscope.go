@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // DashScopeSTT 阿里云 DashScope 原生 STT Provider

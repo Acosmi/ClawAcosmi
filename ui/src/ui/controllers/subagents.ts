@@ -105,8 +105,11 @@ export async function toggleSubAgent(state: SubAgentsState, agentId: string, ena
             entry.enabled = enabled;
             entry.status = enabled ? "running" : "stopped";
         }
-    } catch (err) {
-        state.subagentsError = err instanceof Error ? err.message : String(err);
+    } catch (err: any) {
+        // 优先展示结构化恢复指引（来自 ArgusStartError.recovery）
+        const recovery = err?.details?.recovery;
+        const message = err instanceof Error ? err.message : String(err);
+        state.subagentsError = recovery ? `${message}\n${recovery}` : message;
     } finally {
         state.subagentsBusyKey = null;
     }

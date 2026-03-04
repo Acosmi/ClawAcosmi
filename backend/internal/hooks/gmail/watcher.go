@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // --- Gmail Watcher Service ---

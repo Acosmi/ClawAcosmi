@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // LLMClientAdapter bridges llmclient.StreamChat to uhms.LLMProvider.

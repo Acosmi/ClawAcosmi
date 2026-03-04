@@ -17,9 +17,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // AgentRPCHandlers 返回 agent 主 RPC 方法处理器。

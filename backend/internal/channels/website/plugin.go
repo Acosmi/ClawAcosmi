@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // ChannelWebsite 自有网站频道 ID。

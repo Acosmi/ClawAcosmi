@@ -3,7 +3,7 @@ package reply
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 func TestNormalizeInboundTextNewlines_CRLF(t *testing.T) {

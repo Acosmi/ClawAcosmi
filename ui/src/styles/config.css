@@ -28,7 +28,7 @@
 }
 
 :root[data-theme="light"] .config-sidebar {
-  background: var(--bg-hover);
+  background: #f7f7f8;
 }
 
 .config-sidebar__header {
@@ -261,7 +261,7 @@
 }
 
 :root[data-theme="light"] .config-actions {
-  background: var(--bg-hover);
+  background: #fafafa;
 }
 
 .config-actions__left,
@@ -385,7 +385,7 @@
 }
 
 :root[data-theme="light"] .config-section-hero {
-  background: var(--bg-hover);
+  background: #fafafa;
 }
 
 .config-section-hero__icon {
@@ -435,7 +435,7 @@
 }
 
 :root[data-theme="light"] .config-subnav {
-  background: var(--bg-hover);
+  background: #fafafa;
 }
 
 .config-subnav__item {
@@ -565,7 +565,7 @@
 }
 
 :root[data-theme="light"] .config-section-card__header {
-  background: var(--bg-hover);
+  background: #fafafa;
 }
 
 .config-section-card__icon {

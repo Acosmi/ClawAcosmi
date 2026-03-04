@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ---------- H3-2: CompactionFailureEmitter ----------

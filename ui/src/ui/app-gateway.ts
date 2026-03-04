@@ -348,14 +348,35 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       text?: string;
       mediaBase64?: string;
       mediaMimeType?: string;
+      mediaItems?: Array<{
+        mediaBase64?: string;
+        mediaMimeType?: string;
+      }>;
       ts?: number;
     } | undefined;
-    if ((payload?.text || payload?.mediaBase64) && (!payload?.sessionKey || payload.sessionKey === host.sessionKey)) {
+    const hasMediaItems = Boolean(payload?.mediaItems?.some((item) => Boolean(item?.mediaBase64)));
+    if ((payload?.text || payload?.mediaBase64 || hasMediaItems) &&
+      (!payload?.sessionKey || payload.sessionKey === host.sessionKey)) {
       const content: Array<Record<string, unknown>> = [];
       if (payload.text) {
         content.push({ type: "text", text: payload.text });
       }
-      if (payload.mediaBase64) {
+      const mediaItems = payload.mediaItems ?? [];
+      if (mediaItems.length > 0) {
+        for (const item of mediaItems) {
+          if (!item?.mediaBase64) {
+            continue;
+          }
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              data: item.mediaBase64,
+              media_type: item.mediaMimeType || "image/png",
+            },
+          });
+        }
+      } else if (payload.mediaBase64) {
         content.push({
           type: "image",
           source: {
@@ -412,21 +433,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       const app = host as unknown as OpenAcosmiApp;
       const fromStr = payload.from ? `[${payload.from}] ` : "";
       const msg = `${fromStr}${payload.text}`;
-
-      // 任务频道（task:{runId}）的工具执行日志由 channel.message.incoming 驱动，
-      // 这里仅对任务频道做实时追加；其他频道（飞书等）由 chat.message 负责，不重复追加。
-      if (payload.sessionKey === host.sessionKey && payload.sessionKey.startsWith("task:")) {
-        const content: Array<Record<string, unknown>> = [];
-        if (payload.text) {
-          content.push({ type: "text", text: payload.text });
-        }
-        app.chatMessages = [...app.chatMessages, {
-          role: "assistant",
-          content,
-          timestamp: payload.ts ?? Date.now(),
-          channel: payload.channel,
-        }];
-      }
 
       // Trigger red dot jump only if the notification comes from a session we're not currently viewing
       if (payload.sessionKey !== host.sessionKey) {

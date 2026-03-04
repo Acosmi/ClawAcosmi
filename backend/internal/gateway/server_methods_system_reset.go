@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // SystemResetHandlers 返回系统恢复/重置方法处理器。

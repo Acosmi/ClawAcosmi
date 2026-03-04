@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestSetupInternalHooks_EmptyWorkspace(t *testing.T) {

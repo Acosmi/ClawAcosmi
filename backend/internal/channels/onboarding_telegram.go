@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 引导适配器 — 继承自 src/channels/plugins/onboarding/telegram.ts (357L)

@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/sessions"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/sessions"
 )
 
 // UsageHandlers 返回 sessions.usage.* 方法处理器映射。

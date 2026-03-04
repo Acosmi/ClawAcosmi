@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // PipelineDispatcher 管线分发接口。
@@ -157,13 +157,60 @@ func stripReplyTags(text string) string {
 	return strings.TrimSpace(result)
 }
 
-// ExtractMediaFromReplies 从回复载荷中提取第一个 base64 媒体数据。
-// 用于出站管线：将 agent 工具产出的图片传递到 DispatchReply.MediaData。
-func ExtractMediaFromReplies(replies []autoreply.ReplyPayload) (base64Data, mimeType string) {
+// ReplyMediaItem 回复媒体项（base64 + MIME）。
+type ReplyMediaItem struct {
+	Base64Data string
+	MimeType   string
+}
+
+// ExtractMediaListFromReplies 从回复载荷中提取所有 base64 媒体数据。
+func ExtractMediaListFromReplies(replies []autoreply.ReplyPayload) []ReplyMediaItem {
+	if len(replies) == 0 {
+		return nil
+	}
+	items := make([]ReplyMediaItem, 0, len(replies))
 	for _, r := range replies {
-		if r.MediaBase64 != "" {
-			return r.MediaBase64, r.MediaMimeType
+		if len(r.MediaItems) > 0 {
+			appended := false
+			for _, media := range r.MediaItems {
+				if media.MediaBase64 == "" {
+					continue
+				}
+				mimeType := media.MediaMimeType
+				if mimeType == "" {
+					mimeType = r.MediaMimeType
+				}
+				items = append(items, ReplyMediaItem{
+					Base64Data: media.MediaBase64,
+					MimeType:   mimeType,
+				})
+				appended = true
+			}
+			// 某些异常 payload 可能携带空 mediaItems，但 legacy 字段仍有数据。
+			if !appended && r.MediaBase64 != "" {
+				items = append(items, ReplyMediaItem{
+					Base64Data: r.MediaBase64,
+					MimeType:   r.MediaMimeType,
+				})
+			}
+			continue
 		}
+		if r.MediaBase64 != "" {
+			items = append(items, ReplyMediaItem{
+				Base64Data: r.MediaBase64,
+				MimeType:   r.MediaMimeType,
+			})
+		}
+	}
+	return items
+}
+
+// ExtractMediaFromReplies 从回复载荷中提取第一个 base64 媒体数据。
+// 兼容旧调用：新逻辑请优先使用 ExtractMediaListFromReplies。
+func ExtractMediaFromReplies(replies []autoreply.ReplyPayload) (base64Data, mimeType string) {
+	items := ExtractMediaListFromReplies(replies)
+	if len(items) > 0 {
+		return items[0].Base64Data, items[0].MimeType
 	}
 	return "", ""
 }

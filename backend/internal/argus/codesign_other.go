@@ -15,3 +15,8 @@ func FindAppBundleBinary() string {
 func EnsureCodeSigned(binaryPath string) error {
 	return nil
 }
+
+// IsValidlySigned 非 macOS 平台无 codesign，始终返回 false。
+func IsValidlySigned(path string) bool {
+	return false
+}

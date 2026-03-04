@@ -8,17 +8,51 @@ import { t } from "../i18n.ts";
 import {
   loadTrendingTopics,
   loadDraftsList,
+  loadPublishHistory,
   deleteDraft,
   type TrendingTopic,
   type DraftEntry,
+  type PublishRecord,
 } from "../controllers/media-dashboard.ts";
 
 export function renderMediaDashboard(state: AppViewState): TemplateResult {
   return html`
     <div style="display:flex;flex-direction:column;gap:20px;padding:0 4px;">
+      ${renderProgressBanner(state)}
       ${renderTrendingPanel(state)}
       ${renderDraftsPanel(state)}
       ${renderPublishPanel(state)}
+    </div>
+  `;
+}
+
+// ---------- 进度横幅 ----------
+
+function renderProgressBanner(state: AppViewState): TemplateResult | typeof nothing {
+  const progress = state.agentProgress;
+  if (!progress) return nothing;
+  const percent = progress.percent;
+  const phase = progress.phase;
+  const elapsed = Math.round((Date.now() - progress.ts) / 1000);
+  const stale = elapsed > 120; // >2min 视为过期
+  if (stale) return nothing;
+  return html`
+    <div class="card" style="border-left:3px solid var(--accent);background:var(--bg-secondary);">
+      <div class="card-body" style="padding:10px 14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:14px;">&#9881;</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;">${progress.summary}</div>
+            ${phase ? html`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${phase}</div>` : nothing}
+          </div>
+          ${percent != null && percent > 0 ? html`<span style="font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;">${percent}%</span>` : nothing}
+        </div>
+        ${percent != null && percent > 0 ? html`
+          <div style="margin-top:6px;height:4px;border-radius:2px;background:var(--bg-tertiary);overflow:hidden;">
+            <div style="height:100%;width:${Math.min(percent, 100)}%;background:var(--accent);border-radius:2px;transition:width 0.3s ease;"></div>
+          </div>
+        ` : nothing}
+      </div>
     </div>
   `;
 }
@@ -193,13 +227,57 @@ function renderDraftItem(state: AppViewState, draft: DraftEntry): TemplateResult
 // ---------- 发布状态面板 ----------
 
 function renderPublishPanel(state: AppViewState): TemplateResult {
+  const records = (state.mediaPublishRecords || []) as PublishRecord[];
+  const loading = state.mediaPublishLoading || false;
+
   return html`
     <div class="card">
-      <div class="card-header">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
         <h3 style="margin:0;font-size:15px;font-weight:600;">${t("media.publish.title")}</h3>
+        <button
+          class="btn btn-sm"
+          ?disabled=${loading}
+          @click=${() => loadPublishHistory(state)}
+        >
+          ${loading ? "..." : t("media.refreshStatus")}
+        </button>
       </div>
       <div class="card-body">
-        <p class="empty-hint">${t("media.publish.empty")}</p>
+        ${records.length === 0
+          ? html`<p class="empty-hint">${t("media.publish.empty")}</p>`
+          : html`
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                ${records.map(
+                  (r) => html`
+                    <div
+                      class="list-item"
+                      style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;background:var(--bg-secondary);"
+                    >
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-weight:500;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                          ${r.title}
+                        </div>
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">
+                          ${r.platform} &middot; ${r.status}
+                          ${r.published_at
+                            ? ` &middot; ${new Date(r.published_at).toLocaleString()}`
+                            : ""}
+                        </div>
+                      </div>
+                      ${r.url
+                        ? html`<a
+                            href=${r.url}
+                            target="_blank"
+                            rel="noopener"
+                            style="font-size:12px;color:var(--accent);text-decoration:none;margin-left:8px;"
+                            >${t("media.publish.viewLink")}</a
+                          >`
+                        : nothing}
+                    </div>
+                  `,
+                )}
+              </div>
+            `}
       </div>
     </div>
   `;

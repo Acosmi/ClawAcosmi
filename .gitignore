@@ -35,20 +35,36 @@ npm-debug.log*
 tmp/
 temp/
 
-# Sub-agent projects (视觉/媒体运营/Coder)
+# Sub-agent projects (仅排除非Go源码的外部项目)
 Acosmo-Code/
-Argus/
 Swabble/
 
-# User requested ignoral
-docs/
-
-# Large compiled binaries
-backend/internal/memory/go-api/server
+# Argus: 排除编译产物，保留 Go 源码和脚本
 Argus/go-sensory/server
+Argus/build/
 
-# Large docs
-Rust 沙箱设计方案文档.md
+# Docs: 保留文档，排除含敏感信息的审计/聊天记录
+docs/claude/
+docs/meiti/audit-*
+docs/xinjiagou/*-audit-*
+docs/renwu/*-audit-*
+
+# 隐私与安全 — 严禁上传
+*.pem
+*.key
+*.p12
+*.keystore
+oauth.json
+credentials.json
+*-audit-report-*.md
+argus-visual-subagent-startup-audit-report-*.md
+core-gateway-audit-report-*.md
+memory-system-audit-report-*.md
+未标题-*.png
 
 backend/acosmi
 backend/openacosmi
+
+# 其他编译产物
+backend/internal/memory/go-api/server
+Rust 沙箱设计方案文档.md

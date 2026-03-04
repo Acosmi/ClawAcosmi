@@ -3,54 +3,27 @@ package main
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/goproviders/bridge"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
-func TestApplyZaiConfig(t *testing.T) {
+func TestBridgeApplyZhipu(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyZaiConfig(cfg)
-	if cfg.Agents.Defaults.Models["zhipu/glm-4-plus"].Alias != "GLM" {
-		t.Error("expected GLM alias")
+	bridge.ApplyProviderByID("zhipu", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
+	if cfg.Agents == nil || cfg.Agents.Defaults == nil || cfg.Agents.Defaults.Model == nil {
+		t.Fatal("agents.defaults.model not set")
 	}
-	if cfg.Agents.Defaults.Model.Primary != "zhipu/glm-4-plus" {
-		t.Errorf("expected default model, got %s", cfg.Agents.Defaults.Model.Primary)
+	// zhipu → zai (normalized)
+	ref := bridge.GetDefaultModelRef("zhipu")
+	if cfg.Agents.Defaults.Model.Primary != ref {
+		t.Errorf("expected default model %s, got %s", ref, cfg.Agents.Defaults.Model.Primary)
 	}
 }
 
-func TestApplyOpenrouterConfig(t *testing.T) {
+func TestBridgeApplyMoonshot(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyOpenrouterConfig(cfg)
-	entry := cfg.Agents.Defaults.Models["openrouter/auto"]
-	if entry == nil || entry.Alias != "OpenRouter" {
-		t.Error("expected OpenRouter alias")
-	}
-	if cfg.Agents.Defaults.Model.Primary != "openrouter/auto" {
-		t.Error("default model not set")
-	}
-}
-
-func TestApplyCloudflareAiGateway(t *testing.T) {
-	cfg := &types.OpenAcosmiConfig{}
-	ApplyCloudflareAiGatewayProviderConfig(cfg, &CloudflareAiGatewayParams{
-		AccountID: "acct123",
-		GatewayID: "gw456",
-	})
-	p := cfg.Models.Providers["cloudflare-ai-gateway"]
-	if p == nil {
-		t.Fatal("provider not found")
-	}
-	if p.BaseURL == "" {
-		t.Error("baseURL not set")
-	}
-	if len(p.Models) != 1 {
-		t.Errorf("expected 1 model, got %d", len(p.Models))
-	}
-}
-
-func TestApplyMoonshotConfig(t *testing.T) {
-	cfg := &types.OpenAcosmiConfig{}
-	ApplyMoonshotConfig(cfg)
-	if cfg.Agents.Defaults.Model.Primary != moonshotModelRef {
+	bridge.ApplyProviderByID("moonshot", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
+	if cfg.Agents.Defaults.Model.Primary == "" {
 		t.Error("default model not set")
 	}
 	p := cfg.Models.Providers["moonshot"]
@@ -59,53 +32,44 @@ func TestApplyMoonshotConfig(t *testing.T) {
 	}
 }
 
-func TestApplyVeniceConfig(t *testing.T) {
+func TestBridgeApplyXai(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyVeniceConfig(cfg)
-	if cfg.Agents.Defaults.Model.Primary != veniceModelRef {
-		t.Error("default model not set")
-	}
-}
-
-func TestApplyXaiConfig(t *testing.T) {
-	cfg := &types.OpenAcosmiConfig{}
-	ApplyXaiConfig(cfg)
-	if cfg.Agents.Defaults.Model.Primary != xaiModelRef {
+	bridge.ApplyProviderByID("xai", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
+	if cfg.Agents.Defaults.Model.Primary == "" {
 		t.Error("default model not set")
 	}
 	p := cfg.Models.Providers["xai"]
-	if p == nil || p.BaseURL != xaiBaseURL {
+	if p == nil || p.BaseURL == "" {
 		t.Error("xai provider not configured")
 	}
 }
 
-func TestApplyQianfanConfig(t *testing.T) {
+func TestBridgeApplyNoDuplicateModels(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyQianfanConfig(cfg)
-	if cfg.Agents.Defaults.Model.Primary != qianfanModelRef {
-		t.Error("default model not set")
+	bridge.ApplyProviderByID("moonshot", cfg, nil)
+	bridge.ApplyProviderByID("moonshot", cfg, nil)
+	p := cfg.Models.Providers["moonshot"]
+	if p == nil {
+		t.Fatal("moonshot provider not created")
+	}
+	// Models should not be duplicated
+	ids := make(map[string]int)
+	for _, m := range p.Models {
+		ids[m.ID]++
+	}
+	for id, count := range ids {
+		if count > 1 {
+			t.Errorf("model %s duplicated %d times", id, count)
+		}
 	}
 }
 
-func TestMergeModelIfMissing_NoDuplicates(t *testing.T) {
+func TestBridgeApplyMultiProviders_NoNilPanic(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplySyntheticProviderConfig(cfg)
-	ApplySyntheticProviderConfig(cfg) // call twice
-	p := cfg.Models.Providers["synthetic"]
-	if len(p.Models) != 1 {
-		t.Errorf("expected no duplicates, got %d models", len(p.Models))
-	}
-}
-
-func TestEmptyConfig_NoNilPanic(t *testing.T) {
-	cfg := &types.OpenAcosmiConfig{}
-	// 应该不 panic
-	ApplyZaiConfig(cfg)
-	ApplyOpenrouterConfig(cfg)
-	ApplyXaiConfig(cfg)
-	ApplyXiaomiConfig(cfg)
-	ApplyVeniceConfig(cfg)
-	ApplyQianfanConfig(cfg)
+	// 连续 Apply 多个 provider，不应 panic
+	bridge.ApplyProviderByID("zhipu", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
+	bridge.ApplyProviderByID("xai", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
+	bridge.ApplyProviderByID("moonshot", cfg, &bridge.ApplyOpts{SetDefaultModel: true})
 	if cfg.Agents == nil || cfg.Agents.Defaults == nil {
 		t.Error("agents.defaults should be initialized")
 	}

@@ -28,7 +28,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ackReactionDefault is the default emoji used to acknowledge receipt of an

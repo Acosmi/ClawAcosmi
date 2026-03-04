@@ -6,9 +6,9 @@
 package linkparse
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply/reply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ApplyLinkUnderstandingResult 链接理解应用结果。

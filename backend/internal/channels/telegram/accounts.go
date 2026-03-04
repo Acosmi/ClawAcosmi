@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/routing"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 账户解析 — 继承自 src/telegram/accounts.ts (140L)

@@ -715,12 +715,13 @@ function renderDetailCard(props: MemoryProps) {
           </div>
 
           <!-- Bottom: L0/L1/L2 Tabs -->
-          <div class="tabs" style="margin-top: 1rem; border-bottom: 1px solid #dee2e6;">
+          <div class="memory-tier-tabs" style="margin-top: 1rem; border-bottom: 1px solid #dee2e6;">
             ${[0, 1, 2].map(
     (lvl) => html`
                 <button
-                  class="tab ${props.detailLevel === lvl ? "tab--active" : ""}"
-                  style="font-size: 0.95rem; padding: 8px 16px;"
+                  class="memory-tier-tab ${props.detailLevel === lvl ? "memory-tier-tab--active" : ""}"
+                  type="button"
+                  aria-pressed=${props.detailLevel === lvl ? "true" : "false"}
                   @click=${() => props.onDetailLevel(lvl)}
                 >
                   ${tierLabels[lvl]}
@@ -737,6 +738,39 @@ function renderDetailCard(props: MemoryProps) {
         @keyframes fade-in-up {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        .memory-tier-tabs {
+          display: inline-flex;
+          gap: 6px;
+          padding-bottom: 10px;
+        }
+        .memory-tier-tab {
+          appearance: none;
+          border: 1px solid #cfd6de;
+          background: #f7f9fc;
+          color: #334155;
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 0.92rem;
+          line-height: 1.25;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.16s ease;
+        }
+        .memory-tier-tab:hover {
+          background: #eef3ff;
+          border-color: #b8c5f0;
+          color: #1e3a8a;
+        }
+        .memory-tier-tab:active {
+          transform: translateY(1px);
+        }
+        .memory-tier-tab--active {
+          background: #2f6feb;
+          border-color: #2f6feb;
+          color: #ffffff;
+          font-weight: 600;
+          box-shadow: 0 0 0 2px rgba(47, 111, 235, 0.15);
         }
       </style>
     </div>

@@ -40,12 +40,14 @@ type MediaSubsystemConfig struct {
 
 // MediaSubsystem 聚合 oa-media 的全部运行时组件。
 type MediaSubsystem struct {
-	mu          sync.RWMutex
-	DraftStore  DraftStore
-	Aggregator  *TrendingAggregator
-	Publishers  map[Platform]MediaPublisher
-	Tools       []*MediaTool
-	ToolsByName map[string]*MediaTool
+	mu             sync.RWMutex
+	DraftStore     DraftStore
+	Aggregator     *TrendingAggregator
+	Publishers     map[Platform]MediaPublisher
+	PublishHistory PublishHistoryStore
+	StateStore     MediaStateStore
+	Tools          []*MediaTool
+	ToolsByName    map[string]*MediaTool
 }
 
 // NewMediaSubsystem 创建完整的媒体子系统。
@@ -53,6 +55,23 @@ type MediaSubsystem struct {
 func NewMediaSubsystem(cfg MediaSubsystemConfig) (*MediaSubsystem, error) {
 	draftsDir := filepath.Join(cfg.Workspace, "_media", "drafts")
 	store, err := NewFileDraftStore(draftsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var historyStore PublishHistoryStore
+	if cfg.EnablePublish {
+		historyDir := filepath.Join(cfg.Workspace, "_media", "publish_history")
+		hs, err := NewFilePublishHistoryStore(historyDir)
+		if err != nil {
+			return nil, err
+		}
+		historyStore = hs
+	}
+
+	// 持久状态存储（跨会话记忆）
+	stateDir := filepath.Join(cfg.Workspace, "_media")
+	stateStore, err := NewFileMediaStateStore(stateDir)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +86,7 @@ func NewMediaSubsystem(cfg MediaSubsystemConfig) (*MediaSubsystem, error) {
 		publishers = make(map[Platform]MediaPublisher)
 	}
 
-	tools := buildMediaTools(cfg, store, aggregator, publishers)
+	tools := buildMediaTools(cfg, store, aggregator, publishers, historyStore, stateStore)
 	toolsByName := make(map[string]*MediaTool, len(tools))
 	for _, t := range tools {
 		toolsByName[t.ToolName] = t
@@ -80,11 +99,13 @@ func NewMediaSubsystem(cfg MediaSubsystemConfig) (*MediaSubsystem, error) {
 	)
 
 	return &MediaSubsystem{
-		DraftStore:  store,
-		Aggregator:  aggregator,
-		Publishers:  publishers,
-		Tools:       tools,
-		ToolsByName: toolsByName,
+		DraftStore:     store,
+		Aggregator:     aggregator,
+		Publishers:     publishers,
+		PublishHistory: historyStore,
+		StateStore:     stateStore,
+		Tools:          tools,
+		ToolsByName:    toolsByName,
 	}, nil
 }
 
@@ -94,13 +115,15 @@ func buildMediaTools(
 	store DraftStore,
 	agg *TrendingAggregator,
 	publishers map[Platform]MediaPublisher,
+	history PublishHistoryStore,
+	stateStore MediaStateStore,
 ) []*MediaTool {
 	tools := []*MediaTool{
-		CreateTrendingTool(agg),
+		CreateTrendingTool(agg, stateStore),
 		CreateContentComposeTool(store),
 	}
 	if cfg.EnablePublish {
-		tools = append(tools, CreateMediaPublishTool(store, publishers))
+		tools = append(tools, CreateMediaPublishTool(store, publishers, history))
 	}
 	if cfg.EnableInteract {
 		tools = append(tools, CreateSocialInteractTool(nil))
@@ -114,6 +137,28 @@ func (s *MediaSubsystem) RegisterPublisher(platform Platform, pub MediaPublisher
 	defer s.mu.Unlock()
 	s.Publishers[platform] = pub
 	slog.Info("media publisher registered", "platform", platform)
+}
+
+// RegisterInteractor 注册社交互动器。
+// 替换初始化时以 nil 创建的 social_interact 工具实例。
+// 若工具列表中不存在 social_interact（EnableInteract=false 时），则新增。
+func (s *MediaSubsystem) RegisterInteractor(interactor SocialInteractor) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tool := CreateSocialInteractTool(interactor)
+	for i, t := range s.Tools {
+		if t.ToolName == ToolSocialInteract {
+			s.Tools[i] = tool
+			s.ToolsByName[ToolSocialInteract] = tool
+			slog.Info("media social interactor registered (replaced)")
+			return
+		}
+	}
+	// 工具不存在，追加
+	s.Tools = append(s.Tools, tool)
+	s.ToolsByName[ToolSocialInteract] = tool
+	slog.Info("media social interactor registered (added)")
 }
 
 // GetTool 按名字获取工具。
@@ -207,10 +252,18 @@ func (s *MediaSubsystem) BuildSystemPrompt(task, contractPrompt, sessionKey stri
 	if contractPrompt != "" {
 		contract = &contractPromptAdapter{text: contractPrompt}
 	}
+	// 加载跨会话状态
+	var state *MediaState
+	if s.StateStore != nil {
+		if st, err := s.StateStore.Load(); err == nil {
+			state = st
+		}
+	}
 	return BuildMediaSystemPrompt(MediaPromptParams{
 		Task:                task,
 		Contract:            contract,
 		RequesterSessionKey: sessionKey,
+		State:               state,
 	})
 }
 

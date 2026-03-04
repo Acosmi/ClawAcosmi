@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // ---------- 常量 ----------

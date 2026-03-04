@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/auth"
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/auth"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 内部 helper ----------
@@ -62,76 +62,11 @@ func upsertOAuthProfile(store *auth.AuthStore, provider, email, token, refreshTo
 	return err
 }
 
-// ---------- set*ApiKey 系列（17 个 provider） ----------
+// ---------- set*ApiKey 系列 ----------
 
 // SetAnthropicApiKey 写入 Anthropic API key。
 func SetAnthropicApiKey(store *auth.AuthStore, key string) error {
 	return upsertApiKeyProfile(store, "anthropic", key)
-}
-
-// SetGeminiApiKey 写入 Google/Gemini API key。
-func SetGeminiApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "google", key)
-}
-
-// SetMinimaxApiKey 写入 Minimax API key。
-func SetMinimaxApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "minimax", key)
-}
-
-// SetMoonshotApiKey 写入 Moonshot API key。
-func SetMoonshotApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "moonshot", key)
-}
-
-// SetKimiCodingApiKey 写入 Kimi Coding API key。
-func SetKimiCodingApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "kimi-coding", key)
-}
-
-// SetSyntheticApiKey 写入 Synthetic/MiniMax hosted API key。
-func SetSyntheticApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "synthetic", key)
-}
-
-// SetVeniceApiKey 写入 Venice API key。
-func SetVeniceApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "venice", key)
-}
-
-// SetZaiApiKey 写入 ZAI/GLM API key。
-func SetZaiApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "zai", key)
-}
-
-// SetXiaomiApiKey 写入 Xiaomi API key。
-func SetXiaomiApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "xiaomi", key)
-}
-
-// SetOpenrouterApiKey 写入 OpenRouter API key。
-func SetOpenrouterApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "openrouter", key)
-}
-
-// SetVercelAiGatewayApiKey 写入 Vercel AI Gateway API key。
-func SetVercelAiGatewayApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "vercel-ai-gateway", key)
-}
-
-// SetAcosmiZenApiKey 写入 OpenAcosmi Zen API key。
-func SetAcosmiZenApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "openacosmi", key)
-}
-
-// SetQianfanApiKey 写入百度千帆 API key。
-func SetQianfanApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "qianfan", key)
-}
-
-// SetXaiApiKey 写入 xAI/Grok API key。
-func SetXaiApiKey(store *auth.AuthStore, key string) error {
-	return upsertApiKeyProfile(store, "xai", key)
 }
 
 // SetOpenAIApiKey 写入 OpenAI API key。
@@ -139,28 +74,34 @@ func SetOpenAIApiKey(store *auth.AuthStore, key string) error {
 	return upsertApiKeyProfile(store, "openai", key)
 }
 
-// SetCloudflareAiGatewayCredential 写入 Cloudflare AI Gateway 凭证（含 account/gateway metadata）。
-// 对应 TS: setCloudflareAiGatewayConfig(accountId, gatewayId, apiKey, agentDir)
-func SetCloudflareAiGatewayCredential(store *auth.AuthStore, accountID, gatewayID, apiKey string) error {
-	normalizedAccount := strings.TrimSpace(accountID)
-	normalizedGateway := strings.TrimSpace(gatewayID)
-	normalizedKey := strings.TrimSpace(apiKey)
-	if store == nil {
-		return nil
-	}
-	_, err := store.Update(func(s *auth.AuthProfileStore) bool {
-		s.Profiles["cloudflare-ai-gateway:default"] = &auth.AuthProfileCredential{
-			Type:     auth.CredentialAPIKey,
-			Provider: "cloudflare-ai-gateway",
-			Key:      normalizedKey,
-			Metadata: map[string]string{
-				"accountId": normalizedAccount,
-				"gatewayId": normalizedGateway,
-			},
-		}
-		return true
-	})
-	return err
+// SetGeminiApiKey 写入 Google Gemini API key。
+func SetGeminiApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "google", key)
+}
+
+// SetXaiApiKey 写入 xAI API key。
+func SetXaiApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "xai", key)
+}
+
+// SetMoonshotApiKey 写入 Moonshot API key。
+func SetMoonshotApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "moonshot", key)
+}
+
+// SetZaiApiKey 写入 Z.AI (智谱) API key。
+func SetZaiApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "zai", key)
+}
+
+// SetMinimaxApiKey 写入 MiniMax API key。
+func SetMinimaxApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "minimax", key)
+}
+
+// SetAcosmiZenApiKey 写入 OpenAcosmi Zen API key。
+func SetAcosmiZenApiKey(store *auth.AuthStore, key string) error {
+	return upsertApiKeyProfile(store, "openacosmi", key)
 }
 
 // WriteOAuthCredentials 写入 OAuth 凭证到 profile store。
@@ -189,8 +130,6 @@ const (
 	MoonshotDefaultModelRef = "moonshot/kimi-k2.5"
 	MoonshotDefaultCtxWin   = 256000
 	MoonshotDefaultMaxTok   = 8192
-	KimiCodingModelID       = "k2p5"
-	KimiCodingModelRef      = "kimi-coding/k2p5"
 )
 
 // xAI 常量
@@ -204,12 +143,7 @@ const (
 
 // 其他 provider 默认模型引用
 const (
-	ZaiDefaultModelRef              = "zai/glm-4.7"
-	XiaomiDefaultModelRef           = "xiaomi/mimo-v2-flash"
-	OpenrouterDefaultModelRef       = "openrouter/auto"
-	VercelAiGatewayDefaultModelRef  = "vercel-ai-gateway/anthropic/claude-opus-4.6"
-	QianfanDefaultModelRef          = "qianfan/ernie-4.5-8k"
-	CloudflareAiGatewayDefaultModel = "cloudflare-ai-gateway/claude-4-sonnet"
+	ZaiDefaultModelRef = "zai/glm-4.7"
 )
 
 // ---------- buildModel* 工厂函数 ----------
@@ -321,14 +255,6 @@ func BuildProviderModelCatalog(provider string) []ModelCatalogEntry {
 	case "zai":
 		return []ModelCatalogEntry{
 			{Ref: ZaiDefaultModelRef, Label: "GLM 4.7", Default: true, Provider: "zai"},
-		}
-	case "openrouter":
-		return []ModelCatalogEntry{
-			{Ref: OpenrouterDefaultModelRef, Label: "Auto", Default: true, Provider: "openrouter"},
-		}
-	case "qianfan":
-		return []ModelCatalogEntry{
-			{Ref: QianfanDefaultModelRef, Label: "ERNIE 4.5 8K", Default: true, Provider: "qianfan"},
 		}
 	default:
 		return nil

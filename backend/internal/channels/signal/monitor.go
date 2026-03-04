@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply/reply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Signal 监控入口 — 继承自 src/signal/monitor.ts (401L)

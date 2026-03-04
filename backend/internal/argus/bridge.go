@@ -22,8 +22,49 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/mcpclient"
+	"github.com/Acosmi/ClawAcosmi/internal/mcpclient"
 )
+
+// ---------- 结构化错误 ----------
+
+// ArgusStartError 结构化启动失败错误。
+type ArgusStartError struct {
+	Phase    string `json:"phase"`    // "resolve" | "permission" | "codesign" | "handshake" | "crash"
+	Reason   string `json:"reason"`   // 机器可读原因
+	Recovery string `json:"recovery"` // 面向用户的恢复指引
+	Err      error  `json:"-"`        // 底层错误（不序列化）
+}
+
+func (e *ArgusStartError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("argus [%s]: %s: %v", e.Phase, e.Reason, e.Err)
+	}
+	return fmt.Sprintf("argus [%s]: %s", e.Phase, e.Reason)
+}
+
+func (e *ArgusStartError) Unwrap() error { return e.Err }
+
+// BinaryCheckResult 二进制检查结果。
+type BinaryCheckResult struct {
+	Status   string `json:"status"`   // "available" | "not_found" | "not_executable"
+	Path     string `json:"path"`     // 检查的路径
+	Recovery string `json:"recovery"` // 恢复指引（仅失败时非空）
+}
+
+// CheckBinary 检查指定路径的二进制状态，返回结构化结果。
+func CheckBinary(binaryPath string) BinaryCheckResult {
+	if binaryPath == "" {
+		return BinaryCheckResult{Status: "not_found", Path: "", Recovery: "No Argus binary path configured. Install argus-sensory or set $ARGUS_BINARY_PATH."}
+	}
+	info, err := os.Stat(binaryPath)
+	if err != nil {
+		return BinaryCheckResult{Status: "not_found", Path: binaryPath, Recovery: fmt.Sprintf("Binary not found at %s. Install argus-sensory or check $ARGUS_BINARY_PATH.", binaryPath)}
+	}
+	if info.IsDir() || info.Mode().Perm()&0111 == 0 {
+		return BinaryCheckResult{Status: "not_executable", Path: binaryPath, Recovery: fmt.Sprintf("Binary at %s is not executable. Run: chmod +x %s", binaryPath, binaryPath)}
+	}
+	return BinaryCheckResult{Status: "available", Path: binaryPath}
+}
 
 // ---------- 常量 ----------
 
@@ -438,13 +479,30 @@ func (b *Bridge) Stop() {
 	b.mu.Unlock()
 }
 
-// IsAvailable 检查 Argus 二进制是否存在于指定路径。
+// ResolveBinary 在 PATH 中搜索指定名称的可执行文件。
+// 成功返回绝对路径，失败返回错误。
+func ResolveBinary(name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("argus: empty binary name")
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", fmt.Errorf("argus: binary %q not found in PATH: %w", name, err)
+	}
+	return path, nil
+}
+
+// IsAvailable 检查 Argus 二进制是否存在于指定路径且具有可执行权限。
 func IsAvailable(binaryPath string) bool {
 	if binaryPath == "" {
 		return false
 	}
-	_, err := os.Stat(binaryPath)
-	return err == nil
+	info, err := os.Stat(binaryPath)
+	if err != nil {
+		return false
+	}
+	// 排除目录 + 检查至少一个执行位
+	return !info.IsDir() && info.Mode().Perm()&0111 != 0
 }
 
 // ---------- 辅助 ----------

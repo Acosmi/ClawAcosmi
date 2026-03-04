@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/gateway"
+	"github.com/Acosmi/ClawAcosmi/internal/gateway"
 	"github.com/spf13/cobra"
 )
 

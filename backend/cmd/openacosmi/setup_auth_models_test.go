@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- setup_auth_models.go tests ----------
@@ -45,9 +45,9 @@ func TestBuildMinimaxAPIModelDef(t *testing.T) {
 
 // ---------- setup_auth_config_minimax.go tests ----------
 
-func TestApplyMinimaxProviderConfig(t *testing.T) {
+func TestApplyMinimaxLMStudioProviderConfig(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyMinimaxProviderConfig(cfg)
+	ApplyMinimaxLMStudioProviderConfig(cfg)
 
 	// lmstudio provider 应存在
 	p := cfg.Models.Providers["lmstudio"]
@@ -108,9 +108,9 @@ func TestApplyMinimaxApiProviderConfig(t *testing.T) {
 	}
 }
 
-func TestApplyMinimaxConfig_SetsDefault(t *testing.T) {
+func TestApplyMinimaxLMStudioConfig_SetsDefault(t *testing.T) {
 	cfg := &types.OpenAcosmiConfig{}
-	ApplyMinimaxConfig(cfg)
+	ApplyMinimaxLMStudioConfig(cfg)
 
 	if cfg.Agents == nil || cfg.Agents.Defaults == nil || cfg.Agents.Defaults.Model == nil {
 		t.Fatal("defaults.model not set")

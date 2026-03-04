@@ -3,7 +3,7 @@ package telegram
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestResolveTableMode_NilConfig(t *testing.T) {

@@ -3,8 +3,8 @@ package reply
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/agent-runner-payloads.ts (122L)
@@ -90,7 +90,10 @@ func sanitizePayloads(payloads []autoreply.ReplyPayload, isHeartbeat bool, didLo
 			*didLog = true
 		}
 
-		hasMedia := p.MediaURL != "" || len(p.MediaURLs) > 0
+		hasMedia := p.MediaURL != "" ||
+			len(p.MediaURLs) > 0 ||
+			len(p.MediaItems) > 0 ||
+			p.MediaBase64 != ""
 		if stripped.ShouldSkip && !hasMedia {
 			continue
 		}
@@ -114,6 +117,9 @@ func isRenderablePayload(p autoreply.ReplyPayload) bool {
 		return true
 	}
 	if p.MediaBase64 != "" {
+		return true
+	}
+	if len(p.MediaItems) > 0 {
 		return true
 	}
 	return false

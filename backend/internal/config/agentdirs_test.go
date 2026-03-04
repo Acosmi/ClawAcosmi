@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestNormalizeAgentID(t *testing.T) {

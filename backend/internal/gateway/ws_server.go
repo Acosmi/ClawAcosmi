@@ -6,17 +6,16 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
 )
 
 // ---------- 服务端 WebSocket 处理器 ----------
@@ -104,7 +103,6 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 	connID := uuid.NewString()
 	var registered bool
 	var writeMu sync.Mutex
-	var bufferedBytes atomic.Int64
 
 	// 关闭清理
 	defer func() {
@@ -121,12 +119,7 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 		writeMu.Lock()
 		defer writeMu.Unlock()
 		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		err := conn.WriteMessage(websocket.TextMessage, data)
-		if err != nil {
-			return err
-		}
-		bufferedBytes.Add(int64(len(data)))
-		return nil
+		return conn.WriteMessage(websocket.TextMessage, data)
 	}
 
 	sendJSON := func(v interface{}) error {
@@ -383,7 +376,7 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 		ClientIP:       ResolveGatewayClientIP(r.RemoteAddr, GetHeader(r, "X-Forwarded-For"), GetHeader(r, "X-Real-IP"), cfg.TrustedProxies),
 		Send:           sendRaw,
 		Close:          func(code int, reason string) error { return conn.Close() },
-		BufferedAmount: func() int64 { return bufferedBytes.Load() },
+		BufferedAmount: func() int64 { return 0 }, // 写超时已兜底，不再用累计字节
 	}
 	cfg.State.Broadcaster().AddClient(client)
 	cfg.State.Broadcaster().Broadcast("presence.changed", nil, nil)
@@ -392,17 +385,26 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 	// ---------- Phase 5: 请求-响应循环 ----------
 	// ping 保活
 	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	pingDone := make(chan struct{})
+	defer func() {
+		ticker.Stop()
+		close(pingDone) // 通知 goroutine 退出
+	}()
 
 	go func() {
-		for range ticker.C {
-			writeMu.Lock()
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				writeMu.Unlock()
+		for {
+			select {
+			case <-pingDone:
 				return
+			case <-ticker.C:
+				writeMu.Lock()
+				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					writeMu.Unlock()
+					return
+				}
+				writeMu.Unlock()
 			}
-			writeMu.Unlock()
 		}
 	}()
 

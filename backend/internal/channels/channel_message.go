@@ -46,11 +46,21 @@ type ChannelAttachment struct {
 	DataURL string
 }
 
+// ChannelMediaItem 渠道回复媒体项（二进制 + MIME）。
+type ChannelMediaItem struct {
+	Data     []byte
+	MimeType string
+}
+
 // DispatchReply 多模态分发回复（支持文本 + 媒体）。
 type DispatchReply struct {
-	Text          string // 文本回复
-	MediaData     []byte // 二进制媒体（可选）
-	MediaMimeType string // MIME 类型（可选）
+	Text string // 文本回复
+	// MediaItems 媒体列表（新增，多媒体回复优先使用该字段）。
+	MediaItems []ChannelMediaItem
+	// 兼容字段：保留第一项媒体数据。
+	MediaData []byte
+	// 兼容字段：保留第一项媒体 MIME。
+	MediaMimeType string
 }
 
 // DispatchMultimodalFunc 多模态消息分发回调类型。

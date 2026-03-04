@@ -9,8 +9,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // DiscordInboundMessage 预处理后的入站消息

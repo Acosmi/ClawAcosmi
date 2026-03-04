@@ -1,7 +1,7 @@
 package signal
 
 import (
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Signal 反应级别策略 — 继承自 src/signal/reaction-level.ts (72L)

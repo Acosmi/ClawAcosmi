@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Signal 账户解析 — 继承自 src/signal/accounts.ts (92L)

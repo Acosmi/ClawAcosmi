@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/agent-runner-execution.ts L146-465
@@ -108,7 +108,8 @@ func (e *ModelFallbackExecutor) RunTurn(ctx context.Context, params AgentTurnPar
 				AuthProfileIDSource: resolveAuthProfileIDSource(run, fbProvider),
 				ThinkLevel:          string(run.ThinkLevel),
 				TimeoutMs:           int64(run.TimeoutMs),
-				RunID:               "", // 由 RunEmbeddedPiAgent 生成
+				RunID:               run.RunID, // Bug#11: 从 FollowupRunParams 传递，确保全链路可追踪
+				SuppressTranscript:  true,      // Bug#11: fallback 场景跳过 transcript 持久化，避免失败 attempt 污染历史
 				FallbackModels:      fallbacksOverride,
 				OnPermissionDenied:  e.OnPermissionDenied,
 				WaitForApproval:     e.WaitForApproval,
@@ -146,10 +147,21 @@ func convertEmbeddedResult(result *runner.EmbeddedPiRunResult, provider, model s
 	// 转换 payloads
 	var payloads []autoreply.ReplyPayload
 	for _, p := range result.Payloads {
+		mediaItems := make([]autoreply.ReplyMediaItem, 0, len(p.MediaItems))
+		for _, item := range p.MediaItems {
+			if item.Base64 == "" {
+				continue
+			}
+			mediaItems = append(mediaItems, autoreply.ReplyMediaItem{
+				MediaBase64:   item.Base64,
+				MediaMimeType: item.MimeType,
+			})
+		}
 		payloads = append(payloads, autoreply.ReplyPayload{
 			Text:          p.Text,
 			MediaURL:      p.MediaURL,
 			MediaURLs:     p.MediaURLs,
+			MediaItems:    mediaItems,
 			MediaBase64:   p.MediaBase64,
 			MediaMimeType: p.MediaMimeType,
 			IsError:       p.IsError,

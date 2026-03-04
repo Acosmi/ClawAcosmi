@@ -13,10 +13,11 @@ package gateway
 
 import (
 	"context"
+	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
 )
 
 // MemoryHandlers 返回 memory.* 直接操作方法映射。
@@ -131,6 +132,14 @@ func handleMemoryGet(ctx *MethodHandlerContext) {
 		mem.UserID, string(mem.MemoryType), string(mem.Category), mem.ID, level,
 	)
 	if vfsErr == nil && content != "" {
+		if level == 1 {
+			// 兼容历史数据：若 L1 比 L2 还“完整”，按 L2 长度约束概要，避免层级语义反转。
+			if full, fullErr := mgr.ReadVFSContent(
+				mem.UserID, string(mem.MemoryType), string(mem.Category), mem.ID, 2,
+			); fullErr == nil && full != "" {
+				content = normalizeOverviewByFull(content, full)
+			}
+		}
 		result["vfsContent"] = content
 		result["vfsLevel"] = level
 	}
@@ -469,4 +478,42 @@ func memoryToMap(m *uhms.Memory) map[string]interface{} {
 	}
 
 	return result
+}
+
+func normalizeOverviewByFull(overview, full string) string {
+	overview = strings.TrimSpace(overview)
+	full = strings.TrimSpace(full)
+	if overview == "" || full == "" {
+		return overview
+	}
+
+	fullRunes := len([]rune(full))
+	if fullRunes == 0 {
+		return overview
+	}
+	overviewRunes := len([]rune(overview))
+	if overviewRunes <= fullRunes {
+		return overview
+	}
+
+	// 概要不应比完整层更长：按 full 大小截取一个上限（最多 1200 rune）。
+	maxOverview := fullRunes
+	if maxOverview > 1200 {
+		maxOverview = 1200
+	}
+	if maxOverview < 80 {
+		maxOverview = fullRunes
+	}
+	return truncateRunes(overview, maxOverview)
+}
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }

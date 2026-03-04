@@ -1,8 +1,8 @@
 package reply
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
 )
 
 // TS 对照: auto-reply/reply/agent-runner-memory.ts (203L)

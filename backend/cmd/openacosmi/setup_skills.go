@@ -12,10 +12,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/skills"
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/skills"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 辅助函数 ----------

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 	"github.com/bwmarrin/discordgo"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
 )
 
 // ── Test Helpers ──

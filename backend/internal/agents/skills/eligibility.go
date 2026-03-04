@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // 默认配置值

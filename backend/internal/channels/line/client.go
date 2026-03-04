@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels/ratelimit"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/ratelimit"
 )
 
 // ---------- 客户端 ----------

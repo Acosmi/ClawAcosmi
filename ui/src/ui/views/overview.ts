@@ -22,6 +22,7 @@ export type OverviewProps = {
   onConnect: () => void;
   onRefresh: () => void;
   onStartWizard: () => void;
+  onStartWizardV2?: () => void;
 };
 
 export function renderOverview(props: OverviewProps) {
@@ -52,7 +53,7 @@ export function renderOverview(props: OverviewProps) {
           <div style="margin-top: 6px">
             <a
               class="session-link"
-              href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web"
+              href="https://github.com/Acosmi/ClawAcosmi/tree/main/docs/skills/web"
               target="_blank"
               rel="noreferrer"
               title=${t("overview.docsControlUiAuthTitle")}
@@ -68,7 +69,7 @@ export function renderOverview(props: OverviewProps) {
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web"
+            href="https://github.com/Acosmi/ClawAcosmi/tree/main/docs/skills/web"
             target="_blank"
             rel="noreferrer"
             title="Control UI auth docs (opens in new tab)"
@@ -101,7 +102,7 @@ export function renderOverview(props: OverviewProps) {
         <div style="margin-top: 6px">
           <a
             class="session-link"
-            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/gateway/tailscale"
+            href="https://github.com/Acosmi/ClawAcosmi/tree/main/docs/skills/gateway/tailscale"
             target="_blank"
             rel="noreferrer"
             title=${t("overview.docsTailscaleTitle")}
@@ -110,7 +111,7 @@ export function renderOverview(props: OverviewProps) {
           <span class="muted"> · </span>
           <a
             class="session-link"
-            href="https://github.com/Acosmi/Claw-Acismi/tree/main/docs/skills/web/control-ui"
+            href="https://github.com/Acosmi/ClawAcosmi/tree/main/docs/skills/web/control-ui"
             target="_blank"
             rel="noreferrer"
             title=${t("overview.docsInsecureHttpTitle")}
@@ -176,6 +177,7 @@ export function renderOverview(props: OverviewProps) {
           <button class="btn" @click=${() => props.onConnect()}>${t("overview.connect")}</button>
           <button class="btn" @click=${() => props.onRefresh()}>${t("overview.refresh")}</button>
           ${props.connected ? html`<button class="btn" @click=${() => props.onStartWizard()}>🧙 ${t("overview.startWizard")}</button>` : ""}
+          ${props.connected && props.onStartWizardV2 ? html`<button class="btn" style="background:#FF4D4F;border-color:#FF4D4F;" @click=${() => props.onStartWizardV2?.()}>🚀 体验新版向导 (V2)</button>` : ""}
           <span class="muted">${t("overview.connectHint")}</span>
         </div>
       </div>

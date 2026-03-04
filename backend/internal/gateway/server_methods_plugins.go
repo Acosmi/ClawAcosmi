@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	types "github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	types "github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // PluginConfigField 插件配置字段描述

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 消息分发 — 继承自 src/telegram/bot-message-dispatch.ts (358L)

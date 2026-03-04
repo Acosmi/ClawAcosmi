@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ---------- 工具输入 ----------

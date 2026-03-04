@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 func TestIsGoogleProvider(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ---------- Block Reply Coalescer ----------

@@ -3,7 +3,7 @@ package reply
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // TS 对照: auto-reply/reply/streaming-directives.ts (129L)

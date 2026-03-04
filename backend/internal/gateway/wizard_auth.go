@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
 )
 
 // ---------- 认证选择 ----------
@@ -33,8 +33,7 @@ type WizardAuthMethod struct {
 // 对应 cmd 层 setup_auth_options.go 的 authChoiceGroupDefs
 func getWizardAuthGroups() []WizardAuthGroup {
 	return []WizardAuthGroup{
-		{"openai", "OpenAI", "Codex OAuth + API key", []WizardAuthMethod{
-			{"openai-codex", "OpenAI Codex (ChatGPT OAuth)", ""},
+		{"openai", "OpenAI", "API key", []WizardAuthMethod{
 			{"openai-api-key", "OpenAI API key", ""},
 		}},
 		{"anthropic", "Anthropic", "setup-token + API key", []WizardAuthMethod{
@@ -228,7 +227,6 @@ func resolveProviderForAuthChoice(authChoice string) string {
 	mapping := map[string]string{
 		"apiKey":                        "anthropic",
 		"token":                         "anthropic",
-		"openai-codex":                  "openai",
 		"openai-api-key":                "openai",
 		"gemini-api-key":                "google",
 		"google-antigravity":            "google",

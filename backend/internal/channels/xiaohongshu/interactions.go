@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // ---------- 互动管理接口 ----------

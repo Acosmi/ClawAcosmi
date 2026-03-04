@@ -18,9 +18,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/gateway"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/gateway"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 类型定义 ----------

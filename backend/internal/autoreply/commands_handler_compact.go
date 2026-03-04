@@ -56,18 +56,31 @@ func HandleCompactCommand(ctx context.Context, params *HandleCommandsParams, all
 		}
 	}
 
-	if params.SessionUpdater == nil {
+	// CompactFn 是 /compact 的核心依赖，优先检查
+	if params.CompactFn == nil {
 		return &CommandHandlerResult{
 			ShouldContinue: false,
-			Reply:          &ReplyPayload{Text: "⚠️ Session store not available."},
+			Reply:          &ReplyPayload{Text: "⚠️ Compression not available in current mode."},
 		}, nil
 	}
 
-	// 执行压缩
-	replyText := fmt.Sprintf("🗜️ Compacting session (%s mode)...", mode)
+	original, compressed, err := params.CompactFn(ctx, params.SessionKey, mode)
+	if err != nil {
+		return &CommandHandlerResult{
+			ShouldContinue: false,
+			Reply:          &ReplyPayload{Text: fmt.Sprintf("⚠️ Compression failed: %s", err.Error())},
+		}, nil
+	}
+
+	if original == compressed {
+		return &CommandHandlerResult{
+			ShouldContinue: false,
+			Reply:          &ReplyPayload{Text: fmt.Sprintf("✅ Context is within threshold (%d messages). No compression needed.", original)},
+		}, nil
+	}
 
 	return &CommandHandlerResult{
 		ShouldContinue: false,
-		Reply:          &ReplyPayload{Text: replyText},
+		Reply:          &ReplyPayload{Text: fmt.Sprintf("🗜️ Compressed: %d → %d messages.", original, compressed)},
 	}, nil
 }

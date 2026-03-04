@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
 )
 
 // SkillDistributeResult 技能分级结果。

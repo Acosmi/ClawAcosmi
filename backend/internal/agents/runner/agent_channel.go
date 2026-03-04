@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 
 	"github.com/google/uuid"
 )
@@ -278,6 +278,37 @@ func RequestHelpToolDef() llmclient.ToolDef {
 		}
 	},
 	"required": ["question"]
+}`),
+	}
+}
+
+// ReportProgressToolDef 返回 report_progress 的 LLM 工具定义。
+// 智能体使用此工具主动汇报中间进度，实时推送到前端和远程渠道。
+func ReportProgressToolDef() llmclient.ToolDef {
+	return llmclient.ToolDef{
+		Name: "report_progress",
+		Description: `Report intermediate progress to the user. Use this tool proactively during long-running tasks to keep the user informed:
+- After completing a significant step (e.g., finished reading files, built the code, ran tests)
+- When starting a new phase of work
+- When encountering delays or waiting for resources
+The report is non-blocking — the message is broadcast immediately and you continue working.`,
+		InputSchema: json.RawMessage(`{
+	"type": "object",
+	"properties": {
+		"summary": {
+			"type": "string",
+			"description": "Brief progress summary (≤300 chars). Example: 'Completed code analysis, found 3 issues. Starting fixes now.'"
+		},
+		"percent": {
+			"type": "integer",
+			"description": "Estimated completion percentage (0-100, optional). Omit if hard to estimate."
+		},
+		"phase": {
+			"type": "string",
+			"description": "Current work phase (optional). Example: 'analyzing', 'implementing', 'testing', 'reviewing'."
+		}
+	},
+	"required": ["summary"]
 }`),
 	}
 }

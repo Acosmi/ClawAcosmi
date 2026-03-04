@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // iMessage CLI 可用性探测 — 继承自 src/imessage/probe.ts (107L)

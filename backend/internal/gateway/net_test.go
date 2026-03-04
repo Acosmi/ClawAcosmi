@@ -110,6 +110,24 @@ func TestResolveGatewayClientIP(t *testing.T) {
 	}
 }
 
+func TestResolveGatewayClientIP_StripPort(t *testing.T) {
+	// remoteAddr 带端口，trusted proxy 不带端口 → 应正确匹配代理并返回 forwarded IP
+	ip := ResolveGatewayClientIP("192.168.1.1:54321", "10.0.0.1", "", []string{"192.168.1.1"})
+	if ip != "10.0.0.1" {
+		t.Errorf("expected forwarded IP, got %q", ip)
+	}
+	// 非 trusted proxy 场景，返回不带端口的 IP
+	ip2 := ResolveGatewayClientIP("203.0.113.5:8080", "", "", nil)
+	if ip2 != "203.0.113.5" {
+		t.Errorf("expected stripped IP, got %q", ip2)
+	}
+	// IPv6 带端口
+	ip3 := ResolveGatewayClientIP("[::1]:9999", "", "", nil)
+	if ip3 != "::1" {
+		t.Errorf("expected ::1, got %q", ip3)
+	}
+}
+
 func TestIsValidIPv4(t *testing.T) {
 	cases := []struct {
 		ip   string

@@ -6,7 +6,7 @@ package tools
 import (
 	"context"
 
-	"github.com/openacosmi/claw-acismi/internal/channels/bridge"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/bridge"
 )
 
 // SlackActionsToolDeps Slack 工具所需的外部依赖。

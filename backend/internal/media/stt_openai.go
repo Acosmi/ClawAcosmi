@@ -14,7 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // OpenAISTT OpenAI Whisper API 实现

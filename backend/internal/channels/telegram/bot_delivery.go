@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // Telegram 回复投递 — 继承自 src/telegram/bot/delivery.ts (563L)

@@ -11,7 +11,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // RuleMatchResult 规则匹配结果。

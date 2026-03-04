@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // ---------- 类型定义 ----------

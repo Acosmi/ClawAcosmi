@@ -154,6 +154,7 @@ type ChatRequest struct {
 	ThinkLevel   string        // "off" | "low" | "medium" | "high"
 	TimeoutMs    int64         // 超时毫秒
 	APIKey       string        // API Key
+	AuthMode     string        // "oauth" = Bearer token; "" | "key" = API key header
 	BaseURL      string        // 自定义 API Base URL（可选）
 	Temperature  *float64      // 可选温度
 }

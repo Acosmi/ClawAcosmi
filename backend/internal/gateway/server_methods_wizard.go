@@ -7,9 +7,9 @@ package gateway
 // 方法: wizard.start, wizard.next, wizard.cancel, wizard.status
 
 import (
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
 	"github.com/google/uuid"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/config"
 )
 
 // WizardHandlerDeps wizard handler 依赖。

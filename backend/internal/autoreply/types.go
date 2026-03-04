@@ -4,6 +4,12 @@ import "context"
 
 // TS 对照: auto-reply/types.ts
 
+// ReplyMediaItem 回复媒体项（base64 + MIME）。
+type ReplyMediaItem struct {
+	MediaBase64   string `json:"mediaBase64,omitempty"`
+	MediaMimeType string `json:"mediaMimeType,omitempty"`
+}
+
 // BlockReplyContext 阻塞回复上下文。
 // TS 对照: types.ts L4-7
 type BlockReplyContext struct {
@@ -22,17 +28,18 @@ type ModelSelectedContext struct {
 // ReplyPayload 回复载荷。
 // TS 对照: types.ts L46-59
 type ReplyPayload struct {
-	Text           string         `json:"text,omitempty"`
-	MediaURL       string         `json:"mediaUrl,omitempty"`
-	MediaURLs      []string       `json:"mediaUrls,omitempty"`
-	MediaBase64    string         `json:"mediaBase64,omitempty"`
-	MediaMimeType  string         `json:"mediaMimeType,omitempty"`
-	ReplyToID      string         `json:"replyToId,omitempty"`
-	ReplyToTag     bool           `json:"replyToTag,omitempty"`
-	ReplyToCurrent bool           `json:"replyToCurrent,omitempty"`
-	AudioAsVoice   bool           `json:"audioAsVoice,omitempty"`
-	IsError        bool           `json:"isError,omitempty"`
-	ChannelData    map[string]any `json:"channelData,omitempty"`
+	Text           string           `json:"text,omitempty"`
+	MediaURL       string           `json:"mediaUrl,omitempty"`
+	MediaURLs      []string         `json:"mediaUrls,omitempty"`
+	MediaItems     []ReplyMediaItem `json:"mediaItems,omitempty"`
+	MediaBase64    string           `json:"mediaBase64,omitempty"`
+	MediaMimeType  string           `json:"mediaMimeType,omitempty"`
+	ReplyToID      string           `json:"replyToId,omitempty"`
+	ReplyToTag     bool             `json:"replyToTag,omitempty"`
+	ReplyToCurrent bool             `json:"replyToCurrent,omitempty"`
+	AudioAsVoice   bool             `json:"audioAsVoice,omitempty"`
+	IsError        bool             `json:"isError,omitempty"`
+	ChannelData    map[string]any   `json:"channelData,omitempty"`
 }
 
 // GetReplyOptions 获取回复选项。

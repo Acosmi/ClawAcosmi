@@ -6,6 +6,7 @@ package media
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -22,6 +23,8 @@ type MediaPromptParams struct {
 	Contract ContractFormatter
 	// RequesterSessionKey 请求方 session key。
 	RequesterSessionKey string
+	// State 持久化状态（可选，用于跨会话上下文注入）。
+	State *MediaState
 }
 
 // BuildMediaSystemPrompt 构建 oa-media 媒体运营子智能体完整系统提示词。
@@ -91,7 +94,9 @@ func writeCapabilities(b *strings.Builder) {
 	b.WriteString("| `web_fetch` | 获取并阅读网页内容 | ")
 	b.WriteString("需要读取特定 URL 作为参考时 |\n")
 	b.WriteString("| `image` | 生成内容配图 | ")
-	b.WriteString("为帖子创建视觉素材时 |\n\n")
+	b.WriteString("为帖子创建视觉素材时 |\n")
+	b.WriteString("| `report_progress` | 向用户汇报中间进度 | ")
+	b.WriteString("完成重要步骤、开始新阶段、或任务耗时较长时 |\n\n")
 }
 
 func writeContentGuidelines(b *strings.Builder) {
@@ -183,7 +188,9 @@ func writeToolUsage(b *strings.Builder) {
 	b.WriteString("  2. `web_search`（可选）→ 收集更多素材\n")
 	b.WriteString("  3. `image`（可选）→ 生成配图\n")
 	b.WriteString("  4. `content_compose` (draft) → 创建并保存草稿\n")
-	b.WriteString("  5. 回报草稿等待审批\n\n")
+	b.WriteString("  5. `report_progress` → 汇报草稿完成、等待审批\n")
+	b.WriteString("- **进度汇报**：任务耗时较长时，在完成关键步骤后用 `report_progress` 汇报进度，")
+	b.WriteString("让用户了解当前状态\n\n")
 }
 
 func writeQualityStandards(b *strings.Builder) {
@@ -256,5 +263,51 @@ func writeSessionContext(b *strings.Builder, p MediaPromptParams) {
 	if p.Contract != nil {
 		b.WriteString("\n")
 		b.WriteString(p.Contract.FormatForSystemPrompt())
+	}
+
+	// 跨会话持久状态注入
+	if p.State != nil {
+		writeStateContext(b, p.State)
+	}
+}
+
+// writeStateContext 将持久化状态注入系统提示词（跨会话记忆）。
+func writeStateContext(b *strings.Builder, state *MediaState) {
+	b.WriteString("\n### 跨会话记忆\n\n")
+
+	// 发布统计
+	if state.LastPublishedTitle != "" {
+		b.WriteString(fmt.Sprintf("- 上次发布: **%s**", state.LastPublishedTitle))
+		if state.LastPublishedAt != nil {
+			b.WriteString(fmt.Sprintf(" (%s)", state.LastPublishedAt.Format("2006-01-02 15:04")))
+		}
+		b.WriteString("\n")
+	}
+	total := 0
+	for _, c := range state.PublishCounts {
+		total += c
+	}
+	if total > 0 {
+		b.WriteString(fmt.Sprintf("- 累计发布: %d 篇", total))
+		// 排序 key 确保输出顺序稳定
+		platforms := make([]string, 0, len(state.PublishCounts))
+		for p := range state.PublishCounts {
+			platforms = append(platforms, p)
+		}
+		sort.Strings(platforms)
+		parts := make([]string, 0, len(platforms))
+		for _, p := range platforms {
+			parts = append(parts, fmt.Sprintf("%s:%d", p, state.PublishCounts[p]))
+		}
+		if len(parts) > 0 {
+			b.WriteString(fmt.Sprintf(" (%s)", strings.Join(parts, ", ")))
+		}
+		b.WriteString("\n")
+	}
+
+	// 已处理热点数量
+	if len(state.ProcessedTopics) > 0 {
+		b.WriteString(fmt.Sprintf("- 已处理热点: %d 个（fetch 结果中标记为 processed=true，请优先选择未处理的热点）\n",
+			len(state.ProcessedTopics)))
 	}
 }

@@ -3,7 +3,7 @@ package whatsapp
 import (
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // WhatsApp 心跳收件人解析 — 继承自 src/channels/plugins/whatsapp-heartbeat.ts (78L)

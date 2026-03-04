@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
 )
 
 // Discord 线程工具 — 继承自 src/discord/monitor/threading.ts (347L)

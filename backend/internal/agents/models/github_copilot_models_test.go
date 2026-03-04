@@ -3,14 +3,14 @@ package models
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestGetDefaultCopilotModelIDs(t *testing.T) {
 	ids := GetDefaultCopilotModelIDs()
 
-	if len(ids) != 7 {
-		t.Errorf("GetDefaultCopilotModelIDs() returned %d models, want 7", len(ids))
+	if len(ids) != 9 {
+		t.Errorf("GetDefaultCopilotModelIDs() returned %d models, want 9", len(ids))
 	}
 
 	// 验证不可变性 — 修改副本不影响源
@@ -22,11 +22,13 @@ func TestGetDefaultCopilotModelIDs(t *testing.T) {
 
 	// 验证包含核心模型
 	expected := map[string]bool{
-		"gpt-4o":       true,
-		"gpt-4.1":      true,
-		"gpt-4.1-mini": true,
-		"o1":           true,
-		"o3-mini":      true,
+		"claude-sonnet-4.6": true,
+		"claude-sonnet-4.5": true,
+		"gpt-4o":            true,
+		"gpt-4.1":           true,
+		"gpt-4.1-mini":      true,
+		"o1":                true,
+		"o3-mini":           true,
 	}
 	for _, id := range ids2 {
 		delete(expected, id)
@@ -71,8 +73,8 @@ func TestBuildCopilotModelDefinition(t *testing.T) {
 func TestBuildDefaultCopilotModels(t *testing.T) {
 	models := BuildDefaultCopilotModels()
 
-	if len(models) != 7 {
-		t.Errorf("BuildDefaultCopilotModels() returned %d models, want 7", len(models))
+	if len(models) != 9 {
+		t.Errorf("BuildDefaultCopilotModels() returned %d models, want 9", len(models))
 	}
 
 	// 每个模型应有正确的 API 类型

@@ -5,8 +5,8 @@ package tools
 import (
 	"context"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // CreateAgentsListTool 创建 agent 列表工具。

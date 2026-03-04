@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
 )
 
 // ---------- 设备配对管理 ----------

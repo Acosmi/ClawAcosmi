@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 	"github.com/google/uuid"
-	"github.com/openacosmi/claw-acismi/internal/infra"
 )
 
 // ---------- ContractPersistence ----------

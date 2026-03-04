@@ -3,7 +3,7 @@ package scope
 import (
 	"math"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Agent 超时 ----------

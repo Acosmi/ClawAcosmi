@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // PluginEnableChange 记录一个插件自动启用变更

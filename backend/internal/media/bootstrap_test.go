@@ -93,6 +93,107 @@ func TestNewMediaSubsystem_RegisterPublisher(t *testing.T) {
 	}
 }
 
+func TestNewMediaSubsystem_RegisterInteractor_Replace(t *testing.T) {
+	dir := t.TempDir()
+
+	sub, err := NewMediaSubsystem(MediaSubsystemConfig{
+		Workspace:      dir,
+		EnableInteract: true,
+	})
+	if err != nil {
+		t.Fatalf("NewMediaSubsystem: %v", err)
+	}
+
+	// Initially has tool but with nil interactor.
+	tool := sub.GetTool(ToolSocialInteract)
+	if tool == nil {
+		t.Fatal("social_interact tool should exist")
+	}
+
+	// Register real interactor — should replace the tool.
+	sub.RegisterInteractor(&mockInteractor{})
+	tool2 := sub.GetTool(ToolSocialInteract)
+	if tool2 == nil {
+		t.Fatal("social_interact tool should still exist after register")
+	}
+	if tool2 == tool {
+		t.Error("tool should have been replaced (different pointer)")
+	}
+}
+
+func TestNewMediaSubsystem_RegisterInteractor_Add(t *testing.T) {
+	dir := t.TempDir()
+
+	sub, err := NewMediaSubsystem(MediaSubsystemConfig{
+		Workspace:      dir,
+		EnableInteract: false, // not initially enabled
+	})
+	if err != nil {
+		t.Fatalf("NewMediaSubsystem: %v", err)
+	}
+
+	// Initially no social_interact tool.
+	if sub.GetTool(ToolSocialInteract) != nil {
+		t.Fatal("social_interact tool should not exist when disabled")
+	}
+
+	// Register interactor — should add the tool.
+	sub.RegisterInteractor(&mockInteractor{})
+	if sub.GetTool(ToolSocialInteract) == nil {
+		t.Fatal("social_interact tool should exist after RegisterInteractor")
+	}
+}
+
+func TestNewMediaSubsystem_PublishHistory(t *testing.T) {
+	dir := t.TempDir()
+
+	sub, err := NewMediaSubsystem(MediaSubsystemConfig{
+		Workspace:     dir,
+		EnablePublish: true,
+	})
+	if err != nil {
+		t.Fatalf("NewMediaSubsystem: %v", err)
+	}
+
+	if sub.PublishHistory == nil {
+		t.Fatal("PublishHistory should not be nil")
+	}
+
+	// Verify store works.
+	record := &PublishRecord{
+		DraftID:  "draft-001",
+		Title:    "Test",
+		Platform: PlatformWeChat,
+		Status:   "published",
+	}
+	if err := sub.PublishHistory.Save(record); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	records, err := sub.PublishHistory.List(nil)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(records) != 1 {
+		t.Errorf("expected 1 record, got %d", len(records))
+	}
+}
+
+func TestNewMediaSubsystem_PublishHistory_Disabled(t *testing.T) {
+	dir := t.TempDir()
+
+	sub, err := NewMediaSubsystem(MediaSubsystemConfig{
+		Workspace:     dir,
+		EnablePublish: false,
+	})
+	if err != nil {
+		t.Fatalf("NewMediaSubsystem: %v", err)
+	}
+
+	if sub.PublishHistory != nil {
+		t.Error("PublishHistory should be nil when EnablePublish=false")
+	}
+}
+
 func TestNewMediaSubsystem_DraftStore(t *testing.T) {
 	dir := t.TempDir()
 

@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Discord 引导适配器 — 继承自 src/channels/plugins/onboarding/discord.ts (495L)

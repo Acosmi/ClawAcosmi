@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // STTProvider 语音转文本 Provider 接口

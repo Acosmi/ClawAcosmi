@@ -15,9 +15,9 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/markdown"
-	"github.com/openacosmi/claw-acismi/pkg/retry"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/markdown"
+	"github.com/Acosmi/ClawAcosmi/pkg/retry"
 )
 
 // DiscordReplyOpts 回复选项

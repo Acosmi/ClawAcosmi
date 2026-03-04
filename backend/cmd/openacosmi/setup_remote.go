@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/internal/tui"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/tui"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 const defaultGatewayURL = "ws://127.0.0.1:19001"

@@ -10,7 +10,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
 )
 
 // AgentCommandSnapshot — agent.wait 返回的快照。

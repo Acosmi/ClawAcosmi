@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/argus"
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
-	"github.com/openacosmi/claw-acismi/internal/sandbox"
-	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/argus"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/sandbox"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
 )
 
 // ---------- 服务引导 ----------
@@ -155,11 +155,28 @@ func NewGatewayState() *GatewayState {
 	}
 
 	// 可选：初始化 Argus 视觉子智能体（仅二进制可用时）
-	argusPath := resolveArgusBinaryPath()
+	argusPath := resolveArgusBinaryPath("")
 	if argus.IsAvailable(argusPath) {
+		// ARGUS-007: 安装位标准化 — 在 ~/.openacosmi/bin/ 创建符号链接，
+		// 确保下次重启 resolver 的 "user_bin" 层可直接命中。
+		if err := argus.EnsureUserBinLink(argusPath); err != nil {
+			slog.Warn("argus: user bin link creation failed (non-fatal)",
+				"error", err, "binary", argusPath)
+		}
+
 		// 方案 B 兜底：裸二进制自动签名，确保 macOS TCC 授权持久化
 		if err := argus.EnsureCodeSigned(argusPath); err != nil {
-			slog.Debug("argus: code signing skipped (non-fatal)", "error", err)
+			slog.Warn("argus: code signing failed (non-fatal, TCC authorization may not persist)",
+				"error", err, "binary", argusPath, "phase", "codesign")
+		}
+
+		// TCC 权限预检（仅 macOS）
+		tccStatus := argus.CheckTCCPermissions()
+		if !tccStatus.HasRequiredPermissions() {
+			slog.Warn("argus: TCC permissions missing (Argus may fail to capture screen)",
+				"screen_recording", string(tccStatus.ScreenRecording),
+				"accessibility", string(tccStatus.Accessibility),
+				"recovery", tccStatus.Recovery())
 		}
 
 		cfg := argus.DefaultBridgeConfig()
@@ -176,10 +193,21 @@ func NewGatewayState() *GatewayState {
 		}
 		bridge := argus.NewBridge(cfg)
 		if err := bridge.Start(); err != nil {
-			slog.Warn("gateway: argus bridge start failed (non-fatal)", "error", err)
-		} else {
-			s.argusBridge = bridge
+			slog.Warn("gateway: argus bridge start failed (non-fatal, retained for retry)",
+				"error", err, "binary", argusPath, "phase", "start")
+			// 主动广播启动失败状态，确保前端感知（否则静默失败）
+			if bc := s.broadcaster; bc != nil {
+				bc.Broadcast("argus.status.changed", map[string]interface{}{
+					"state":    "stopped",
+					"reason":   err.Error(),
+					"phase":    "start",
+					"recovery": "Check argus-sensory binary and permissions. Try enabling from SubAgents panel.",
+					"ts":       time.Now().UnixMilli(),
+				}, nil)
+			}
 		}
+		// 无论启动是否成功都保留 bridge 实例，允许 UI 通过 subagent.ctl 重试
+		s.SetArgusBridge(bridge)
 	} else {
 		slog.Info("gateway: Argus binary not available, visual agent disabled")
 	}
@@ -238,6 +266,33 @@ func NewGatewayState() *GatewayState {
 	s.planConfirmMgr = runner.NewPlanConfirmationManager(
 		func(event string, payload interface{}) {
 			bc.Broadcast(event, payload, nil)
+		},
+		func(req runner.PlanConfirmationRequest, sessionKey string) {
+			// 远程通知：将方案确认卡片推送到非 Web 渠道（飞书等）
+			if s.remoteApprovalNotifier == nil {
+				return
+			}
+			// 从 sessionKey 提取 chatID（格式: "feishu:<chatID>"）
+			var chatID string
+			if strings.HasPrefix(sessionKey, "feishu:") {
+				chatID = strings.TrimPrefix(sessionKey, "feishu:")
+			}
+			// 获取 LastKnownUserID 用于私聊 fallback
+			var userID string
+			cfg := s.remoteApprovalNotifier.GetConfig()
+			if cfg.Feishu != nil {
+				userID = cfg.Feishu.LastKnownUserID
+			}
+			s.remoteApprovalNotifier.NotifyPlanConfirm(PlanConfirmCardRequest{
+				ConfirmID:        req.ID,
+				TaskBrief:        req.TaskBrief,
+				PlanSteps:        req.PlanSteps,
+				IntentTier:       req.IntentTier,
+				SessionKey:       sessionKey,
+				OriginatorChatID: chatID,
+				OriginatorUserID: userID,
+				TTLMinutes:       5,
+			})
 		},
 		5*time.Minute,
 	)
@@ -342,13 +397,25 @@ func (s *GatewayState) StopSandbox() {
 	}
 }
 
-// ArgusBridge 返回 Argus 视觉子智能体 Bridge（可能为 nil）。
-func (s *GatewayState) ArgusBridge() *argus.Bridge { return s.argusBridge }
+// ArgusBridge 返回 Argus 视觉子智能体 Bridge（可能为 nil，并发安全）。
+func (s *GatewayState) ArgusBridge() *argus.Bridge {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.argusBridge
+}
+
+// SetArgusBridge 设置 Argus Bridge（并发安全，用于运行时 UI 重试创建）。
+func (s *GatewayState) SetArgusBridge(b *argus.Bridge) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.argusBridge = b
+}
 
 // StopArgus 优雅关闭 Argus 子智能体。
 func (s *GatewayState) StopArgus() {
-	if s.argusBridge != nil {
-		s.argusBridge.Stop()
+	b := s.ArgusBridge()
+	if b != nil {
+		b.Stop()
 	}
 }
 
@@ -427,35 +494,110 @@ func (s *GatewayState) ResultApprovalMgr() *runner.ResultApprovalManager {
 
 // resolveArgusBinaryPath 解析 Argus 二进制路径。
 //
-// 优先级:
+// 优先级 (ARGUS-003 统一顺序):
 //  1. $ARGUS_BINARY_PATH（显式覆盖）
-//  2. .app bundle 内已签名二进制（方案 A — 授权持久化最佳路径）
-//  3. ~/.openacosmi/bin/argus-sensory（裸二进制，macOS 自动签名兜底）
-//  4. argus-sensory（PATH 查找，macOS 自动签名兜底）
-func resolveArgusBinaryPath() string {
+//  2. subAgents.screenObserver.binaryPath 配置字段（ARGUS-002: 持久化配置）
+//  3. .app bundle 内已签名二进制（方案 A — 授权持久化最佳路径）
+//  4. ~/.openacosmi/bin/argus-sensory（裸二进制，macOS 自动签名兜底）
+//  5. argus-sensory（PATH 查找，macOS 自动签名兜底）
+func resolveArgusBinaryPath(configBinaryPath string) string {
+	path, _ := resolveArgusBinaryPathWithError(configBinaryPath)
+	return path
+}
+
+// ResolveTrace 路径解析追踪条目（ARGUS-004: 一键诊断用）。
+type ResolveTrace struct {
+	Layer string `json:"layer"` // "env" | "config" | "app_bundle" | "user_bin" | "path"
+	Path  string `json:"path"`
+	Found bool   `json:"found"`
+}
+
+// ResolveResult 统一的二进制解析结果（ARGUS-003/004）。
+type ResolveResult struct {
+	Path  string                 `json:"path"`
+	Trace []ResolveTrace         `json:"trace"`
+	Error *argus.ArgusStartError `json:"error,omitempty"`
+}
+
+// resolveArgusBinaryPathWithError 解析 Argus 二进制路径，失败时返回结构化错误。
+func resolveArgusBinaryPathWithError(configBinaryPath string) (string, *argus.ArgusStartError) {
+	result := resolveArgusBinaryFull(configBinaryPath)
+	return result.Path, result.Error
+}
+
+// resolveArgusBinaryFull 完整解析 Argus 二进制路径，包含每层 trace（供 argus.diagnose 使用）。
+func resolveArgusBinaryFull(configBinaryPath string) ResolveResult {
+	var trace []ResolveTrace
+
 	// 1. 环境变量显式指定
 	if v := os.Getenv("ARGUS_BINARY_PATH"); v != "" {
-		return v
+		if _, err := os.Stat(v); err != nil {
+			slog.Warn("argus: $ARGUS_BINARY_PATH points to invalid path",
+				"path", v, "error", err)
+			trace = append(trace, ResolveTrace{Layer: "env", Path: v, Found: false})
+			return ResolveResult{
+				Trace: trace,
+				Error: &argus.ArgusStartError{
+					Phase:    "resolve",
+					Reason:   "env_path_invalid",
+					Recovery: fmt.Sprintf("$ARGUS_BINARY_PATH=%s does not exist. Fix the path or unset the variable.", v),
+					Err:      err,
+				},
+			}
+		}
+		trace = append(trace, ResolveTrace{Layer: "env", Path: v, Found: true})
+		return ResolveResult{Path: v, Trace: trace}
 	}
 
-	// 2. 方案 A：优先使用 .app bundle 内二进制（已持久化签名，TCC 授权不丢失）
+	// 2. 配置层 binaryPath（ARGUS-002: subAgents.screenObserver.binaryPath）
+	if configBinaryPath != "" {
+		if _, err := os.Stat(configBinaryPath); err == nil {
+			trace = append(trace, ResolveTrace{Layer: "config", Path: configBinaryPath, Found: true})
+			slog.Info("argus: using configured binaryPath (persistent)",
+				"path", configBinaryPath)
+			return ResolveResult{Path: configBinaryPath, Trace: trace}
+		}
+		slog.Warn("argus: configured binaryPath invalid, trying next layer",
+			"path", configBinaryPath)
+		trace = append(trace, ResolveTrace{Layer: "config", Path: configBinaryPath, Found: false})
+	}
+
+	// 3. 方案 A：优先使用 .app bundle 内二进制（已持久化签名，TCC 授权不丢失）
 	if bundleBin := argus.FindAppBundleBinary(); bundleBin != "" {
 		slog.Info("argus: using .app bundle binary (persistent authorization)",
 			"path", bundleBin)
-		return bundleBin
+		trace = append(trace, ResolveTrace{Layer: "app_bundle", Path: bundleBin, Found: true})
+		return ResolveResult{Path: bundleBin, Trace: trace}
 	}
+	trace = append(trace, ResolveTrace{Layer: "app_bundle", Path: "(candidates searched)", Found: false})
 
-	// 3. 用户级安装
+	// 4. 用户级安装
 	home, err := os.UserHomeDir()
 	if err == nil {
 		candidate := home + "/.openacosmi/bin/argus-sensory"
 		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+			trace = append(trace, ResolveTrace{Layer: "user_bin", Path: candidate, Found: true})
+			return ResolveResult{Path: candidate, Trace: trace}
 		}
+		trace = append(trace, ResolveTrace{Layer: "user_bin", Path: candidate, Found: false})
 	}
 
-	// 4. PATH 查找
-	return "argus-sensory"
+	// 5. PATH 查找（ARGUS-005: 使用 exec.LookPath 搜索并返回绝对路径）
+	if resolved, err := argus.ResolveBinary("argus-sensory"); err == nil {
+		trace = append(trace, ResolveTrace{Layer: "path", Path: resolved, Found: true})
+		return ResolveResult{Path: resolved, Trace: trace}
+	}
+	trace = append(trace, ResolveTrace{Layer: "path", Path: "argus-sensory", Found: false})
+
+	// 未找到任何可用二进制
+	return ResolveResult{
+		Trace: trace,
+		Error: &argus.ArgusStartError{
+			Phase:    "resolve",
+			Reason:   "binary_not_found",
+			Recovery: "Install argus-sensory: place it in ~/.openacosmi/bin/ or add to PATH, or set $ARGUS_BINARY_PATH, or configure subAgents.screenObserver.binaryPath.",
+		},
+	}
 }
 
 // resolveNativeSandboxBinaryPath 解析原生沙箱 CLI 二进制路径。

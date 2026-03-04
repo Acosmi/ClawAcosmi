@@ -13,10 +13,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/agents/workspace"
-	"github.com/openacosmi/claw-acismi/internal/sessions"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/workspace"
+	"github.com/Acosmi/ClawAcosmi/internal/sessions"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // AgentsHandlers 返回 agents.* 方法处理器映射。

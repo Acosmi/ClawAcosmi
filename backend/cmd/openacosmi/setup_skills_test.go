@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 func TestSummarizeInstallFailure(t *testing.T) {

@@ -7,7 +7,7 @@ package main
 // 注：Moonshot/xAI/Qianfan 常量已在 setup_auth_config.go 中定义（私有），
 // 此文件仅补充 Minimax 特有的常量和构建器。
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 // ---------- Minimax 三模式常量 ----------
 

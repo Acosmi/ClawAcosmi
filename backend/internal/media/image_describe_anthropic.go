@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // AnthropicImageDescriber Anthropic 原生图片理解实现

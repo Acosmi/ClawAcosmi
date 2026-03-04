@@ -173,6 +173,8 @@ func (m *CoderConfirmationManager) RequestConfirmation(ctx context.Context, tool
 
 // ResolveConfirmation 处理前端的确认决策回调。
 // 由 WebSocket RPC "coder.confirm.resolve" 调用。
+// 幂等性设计：双渠道（Web + 飞书）可能同时 resolve 同一 ID，
+// 第二个调用静默成功（非 error），确保调用方无需处理竞态。
 func (m *CoderConfirmationManager) ResolveConfirmation(id, decision string) error {
 	if decision != "allow" && decision != "deny" {
 		return fmt.Errorf("invalid decision: %q (expected allow/deny)", decision)
@@ -180,10 +182,18 @@ func (m *CoderConfirmationManager) ResolveConfirmation(id, decision string) erro
 
 	m.mu.Lock()
 	ch, ok := m.pending[id]
+	if ok {
+		delete(m.pending, id) // 先删除，确保第二个 resolve 看到 not found
+	}
 	m.mu.Unlock()
 
 	if !ok {
-		return fmt.Errorf("no pending confirmation with id: %s", id)
+		// 幂等性：已被另一个渠道 resolve，属于正常竞态
+		slog.Debug("coder confirmation already resolved (idempotent)",
+			"id", id,
+			"decision", decision,
+		)
+		return nil
 	}
 
 	// 非阻塞写入（channel 有 1 缓冲）
@@ -194,7 +204,8 @@ func (m *CoderConfirmationManager) ResolveConfirmation(id, decision string) erro
 			"decision", decision,
 		)
 	default:
-		// channel 已被写入（超时或重复调用），忽略
+		// channel 已被写入（超时先触发），忽略
+		slog.Debug("coder confirmation channel already written", "id", id)
 	}
 
 	return nil

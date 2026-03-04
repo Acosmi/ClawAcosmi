@@ -6,7 +6,7 @@ package main
 // OpenAcosmi Zen 使用内建 provider（不需要配置 baseUrl/apiKey），
 // 只需在 config 中 seed allowlist alias 和设置 default model。
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 // ApplyAcosmiZenProviderConfig 注册 OpenAcosmi Zen provider（仅 alias，无 API 配置）。
 // 对应 TS: applyOpencodeZenProviderConfig (config-opencode.ts L4-22)。

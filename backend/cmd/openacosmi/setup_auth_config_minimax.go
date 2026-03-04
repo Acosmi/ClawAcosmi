@@ -8,13 +8,13 @@ package main
 //   2. Minimax 官方 OpenAI 兼容 API (applyMinimaxHostedProviderConfig)
 //   3. Minimax Anthropic 兼容 API (applyMinimaxApiProviderConfig)
 
-import "github.com/openacosmi/claw-acismi/pkg/types"
+import "github.com/Acosmi/ClawAcosmi/pkg/types"
 
 // ---------- Mode 1: LM Studio 本地部署 ----------
 
-// ApplyMinimaxProviderConfig 注册 LM Studio + Minimax 本地部署模式。
+// ApplyMinimaxLMStudioProviderConfig 注册 LM Studio + Minimax 本地部署模式。
 // 对应 TS: applyMinimaxProviderConfig (config-minimax.ts L15-59)。
-func ApplyMinimaxProviderConfig(cfg *types.OpenAcosmiConfig) {
+func ApplyMinimaxLMStudioProviderConfig(cfg *types.OpenAcosmiConfig) {
 	setModelAlias(cfg, "anthropic/claude-opus-4-6", "Opus")
 	setModelAlias(cfg, minimaxLMStudioModelRef, "Minimax")
 
@@ -30,10 +30,10 @@ func ApplyMinimaxProviderConfig(cfg *types.OpenAcosmiConfig) {
 	))
 }
 
-// ApplyMinimaxConfig Mode 1 + 设为默认模型。
+// ApplyMinimaxLMStudioConfig Mode 1 (LM Studio) + 设为默认模型。
 // 对应 TS: applyMinimaxConfig (config-minimax.ts L106-126)。
-func ApplyMinimaxConfig(cfg *types.OpenAcosmiConfig) {
-	ApplyMinimaxProviderConfig(cfg)
+func ApplyMinimaxLMStudioConfig(cfg *types.OpenAcosmiConfig) {
+	ApplyMinimaxLMStudioProviderConfig(cfg)
 	setDefaultModel(cfg, minimaxLMStudioModelRef)
 }
 

@@ -118,9 +118,10 @@ Summary:`, truncate(text, 6000))
 }
 
 // extractMemoriesFromTranscript uses LLM to extract structured memories.
+// Bug#11: 当 LLM 不可用时，降级到关键词启发式提取。
 func extractMemoriesFromTranscript(ctx context.Context, m *DefaultManager, text string) []extractedMemory {
 	if m.llm == nil {
-		return nil
+		return extractMemoriesHeuristic(text)
 	}
 
 	prompt := fmt.Sprintf(`Analyze this conversation and extract important memories.
@@ -147,8 +148,10 @@ JSON:`, truncate(text, 8000))
 		CommitExtractSystemPrompt,
 		prompt)
 	if err != nil {
-		slog.Debug("uhms/commit: extraction LLM failed", "error", err)
-		return nil
+		provider, model := m.LLMInfo()
+		slog.Warn("uhms/commit: extraction LLM failed, fallback to heuristic",
+			"error", err, "provider", provider, "model", model)
+		return extractMemoriesHeuristic(text)
 	}
 
 	return parseExtractedJSON(result)
@@ -210,4 +213,209 @@ func normalizeCategory(c string) MemoryCategory {
 		}
 	}
 	return CatFact
+}
+
+// ---------- Bug#11: 启发式记忆提取（LLM 不可用时降级） ----------
+
+const maxHeuristicExtract = 5
+
+// heuristicKeywords 按类别组织关键词，用于启发式分类。
+var heuristicKeywords = map[MemoryCategory][]string{
+	CatPreference: {
+		"喜欢", "偏好", "偏爱", "更喜欢", "最爱", "讨厌", "不喜欢", "习惯用", "总是用",
+		"prefer", "like", "love", "hate", "dislike", "always use", "favorite",
+	},
+	CatProfile: {
+		"我是", "我的名字", "我叫", "我在", "我住", "我的职业", "我的工作", "我做",
+		"my name", "i am a", "i work", "i live", "my job", "my role",
+	},
+	CatGoal: {
+		"目标", "计划", "打算", "想要", "准备", "希望", "需要完成", "打算做",
+		"goal", "plan to", "want to", "aim to", "intend to", "hope to",
+	},
+	CatFact: {
+		"记住", "注意", "重要的是", "关键是", "需要记住", "别忘了", "一定要",
+		"remember", "important", "key point", "note that", "keep in mind",
+	},
+	CatSkill: {
+		"我会", "我擅长", "我熟悉", "我懂", "我学过", "我的技能", "我精通",
+		"i know", "i can", "skilled in", "proficient", "experienced with", "familiar with",
+	},
+}
+
+// extractMemoriesHeuristic 基于关键词的启发式记忆提取（LLM 不可用时的降级方案）。
+// 只处理 [user]: 前缀行，按关键词分类，评分阈值 ≥2.0 才提取，Jaccard 去重。
+func extractMemoriesHeuristic(text string) []extractedMemory {
+	if len(text) < 20 {
+		return nil
+	}
+
+	lines := strings.Split(text, "\n")
+	var candidates []extractedMemory
+	seen := make([]string, 0) // 已提取内容，用于去重
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// 只处理用户消息
+		if !strings.HasPrefix(line, "[user]:") {
+			continue
+		}
+		content := strings.TrimSpace(strings.TrimPrefix(line, "[user]:"))
+		if len(content) < 8 {
+			continue
+		}
+
+		cat, score := classifyByKeywords(content)
+		if score < 2.0 {
+			continue
+		}
+
+		// Jaccard 去重
+		if isDuplicateHeuristic(content, seen) {
+			continue
+		}
+
+		candidates = append(candidates, extractedMemory{
+			Content:  content,
+			MemType:  classifyCategoryToType(cat),
+			Category: cat,
+		})
+		seen = append(seen, content)
+
+		if len(candidates) >= maxHeuristicExtract {
+			break
+		}
+	}
+
+	return candidates
+}
+
+// classifyByKeywords 按关键词匹配返回最佳类别和评分。
+// 每匹配一个关键词 +2.0 分。
+func classifyByKeywords(text string) (MemoryCategory, float64) {
+	lower := strings.ToLower(text)
+	bestCat := CatFact
+	bestScore := 0.0
+
+	for cat, keywords := range heuristicKeywords {
+		score := 0.0
+		for _, kw := range keywords {
+			if strings.Contains(lower, kw) {
+				score += 2.0
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			bestCat = cat
+		}
+	}
+
+	return bestCat, bestScore
+}
+
+// classifyCategoryToType 将 category 映射到 MemoryType。
+func classifyCategoryToType(cat MemoryCategory) MemoryType {
+	switch cat {
+	case CatPreference, CatHabit:
+		return MemTypeSemantic
+	case CatProfile:
+		return MemTypePermanent
+	case CatGoal, CatTask:
+		return MemTypeEpisodic
+	case CatSkill:
+		return MemTypeProcedural
+	default:
+		return MemTypeSemantic
+	}
+}
+
+// isDuplicateHeuristic 使用 Jaccard 相似度和子集包含检查重复。
+// 使用 mixedTokenSet 同时支持空格分词（英文）和 bigram（中文）。
+func isDuplicateHeuristic(content string, seen []string) bool {
+	newSet := mixedTokenSet(content)
+	if len(newSet) == 0 {
+		return false
+	}
+	for _, s := range seen {
+		oldSet := mixedTokenSet(s)
+		// Jaccard 相似度检查
+		if jaccardSimilarity(newSet, oldSet) >= 0.5 {
+			return true
+		}
+		// 子集包含检查: 短文本的 token 全部出现在长文本中
+		if isSubset(newSet, oldSet) || isSubset(oldSet, newSet) {
+			return true
+		}
+	}
+	return false
+}
+
+// isSubset 检查 a 是否为 b 的子集（a 的所有 token 都在 b 中）。
+func isSubset(a, b map[string]bool) bool {
+	if len(a) == 0 || len(a) > len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// mixedTokenSet 生成混合 token 集合：英文按空格分词，中文按字符 bigram。
+// 例: "我喜欢 dark mode" → {"我喜", "喜欢", "dark", "mode"}
+func mixedTokenSet(text string) map[string]bool {
+	set := make(map[string]bool)
+	lower := strings.ToLower(text)
+
+	// 英文空格分词: 只保留含 ASCII 字母的 token（排除纯 CJK 字符串被当作单词）
+	for _, w := range strings.Fields(lower) {
+		if len(w) > 2 && containsLatin(w) {
+			set[w] = true
+		}
+	}
+
+	// 中文字符 bigram
+	runes := []rune(lower)
+	for i := 0; i+1 < len(runes); i++ {
+		if isCJK(runes[i]) && isCJK(runes[i+1]) {
+			set[string(runes[i:i+2])] = true
+		}
+	}
+
+	return set
+}
+
+// containsLatin 检查字符串是否包含至少一个 ASCII 字母。
+func containsLatin(s string) bool {
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			return true
+		}
+	}
+	return false
+}
+
+// isCJK 判断是否为 CJK 统一汉字（U+4E00–U+9FFF）。
+func isCJK(r rune) bool {
+	return r >= 0x4E00 && r <= 0x9FFF
+}
+
+// jaccardSimilarity 计算两个词集的 Jaccard 相似度。
+func jaccardSimilarity(a, b map[string]bool) float64 {
+	if len(a) == 0 && len(b) == 0 {
+		return 1.0
+	}
+	intersection := 0
+	for w := range a {
+		if b[w] {
+			intersection++
+		}
+	}
+	union := len(a) + len(b) - intersection
+	if union == 0 {
+		return 0
+	}
+	return float64(intersection) / float64(union)
 }

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 消息处理器工厂 — 继承自 src/telegram/bot-message.ts (93L)

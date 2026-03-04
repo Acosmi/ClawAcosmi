@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/helpers"
-	"github.com/openacosmi/claw-acismi/internal/agents/models"
-	"github.com/openacosmi/claw-acismi/internal/agents/workspace"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/helpers"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/models"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/workspace"
 )
 
 const (
@@ -167,6 +167,7 @@ func RunEmbeddedPiAgent(ctx context.Context, params RunEmbeddedPiAgentParams, de
 			OnToolEvent:        params.OnToolEvent,
 			AgentChannel:       params.AgentChannel,
 			AgentType:          params.AgentType,
+			SuppressTranscript: params.SuppressTranscript,
 		})
 		if err != nil {
 			return nil, err
@@ -533,7 +534,7 @@ func buildErrorResult(durationMs int64, attempt *AttemptResult, provider, modelI
 }
 
 func buildPayloads(attempt *AttemptResult) []RunPayload {
-	if attempt == nil || len(attempt.AssistantTexts) == 0 {
+	if attempt == nil {
 		return nil
 	}
 	var payloads []RunPayload
@@ -542,15 +543,39 @@ func buildPayloads(attempt *AttemptResult) []RunPayload {
 			payloads = append(payloads, RunPayload{Text: t})
 		}
 	}
-	// 将最后一张图片附加到第一个 payload（最近产出的工具结果，最可能是用户要的图片）
+
+	// 媒体-only 响应：没有文本时仍保留一个 payload，避免媒体被直接丢弃。
+	if len(payloads) == 0 && len(attempt.MediaBlocks) > 0 {
+		payloads = append(payloads, RunPayload{})
+	}
+
+	// 将全部媒体附加到第一个 payload，并保留旧字段兼容（仍使用最后一项）。
 	if len(attempt.MediaBlocks) > 0 && len(payloads) > 0 {
-		last := attempt.MediaBlocks[len(attempt.MediaBlocks)-1]
-		payloads[0].MediaBase64 = last.Base64
-		payloads[0].MediaMimeType = last.MimeType
-		slog.Info("buildPayloads: media attached to payload",
-			"mimeType", last.MimeType,
-			"base64Len", len(last.Base64),
-		)
+		items := make([]MediaBlock, 0, len(attempt.MediaBlocks))
+		for _, block := range attempt.MediaBlocks {
+			if block.Base64 == "" {
+				continue
+			}
+			items = append(items, MediaBlock{
+				MimeType: block.MimeType,
+				Base64:   block.Base64,
+			})
+		}
+		if len(items) > 0 {
+			payloads[0].MediaItems = items
+			last := items[len(items)-1]
+			payloads[0].MediaBase64 = last.Base64
+			payloads[0].MediaMimeType = last.MimeType
+			slog.Info("buildPayloads: media attached to payload",
+				"count", len(items),
+				"lastMimeType", last.MimeType,
+				"lastBase64Len", len(last.Base64),
+			)
+		}
+	}
+
+	if len(payloads) == 0 {
+		return nil
 	}
 	return payloads
 }

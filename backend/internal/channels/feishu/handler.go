@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // FeishuMessageEvent im.message.receive_v1 事件（简化结构）

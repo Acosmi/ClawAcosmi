@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/exec"
-	"github.com/openacosmi/claw-acismi/internal/cli"
-	"github.com/openacosmi/claw-acismi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/exec"
+	"github.com/Acosmi/ClawAcosmi/internal/cli"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
 )
 
 // 对应 TS src/commands/agent.ts + agent-via-gateway.ts

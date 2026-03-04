@@ -3,7 +3,7 @@ package runner
 import (
 	"context"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ============================================================================
@@ -77,13 +77,14 @@ type EmbeddedPiRunResult struct {
 
 // RunPayload 运行输出负载。
 type RunPayload struct {
-	Text          string   `json:"text,omitempty"`
-	MediaURL      string   `json:"mediaUrl,omitempty"`
-	MediaURLs     []string `json:"mediaUrls,omitempty"`
-	MediaBase64   string   `json:"mediaBase64,omitempty"`
-	MediaMimeType string   `json:"mediaMimeType,omitempty"`
-	ReplyToID     string   `json:"replyToId,omitempty"`
-	IsError       bool     `json:"isError,omitempty"`
+	Text          string       `json:"text,omitempty"`
+	MediaURL      string       `json:"mediaUrl,omitempty"`
+	MediaURLs     []string     `json:"mediaUrls,omitempty"`
+	MediaItems    []MediaBlock `json:"mediaItems,omitempty"`
+	MediaBase64   string       `json:"mediaBase64,omitempty"`
+	MediaMimeType string       `json:"mediaMimeType,omitempty"`
+	ReplyToID     string       `json:"replyToId,omitempty"`
+	IsError       bool         `json:"isError,omitempty"`
 }
 
 // MessagingToolSend 消息工具发送目标。
@@ -186,6 +187,8 @@ type RunEmbeddedPiAgentParams struct {
 	// 值: "coder" / "argus" / "media"
 	// 传递到 AttemptParams.AgentType，用于按类型注入子智能体专属工具。
 	AgentType string `json:"agentType,omitempty"`
+	// SuppressTranscript Bug#11: 在 model fallback 场景下跳过 transcript 持久化。
+	SuppressTranscript bool `json:"-"`
 }
 
 // ---------- ToolEvent 工具事件 ----------

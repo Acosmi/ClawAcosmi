@@ -14,7 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/openacosmi/claw-acismi/internal/routing"
+	"github.com/Acosmi/ClawAcosmi/internal/routing"
 )
 
 // ---------- 消息类型 ----------

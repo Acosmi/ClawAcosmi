@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ConfigSchemaResponse schema 查询响应（供 API 使用）

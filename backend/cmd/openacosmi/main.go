@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/openacosmi/claw-acismi/internal/cli"
-	"github.com/openacosmi/claw-acismi/pkg/i18n"
+	"github.com/Acosmi/ClawAcosmi/internal/cli"
+	"github.com/Acosmi/ClawAcosmi/pkg/i18n"
 )
 
 // rootCmd 根命令（对应 TS buildProgram() + configureProgramHelp()）

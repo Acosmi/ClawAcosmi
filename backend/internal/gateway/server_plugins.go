@@ -6,8 +6,8 @@ package gateway
 import (
 	"log/slog"
 
-	"github.com/openacosmi/claw-acismi/internal/plugins"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/plugins"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // PluginDiagnostic 插件加载诊断信息。

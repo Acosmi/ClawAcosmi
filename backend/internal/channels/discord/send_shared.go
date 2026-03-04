@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/retry"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/retry"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Discord 发送共享工具 — 继承自 src/discord/send.shared.ts (424L)

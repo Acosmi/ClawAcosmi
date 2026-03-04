@@ -1,106 +1,162 @@
 PolyForm Noncommercial License 1.0.0
+PolyForm 非商业许可证 1.0.0
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>
 
-## Acceptance
+---
+
+## Acceptance | 接受条款
 
 In order to get any license under these terms, you must agree
 to them as both strict obligations and conditions to all
 your licenses.
 
-## Copyright License
+要获得本条款下的任何许可，您必须同意将这些条款作为您所有许可的
+严格义务和条件。
+
+## Copyright License | 版权许可
 
 The licensor grants you a copyright license for the
 software to do everything you might do with the software
 that would otherwise infringe the licensor's copyright in
-it for any permitted purpose.  However, you may
+it for any permitted purpose. However, you may
 only distribute the software according to [Distribution
-License](#distribution-license) and make changes or new works
+License](#distribution-license--分发许可) and make changes or new works
 based on the software according to [Changes and New Works
-License](#changes-and-new-works-license).
+License](#changes-and-new-works-license--变更与衍生作品许可).
 
-## Distribution License
+许可方授予您一项版权许可，允许您在许可目的范围内对软件执行任何
+可能侵犯许可方版权的操作。但是，您只能根据[分发许可](#distribution-license--分发许可)
+分发软件，并根据[变更与衍生作品许可](#changes-and-new-works-license--变更与衍生作品许可)
+对软件进行修改或创作衍生作品。
+
+## Distribution License | 分发许可
 
 The licensor grants you an additional copyright license
-to distribute copies of the software.  Your license
+to distribute copies of the software. Your license
 to distribute covers distributing the software with
 changes and new works permitted by [Changes and New Works
-License](#changes-and-new-works-license).
+License](#changes-and-new-works-license--变更与衍生作品许可).
 
-## Changes and New Works License
+许可方授予您额外的版权许可，允许您分发软件副本。您的分发许可
+涵盖分发经[变更与衍生作品许可](#changes-and-new-works-license--变更与衍生作品许可)
+允许的修改和衍生作品。
+
+## Changes and New Works License | 变更与衍生作品许可
 
 The licensor grants you an additional copyright license to
 make changes and new works based on the software for any
 permitted purpose.
 
-## Notices
+许可方授予您额外的版权许可，允许您在许可目的范围内对软件进行
+修改和创作衍生作品。
+
+## Notices | 通知
 
 You must ensure that anyone who gets a copy of any part of
 the software from you also gets a copy of these terms or the
 URL for them above, as well as copies of any plain-text lines
 beginning with `Required Notice:` that the licensor provided
-with the software.  For example:
+with the software. For example:
 
-> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+> Required Notice: Copyright Acosmi (<https://github.com/Acosmi>)
 
-## Noncommercial Purposes
+您必须确保从您处获取软件任何部分副本的人同时获得本条款的副本
+或上述 URL，以及许可方随软件提供的以 `Required Notice:` 开头的
+任何纯文本行的副本。例如：
+
+> 必要通知：版权所有 Acosmi (<https://github.com/Acosmi>)
+
+## Noncommercial Purposes | 非商业用途
 
 Any noncommercial purpose is a permitted purpose.
 
-## Commercial Purposes
+任何非商业用途均为许可用途。
 
-Any commercial purpose is not a permitted purpose. This includes, 
+## Commercial Purposes | 商业用途
+
+Any commercial purpose is not a permitted purpose. This includes,
 but is not limited to:
+
 - Using the software to provide commercial services (e.g., SaaS, DaaS).
 - Distributing the software as part of a commercial product.
 - Using the software for internal business operations that directly generate revenue.
 
-For commercial authorization, please contact: fushihua@fgfn.cc
+任何商业用途均非许可用途。包括但不限于：
 
-## Fair Use
+- 使用本软件提供商业服务（如 SaaS、DaaS）。
+- 将本软件作为商业产品的一部分进行分发。
+- 将本软件用于直接产生收入的内部业务运营。
+
+For commercial authorization, please contact: <fushihua@fgfn.cc>
+如需商业授权，请联系：<fushihua@fgfn.cc>
+
+## Fair Use | 合理使用
 
 You may have "fair use" rights for the software under the
 law. These terms do not limit them.
 
-## No Other Rights
+您可能依据法律对本软件享有"合理使用"权利。本条款不限制该等权利。
+
+## No Other Rights | 无其他权利
 
 These terms do not allow you to sublicense or transfer any of
 your licenses to anyone else, or prevent the licensor from
-granting licenses to anyone else.  These terms do not imply
+granting licenses to anyone else. These terms do not imply
 any other licenses.
 
-## Patent Defense
+本条款不允许您将您的任何许可再许可或转让给他人，也不阻止许可方
+向他人授予许可。本条款不暗示任何其他许可。
+
+## Patent Defense | 专利抗辩
 
 If you make any written claim that the software infringes or
 contributes to infringement of any patent, your licenses for
-the software granted under these terms end immediately.  If your
+the software granted under these terms end immediately. If your
 company makes such a claim, your licenses end immediately for
 work on behalf of your company.
 
-## Violations
+如果您以书面形式声称本软件侵犯或促成侵犯任何专利，您在本条款下
+获得的软件许可将立即终止。如果您的公司提出此类声称，您代表公司
+所进行工作的许可将立即终止。
+
+## Violations | 违规
 
 The first time you are notified in writing that you have
 violated any of these terms, or terms of any other licenses
 provided with the software, your licenses granted under these
 terms can be restored. To do so, you must cure the violation
-within thirty days of receiving notice.  Otherwise, your
+within thirty days of receiving notice. Otherwise, your
 licenses end immediately.
 
-## No Liability
+首次书面通知您违反本条款或随软件提供的任何其他许可条款时，您在
+本条款下获得的许可可以恢复。为此，您必须在收到通知后三十天内
+纠正违规行为。否则，您的许可将立即终止。
+
+## No Liability | 免责声明
 
 ***As far as the law allows, the software comes as is, without any
 warranty or condition, and the licensor will not be liable to
 you for any damages arising out of these terms or the use or
 nature of the software, under any kind of legal claim.***
 
-## Definitions
+***在法律允许的最大范围内，本软件按"原样"提供，不附带任何保证或
+条件，许可方不对因本条款或软件的使用或性质而产生的任何损害承担
+责任，无论基于何种法律主张。***
+
+## Definitions | 定义
 
 The **licensor** is the individual or entity offering these
 terms, and the **software** is the software the licensor makes
 available under these terms.
 
+**许可方**是提供本条款的个人或实体，**软件**是许可方在本条款下
+提供的软件。
+
 **You** refers to the individual or entity agreeing to these
 terms.
+
+**您**指同意本条款的个人或实体。
 
 **Your company** is any legal entity, sole proprietorship,
 or other kind of organization that you work for, plus all
@@ -108,11 +164,21 @@ organizations that have control over, are under the control
 of, or are under common control with that organization.
 **Control** means ownership of substantially all the assets of
 an entity, or the power to direct its management and policies
-by vote, contract, or otherwise.  Control can be direct or
+by vote, contract, or otherwise. Control can be direct or
 indirect.
+
+**您的公司**是指您工作的任何法人实体、个人独资企业或其他类型的
+组织，以及对该组织拥有控制权、受该组织控制或与该组织处于共同
+控制下的所有组织。**控制**是指拥有实体几乎全部资产的所有权，或
+通过表决、合同或其他方式指导其管理和政策的权力。控制可以是直接
+的或间接的。
 
 **Your licenses** are all the licenses granted to you for the
 software under these terms.
 
+**您的许可**是指在本条款下授予您的所有软件许可。
+
 **Use** means anything you do with the software requiring one
 of your licenses.
+
+**使用**是指您对软件所做的任何需要您的许可之一的事情。

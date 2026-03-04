@@ -14,7 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ---------- 类型定义 ----------

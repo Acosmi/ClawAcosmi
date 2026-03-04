@@ -3,7 +3,7 @@
 package tools
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/schema"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/schema"
 )
 
 // NormalizeToolParameters 规范化工具参数 schema。

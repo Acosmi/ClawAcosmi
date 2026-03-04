@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/openacosmi/claw-acismi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
 )
 
 // DiscoveryParams 发现服务启动参数。

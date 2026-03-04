@@ -15,19 +15,23 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
-	"github.com/openacosmi/claw-acismi/internal/agents/scope"
-	"github.com/openacosmi/claw-acismi/internal/agents/session"
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/infra"
-	"github.com/openacosmi/claw-acismi/internal/media"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/scope"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/session"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/infra"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
+	sessiontypes "github.com/Acosmi/ClawAcosmi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ChatHandlers 返回 chat.* 方法处理器映射。
@@ -287,6 +291,22 @@ func handleChatSend(ctx *MethodHandlerContext) {
 				Async:      true,
 			}, &BroadcastOptions{DropIfSlow: true})
 		}
+		// 持久化 task session + TaskMeta（看板持久化）
+		if store := ctx.Context.SessionStore; store != nil {
+			now := time.Now().UnixMilli()
+			store.Save(&SessionEntry{
+				SessionKey: fmt.Sprintf("task:%s", runId),
+				SessionId:  runId,
+				Label:      truncateStr(text, 60),
+				Channel:    "task",
+				CreatedAt:  now,
+				UpdatedAt:  now,
+				TaskMeta: &sessiontypes.TaskMeta{
+					Status: "queued",
+					Async:  true,
+				},
+			})
+		}
 	}
 
 	// 广播 chat 开始事件
@@ -337,6 +357,19 @@ func handleChatSend(ctx *MethodHandlerContext) {
 				SessionKey: sessionKey,
 				Ts:         time.Now().UnixMilli(),
 			}, &BroadcastOptions{DropIfSlow: true})
+		}
+		// 更新 TaskMeta.Status = "started"（看板持久化）
+		if store := ctx.Context.SessionStore; store != nil {
+			taskKey := fmt.Sprintf("task:%s", runId)
+			if entry := store.LoadSessionEntry(taskKey); entry != nil {
+				if entry.TaskMeta == nil {
+					entry.TaskMeta = &sessiontypes.TaskMeta{}
+				}
+				entry.TaskMeta.Status = "started"
+				entry.TaskMeta.StartedAt = time.Now().UnixMilli()
+				entry.UpdatedAt = time.Now().UnixMilli()
+				store.Save(entry)
+			}
 		}
 
 		// 订阅全局事件总线 → 广播 agent 工具事件到 WebSocket
@@ -400,45 +433,51 @@ func handleChatSend(ctx *MethodHandlerContext) {
 
 		// 任务频道：懒创建 task:<runID> session，仅在有工具调用时才创建
 		taskSessionKey := fmt.Sprintf("task:%s", runId)
-		taskSessionCreated := false                  // 单 goroutine 内闭包访问，无需 sync
-		smgr := session.NewSessionManager(storePath) // 任务频道 transcript 持久化
+		taskSessionCreated := false // 单 goroutine 内闭包访问，无需 sync
 		// 注意: onToolResult 是历史死代码（autoreply pipeline 从未调用），
 		// 已被下方 onToolEvent 替代。保留以维持 DispatchInboundParams 接口兼容。
 		var onToolResult func(payload autoreply.ReplyPayload)
 
-		// 任务频道结构化工具事件回调
+		// 任务频道结构化工具事件回调（看板持久化：仅广播 task.* WS 事件 + 更新 TaskMeta）
 		var onToolEvent any
 		if broadcaster != nil {
 			onToolEvent = func(event runner.ToolEvent) {
-				// 首次工具调用 → 懒创建任务 session
+				// 首次工具调用 → 懒创建任务 session（非 async 任务在 queued 时未创建）
 				if !taskSessionCreated {
 					taskSessionCreated = true
 					store := ctx.Context.SessionStore
 					if store != nil {
-						taskLabel := truncateStr(text, 60)
-						store.Save(&SessionEntry{
-							SessionKey: taskSessionKey,
-							SessionId:  runId,
-							Label:      taskLabel,
-							Channel:    "task",
-							CreatedAt:  time.Now().UnixMilli(),
-							UpdatedAt:  time.Now().UnixMilli(),
-						})
+						// M-01 修复: 先检查 session 是否已存在（async 任务在 queued 时已创建）
+						existing := store.LoadSessionEntry(taskSessionKey)
+						if existing != nil {
+							// session 已存在（async 路径），仅更新 TaskMeta
+							if existing.TaskMeta == nil {
+								existing.TaskMeta = &sessiontypes.TaskMeta{}
+							}
+							if existing.TaskMeta.Status == "queued" {
+								existing.TaskMeta.Status = "started"
+								existing.TaskMeta.StartedAt = time.Now().UnixMilli()
+							}
+							existing.UpdatedAt = time.Now().UnixMilli()
+							store.Save(existing)
+						} else {
+							// session 不存在（sync 路径），创建新的
+							taskLabel := truncateStr(text, 60)
+							now := time.Now().UnixMilli()
+							store.Save(&SessionEntry{
+								SessionKey: taskSessionKey,
+								SessionId:  runId,
+								Label:      taskLabel,
+								Channel:    "task",
+								CreatedAt:  now,
+								UpdatedAt:  now,
+								TaskMeta: &sessiontypes.TaskMeta{
+									Status:    "started",
+									StartedAt: now,
+								},
+							})
+						}
 					}
-					broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
-						"sessionKey": taskSessionKey,
-						"channel":    "task",
-						"text":       fmt.Sprintf("[任务] 开始执行: %s", truncateStr(text, 60)),
-						"from":       "system",
-						"ts":         time.Now().UnixMilli(),
-					}, nil)
-					// 持久化到任务频道 transcript
-					_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
-						Role: "assistant",
-						Content: []session.ContentBlock{
-							{Type: "text", Text: fmt.Sprintf("[任务] 开始执行: %s", truncateStr(text, 60))},
-						},
-					})
 				}
 				// 广播结构化工具事件
 				var toolText string
@@ -453,7 +492,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 					}
 				}
 
-				// 广播 task.progress 结构化看板事件（并行于 channel.message.incoming）
+				// 广播 task.progress 结构化看板事件
 				broadcaster.Broadcast(EventTaskProgress, TaskProgressEvent{
 					TaskID:     runId,
 					SessionKey: sessionKey,
@@ -465,22 +504,13 @@ func handleChatSend(ctx *MethodHandlerContext) {
 					Duration:   event.Duration,
 					Ts:         time.Now().UnixMilli(),
 				}, &BroadcastOptions{DropIfSlow: true})
-
-				if toolText != "" {
-					broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
-						"sessionKey": taskSessionKey,
-						"channel":    "task",
-						"text":       truncateForLog(toolText, 300),
-						"from":       "agent",
-						"ts":         time.Now().UnixMilli(),
-					}, nil)
-					// 持久化到任务频道 transcript
-					_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
-						Role: "assistant",
-						Content: []session.ContentBlock{
-							{Type: "text", Text: truncateForLog(toolText, 300)},
-						},
-					})
+				// 更新 ToolName 并持久化（L-01 修复：确保指针安全，调用 Save 写入）
+				if store := ctx.Context.SessionStore; store != nil {
+					if entry := store.LoadSessionEntry(taskSessionKey); entry != nil && entry.TaskMeta != nil {
+						entry.TaskMeta.ToolName = event.ToolName
+						entry.UpdatedAt = time.Now().UnixMilli()
+						store.Save(entry)
+					}
 				}
 			}
 		}
@@ -507,24 +537,6 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			// 兜底: 如果管线在 RunAttempt 之前就失败，defer 不会执行，用户消息未持久化。
 			// 此处确保用户消息至少写入 transcript，刷新后不会完全消失。
 			ensureUserTranscriptOnError(resolvedSessionId, storePath, enhancedText)
-			// 任务频道错误广播
-			if taskSessionCreated && broadcaster != nil {
-				errBrief := truncateForLog(result.Error.Error(), 100)
-				broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
-					"sessionKey": taskSessionKey,
-					"channel":    "task",
-					"text":       fmt.Sprintf("[任务] 执行失败: %s", errBrief),
-					"from":       "system",
-					"ts":         time.Now().UnixMilli(),
-				}, nil)
-				// 持久化到任务频道 transcript
-				_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
-					Role: "assistant",
-					Content: []session.ContentBlock{
-						{Type: "text", Text: fmt.Sprintf("[任务] 执行失败: %s", errBrief)},
-					},
-				})
-			}
 			// 广播 task.failed 结构化看板事件
 			if broadcaster != nil {
 				broadcaster.Broadcast(EventTaskFailed, TaskFailedEvent{
@@ -533,6 +545,30 @@ func handleChatSend(ctx *MethodHandlerContext) {
 					Error:      truncateForLog(result.Error.Error(), 200),
 					Ts:         time.Now().UnixMilli(),
 				}, &BroadcastOptions{DropIfSlow: true})
+			}
+			// 更新 TaskMeta.Status = "failed"（看板持久化）
+			if store := ctx.Context.SessionStore; store != nil {
+				taskKey := fmt.Sprintf("task:%s", runId)
+				now := time.Now().UnixMilli()
+				entry := store.LoadSessionEntry(taskKey)
+				if entry == nil {
+					// D-01 兜底：sync 任务无工具调用时 session 未创建
+					entry = &SessionEntry{
+						SessionKey: taskKey,
+						SessionId:  runId,
+						Label:      truncateStr(text, 60),
+						Channel:    "task",
+						CreatedAt:  now,
+					}
+				}
+				if entry.TaskMeta == nil {
+					entry.TaskMeta = &sessiontypes.TaskMeta{}
+				}
+				entry.TaskMeta.Status = "failed"
+				entry.TaskMeta.Error = truncateForLog(result.Error.Error(), 200)
+				entry.TaskMeta.CompletedAt = now
+				entry.UpdatedAt = now
+				store.Save(entry)
 			}
 			// Phase 2: async=true 时注入错误通知到 webchat
 			if asyncMode && broadcaster != nil {
@@ -559,7 +595,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 
 		// 合并回复
 		combinedReply := CombineReplyPayloads(result.Replies)
-		mediaB64, mediaMime := ExtractMediaFromReplies(result.Replies)
+		mediaItems := ExtractMediaListFromReplies(result.Replies)
 
 		// AI 回复 transcript 由 attempt_runner.persistToTranscript 写入，此处仅构造广播消息
 		var message map[string]interface{}
@@ -574,7 +610,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 				"stopReason": "stop",
 				"usage":      map[string]interface{}{"input": 0, "output": 0, "totalTokens": 0},
 			}
-		} else if mediaB64 != "" {
+		} else if len(mediaItems) > 0 {
 			// 纯媒体（无文本）：构建仅含图片的消息
 			message = map[string]interface{}{
 				"role":       "assistant",
@@ -586,50 +622,26 @@ func handleChatSend(ctx *MethodHandlerContext) {
 		}
 
 		// 将媒体数据注入 message.content（前端 extractImages 自动识别）
-		if message != nil && mediaB64 != "" {
+		if message != nil && len(mediaItems) > 0 {
 			if content, ok := message["content"].([]interface{}); ok {
-				mime := mediaMime
-				if mime == "" {
-					mime = "image/png"
+				for _, item := range mediaItems {
+					if item.Base64Data == "" {
+						continue
+					}
+					mime := item.MimeType
+					if mime == "" {
+						mime = "image/png"
+					}
+					content = append(content, map[string]interface{}{
+						"type": "image",
+						"source": map[string]interface{}{
+							"type":       "base64",
+							"data":       item.Base64Data,
+							"media_type": mime,
+						},
+					})
 				}
-				content = append(content, map[string]interface{}{
-					"type": "image",
-					"source": map[string]interface{}{
-						"type":       "base64",
-						"data":       mediaB64,
-						"media_type": mime,
-					},
-				})
 				message["content"] = content
-			}
-		}
-
-		// 任务频道完成广播（仅在 session 被创建时才广播）
-		if taskSessionCreated && broadcaster != nil {
-			replyBrief := combinedReply
-			if len(replyBrief) > 200 {
-				replyBrief = replyBrief[:200] + "..."
-			}
-			broadcaster.Broadcast("channel.message.incoming", map[string]interface{}{
-				"sessionKey": taskSessionKey,
-				"channel":    "task",
-				"text":       fmt.Sprintf("[任务] 执行完成"),
-				"from":       "system",
-				"ts":         time.Now().UnixMilli(),
-			}, nil)
-			// 持久化到任务频道 transcript
-			_ = smgr.AppendMessage(runId, "", session.TranscriptEntry{
-				Role: "assistant",
-				Content: []session.ContentBlock{
-					{Type: "text", Text: "[任务] 执行完成"},
-				},
-			})
-			// 更新 session 时间戳
-			if store := ctx.Context.SessionStore; store != nil {
-				if entry := store.LoadSessionEntry(taskSessionKey); entry != nil {
-					entry.UpdatedAt = time.Now().UnixMilli()
-					store.Save(entry)
-				}
 			}
 		}
 
@@ -642,6 +654,30 @@ func handleChatSend(ctx *MethodHandlerContext) {
 				Summary:    summary,
 				Ts:         time.Now().UnixMilli(),
 			}, &BroadcastOptions{DropIfSlow: true})
+		}
+		// 更新 TaskMeta.Status = "completed"（看板持久化）
+		if store := ctx.Context.SessionStore; store != nil {
+			taskKey := fmt.Sprintf("task:%s", runId)
+			now := time.Now().UnixMilli()
+			entry := store.LoadSessionEntry(taskKey)
+			if entry == nil {
+				// D-01 兜底：sync 任务无工具调用时 session 未创建
+				entry = &SessionEntry{
+					SessionKey: taskKey,
+					SessionId:  runId,
+					Label:      truncateStr(text, 60),
+					Channel:    "task",
+					CreatedAt:  now,
+				}
+			}
+			if entry.TaskMeta == nil {
+				entry.TaskMeta = &sessiontypes.TaskMeta{}
+			}
+			entry.TaskMeta.Status = "completed"
+			entry.TaskMeta.Summary = truncateForLog(combinedReply, 200)
+			entry.TaskMeta.CompletedAt = now
+			entry.UpdatedAt = now
+			store.Save(entry)
 		}
 
 		// Phase 2: async=true 时注入 webchat 通知（跨 session 通知用户异步任务已完成）
@@ -817,19 +853,143 @@ func truncateStr(s string, maxLen int) string {
 	return string(runes[:maxLen]) + "..."
 }
 
+type chatAttachmentProviderSnapshot struct {
+	sttProvider media.STTProvider
+	sttInitErr  error
+
+	docConverter media.DocConverter
+	docInitErr   error
+}
+
+type chatAttachmentProviderCache struct {
+	mu sync.Mutex
+
+	ttl       time.Duration
+	expiresAt time.Time
+
+	sttConfigSig string
+	docConfigSig string
+
+	sttProvider media.STTProvider
+	sttInitErr  error
+
+	docConverter media.DocConverter
+	docInitErr   error
+
+	newSTTProvider  func(cfg *types.STTConfig) (media.STTProvider, error)
+	newDocConverter func(cfg *types.DocConvConfig) (media.DocConverter, error)
+}
+
+func newChatAttachmentProviderCache(ttl time.Duration) *chatAttachmentProviderCache {
+	if ttl <= 0 {
+		ttl = 20 * time.Second
+	}
+	return &chatAttachmentProviderCache{
+		ttl:             ttl,
+		newSTTProvider:  media.NewSTTProvider,
+		newDocConverter: media.NewDocConverter,
+	}
+}
+
+var defaultChatAttachmentProviderCache = newChatAttachmentProviderCache(20 * time.Second)
+
+func (c *chatAttachmentProviderCache) Resolve(cfg *types.OpenAcosmiConfig) chatAttachmentProviderSnapshot {
+	if c == nil || cfg == nil {
+		return chatAttachmentProviderSnapshot{}
+	}
+
+	sttSig := chatAttachmentConfigSignature(cfg.STT)
+	docSig := chatAttachmentConfigSignature(cfg.DocConv)
+	now := time.Now()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if now.Before(c.expiresAt) && sttSig == c.sttConfigSig && docSig == c.docConfigSig {
+		return chatAttachmentProviderSnapshot{
+			sttProvider:  c.sttProvider,
+			sttInitErr:   c.sttInitErr,
+			docConverter: c.docConverter,
+			docInitErr:   c.docInitErr,
+		}
+	}
+
+	c.sttConfigSig = sttSig
+	c.docConfigSig = docSig
+	c.expiresAt = now.Add(c.ttl)
+
+	c.sttProvider = nil
+	c.sttInitErr = nil
+	if cfg.STT != nil && strings.TrimSpace(cfg.STT.Provider) != "" {
+		provider, err := c.newSTTProvider(cfg.STT)
+		if err != nil {
+			c.sttInitErr = err
+			slog.Warn("chat.send: STT provider init failed (cached)", "error", err)
+		} else {
+			c.sttProvider = provider
+		}
+	}
+
+	c.docConverter = nil
+	c.docInitErr = nil
+	if cfg.DocConv != nil && strings.TrimSpace(cfg.DocConv.Provider) != "" {
+		converter, err := c.newDocConverter(cfg.DocConv)
+		if err != nil {
+			c.docInitErr = err
+			slog.Warn("chat.send: DocConv provider init failed (cached)", "error", err)
+		} else {
+			c.docConverter = converter
+		}
+	}
+
+	return chatAttachmentProviderSnapshot{
+		sttProvider:  c.sttProvider,
+		sttInitErr:   c.sttInitErr,
+		docConverter: c.docConverter,
+		docInitErr:   c.docInitErr,
+	}
+}
+
+func chatAttachmentConfigSignature(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%T", v)
+	}
+	return string(data)
+}
+
 // processAttachmentsForChat 处理 chat.send 附件：音频→STT，文档→DocConv。
 // 将转录/转换结果追加到消息文本中返回增强后的文本。
 func processAttachmentsForChat(ctx context.Context, text string, attachments []map[string]interface{}, cfgLoader interface {
 	LoadConfig() (*types.OpenAcosmiConfig, error)
 }) string {
+	return processAttachmentsForChatWithCache(ctx, text, attachments, cfgLoader, defaultChatAttachmentProviderCache)
+}
+
+func processAttachmentsForChatWithCache(
+	ctx context.Context,
+	text string,
+	attachments []map[string]interface{},
+	cfgLoader interface {
+		LoadConfig() (*types.OpenAcosmiConfig, error)
+	},
+	providerCache *chatAttachmentProviderCache,
+) string {
 	if len(attachments) == 0 || cfgLoader == nil {
 		return text
+	}
+	if providerCache == nil {
+		providerCache = defaultChatAttachmentProviderCache
 	}
 
 	cfg, err := cfgLoader.LoadConfig()
 	if err != nil || cfg == nil {
 		return text
 	}
+	providerSnapshot := providerCache.Resolve(cfg)
 
 	var parts []string
 	if text != "" {
@@ -846,8 +1006,8 @@ func processAttachmentsForChat(ctx context.Context, text string, attachments []m
 			continue
 		}
 
-		// H-05: 限制 base64 大小（解码前检查，25 MB decoded ≈ 34 MB base64）
-		const maxBase64Len = 34 * 1024 * 1024
+		maxAttachmentBytes := channels.MaxChatAttachmentBytesForType(attType)
+		maxBase64Len := maxAttachmentBytes*4/3 + 4
 		if len(contentB64) > maxBase64Len {
 			parts = append(parts, "[附件: 数据过大]")
 			continue
@@ -859,21 +1019,28 @@ func processAttachmentsForChat(ctx context.Context, text string, attachments []m
 				parts = append(parts, "[语音附件: 语音转文字(STT)未配置，请前往 设置→Speech to Text 配置语音识别服务]")
 				continue
 			}
+			if providerSnapshot.sttProvider == nil {
+				parts = append(parts, "[语音附件: STT 初始化失败]")
+				if providerSnapshot.sttInitErr != nil {
+					slog.Warn("chat.send: STT provider unavailable",
+						"provider", cfg.STT.Provider, "error", providerSnapshot.sttInitErr)
+				}
+				continue
+			}
 			data, decErr := base64.StdEncoding.DecodeString(contentB64)
 			if decErr != nil {
 				parts = append(parts, "[语音附件: 解码失败]")
 				continue
 			}
-			provider, provErr := media.NewSTTProvider(cfg.STT)
-			if provErr != nil {
-				parts = append(parts, "[语音附件: STT 初始化失败]")
+			if len(data) > maxAttachmentBytes {
+				parts = append(parts, "[语音附件: 数据过大]")
 				continue
 			}
 			if mimeType == "" {
 				mimeType = "audio/webm"
 			}
 			sttCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			transcript, sttErr := provider.Transcribe(sttCtx, data, mimeType)
+			transcript, sttErr := providerSnapshot.sttProvider.Transcribe(sttCtx, data, mimeType)
 			cancel()
 			if sttErr != nil {
 				slog.Error("chat.send: STT failed", "error", sttErr)
@@ -901,13 +1068,20 @@ func processAttachmentsForChat(ctx context.Context, text string, attachments []m
 				parts = append(parts, fmt.Sprintf("[文件: %s, 解码失败]", fileName))
 				continue
 			}
-			converter, convErr := media.NewDocConverter(cfg.DocConv)
-			if convErr != nil {
+			if len(data) > maxAttachmentBytes {
+				parts = append(parts, fmt.Sprintf("[文件: %s, 数据过大]", fileName))
+				continue
+			}
+			if providerSnapshot.docConverter == nil {
 				parts = append(parts, fmt.Sprintf("[文件: %s, 转换器初始化失败]", fileName))
+				if providerSnapshot.docInitErr != nil {
+					slog.Warn("chat.send: DocConv provider unavailable",
+						"provider", cfg.DocConv.Provider, "file", fileName, "error", providerSnapshot.docInitErr)
+				}
 				continue
 			}
 			convCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			markdown, convErr2 := converter.Convert(convCtx, data, mimeType, fileName)
+			markdown, convErr2 := providerSnapshot.docConverter.Convert(convCtx, data, mimeType, fileName)
 			cancel()
 			if convErr2 != nil {
 				slog.Error("chat.send: DocConv failed", "file", fileName, "error", convErr2)

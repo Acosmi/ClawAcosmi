@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	types "github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	types "github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ChannelLogoutFunc DI 回调：实际执行频道 logout。

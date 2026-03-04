@@ -10,7 +10,7 @@ import (
 // ---------- GateMode 测试 ----------
 
 func TestPlanConfirmation_GateMode(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	// 默认 mode = full
@@ -43,7 +43,7 @@ func TestPlanConfirmation_ShouldGate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
-			mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+			mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 			defer mgr.Close()
 			mgr.SetGateMode(tt.mode)
 			if got := mgr.ShouldGate(); got != tt.expected {
@@ -61,7 +61,7 @@ func TestPlanConfirmation_Approve(t *testing.T) {
 		broadcastCalls = append(broadcastCalls, event)
 	}
 
-	mgr := NewPlanConfirmationManager(broadcast, 5*time.Second)
+	mgr := NewPlanConfirmationManager(broadcast, nil, 5*time.Second)
 	defer mgr.Close()
 
 	var decision PlanDecision
@@ -119,7 +119,7 @@ func TestPlanConfirmation_Approve(t *testing.T) {
 }
 
 func TestPlanConfirmation_Reject(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	var decision PlanDecision
@@ -157,7 +157,7 @@ func TestPlanConfirmation_Reject(t *testing.T) {
 }
 
 func TestPlanConfirmation_Edit(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	var decision PlanDecision
@@ -197,7 +197,7 @@ func TestPlanConfirmation_Edit(t *testing.T) {
 // ---------- Timeout 测试 ----------
 
 func TestPlanConfirmation_Timeout(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 200*time.Millisecond)
+	mgr := NewPlanConfirmationManager(nil, nil, 200*time.Millisecond)
 	defer mgr.Close()
 
 	decision, err := mgr.RequestPlanConfirmation(context.Background(), PlanConfirmationRequest{
@@ -218,7 +218,7 @@ func TestPlanConfirmation_Timeout(t *testing.T) {
 // ---------- Context Cancellation 测试 ----------
 
 func TestPlanConfirmation_ContextCancel(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -243,7 +243,7 @@ func TestPlanConfirmation_ContextCancel(t *testing.T) {
 // ---------- ResolvePlanConfirmation 错误路径 ----------
 
 func TestPlanConfirmation_ResolveUnknownID(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	err := mgr.ResolvePlanConfirmation("nonexistent-id", PlanDecision{Action: "approve"})
@@ -253,7 +253,7 @@ func TestPlanConfirmation_ResolveUnknownID(t *testing.T) {
 }
 
 func TestPlanConfirmation_ResolveInvalidAction(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	err := mgr.ResolvePlanConfirmation("any-id", PlanDecision{Action: "invalid"})
@@ -265,7 +265,7 @@ func TestPlanConfirmation_ResolveInvalidAction(t *testing.T) {
 // ---------- Default Timeout 测试 ----------
 
 func TestPlanConfirmation_DefaultTimeout(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 0)
+	mgr := NewPlanConfirmationManager(nil, nil, 0)
 	defer mgr.Close()
 
 	if mgr.Timeout() != 5*time.Minute {
@@ -276,7 +276,7 @@ func TestPlanConfirmation_DefaultTimeout(t *testing.T) {
 // ---------- Close 幂等性 ----------
 
 func TestPlanConfirmation_CloseIdempotent(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	mgr.Close()
 	mgr.Close() // 不应 panic
 }
@@ -284,7 +284,7 @@ func TestPlanConfirmation_CloseIdempotent(t *testing.T) {
 // ---------- Auto-fill ID 测试 ----------
 
 func TestPlanConfirmation_AutoFillID(t *testing.T) {
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 
 	done := make(chan struct{})
@@ -328,7 +328,7 @@ func TestPlanConfirmation_DecisionLogger(t *testing.T) {
 		},
 	}
 
-	mgr := NewPlanConfirmationManager(nil, 5*time.Second)
+	mgr := NewPlanConfirmationManager(nil, nil, 5*time.Second)
 	defer mgr.Close()
 	mgr.SetDecisionLogger(logger)
 

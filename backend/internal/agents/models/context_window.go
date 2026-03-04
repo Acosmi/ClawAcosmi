@@ -3,7 +3,7 @@ package models
 import (
 	"math"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 上下文窗口守卫 ----------

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/autoreply/reply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply/reply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // WhatsApp 入站消息处理管线 — WA-A + WA-B

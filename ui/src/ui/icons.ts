@@ -216,6 +216,23 @@ export const icons = {
       <path d="M12 18h.01" />
     </svg>
   `,
+  channelSwitch: html`
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="channel-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#06b6d4"/>
+          <stop offset="40%" stop-color="#10b981"/>
+          <stop offset="100%" stop-color="#f59e0b"/>
+        </linearGradient>
+      </defs>
+      <rect x="2" y="4" width="10" height="8" rx="1.5" stroke="url(#channel-grad)" stroke-width="1.8" fill="rgba(6,182,212,0.1)"/>
+      <rect x="12" y="12" width="10" height="8" rx="1.5" stroke="url(#channel-grad)" stroke-width="1.8" fill="rgba(245,158,11,0.1)"/>
+      <path d="M15 8l2-2 2 2" stroke="url(#channel-grad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 18l-2-2-2 2" stroke="url(#channel-grad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="rotate(180 7 17)"/>
+      <circle cx="7" cy="8" r="1.2" fill="#06b6d4"/>
+      <circle cx="17" cy="16" r="1.2" fill="#f59e0b"/>
+    </svg>
+  `,
   plug: html`
     <svg viewBox="0 0 24 24">
       <path d="M12 22v-5" />
@@ -278,6 +295,40 @@ export const icons = {
       <path d="M19.938 10.5a4 4 0 0 1 .585.396" stroke="#e57373" />
       <path d="M6 18a4 4 0 0 1-1.967-.516" stroke="#e57373" />
       <path d="M19.967 17.484A4 4 0 0 1 18 18" stroke="#e57373" />
+    </svg>
+  `,
+  skillBolt: html`
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="skill-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#38bdf8"/>
+          <stop offset="50%" stop-color="#a855f7"/>
+          <stop offset="100%" stop-color="#ec4899"/>
+        </linearGradient>
+      </defs>
+      <path d="M4 6.5C4 5.12 5.12 4 6.5 4H8" stroke="url(#skill-grad)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M4 17.5C4 18.88 5.12 20 6.5 20H8" stroke="url(#skill-grad)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 4h1.5C18.88 4 20 5.12 20 6.5" stroke="url(#skill-grad)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 20h1.5c1.38 0 2.5-1.12 2.5-2.5" stroke="url(#skill-grad)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M13 7l-3 5h4l-3 5" stroke="url(#skill-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="7" cy="10" r="1" fill="#38bdf8"/>
+      <circle cx="17" cy="14" r="1" fill="#ec4899"/>
+      <circle cx="9" cy="16" r="0.8" fill="#a855f7"/>
+      <circle cx="15" cy="8" r="0.8" fill="#a855f7"/>
+    </svg>
+  `,
+  compressContext: html`
+    <svg viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="compress-grad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#06b6d4"/>
+          <stop offset="50%" stop-color="#8b5cf6"/>
+          <stop offset="100%" stop-color="#f43f5e"/>
+        </linearGradient>
+      </defs>
+      <path d="M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5" stroke="url(#compress-grad)" stroke-width="2" stroke-linecap="round"/>
+      <rect x="8" y="8" width="8" height="8" rx="2" stroke="url(#compress-grad)" stroke-width="2" fill="rgba(139,92,246,0.15)"/>
+      <circle cx="12" cy="12" r="1.5" fill="url(#compress-grad)"/>
     </svg>
   `,
 } as const;

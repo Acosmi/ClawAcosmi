@@ -1,0 +1,52 @@
+name: Multimedia Regression CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/internal/channels/**"
+      - "backend/internal/gateway/**"
+      - "backend/internal/agents/runner/**"
+      - "backend/internal/config/**"
+      - "backend/Makefile"
+      - "scripts/generate_multimedia_regression_report.sh"
+      - ".github/workflows/multimedia-regression-ci.yml"
+  pull_request:
+    paths:
+      - "backend/internal/channels/**"
+      - "backend/internal/gateway/**"
+      - "backend/internal/agents/runner/**"
+      - "backend/internal/config/**"
+      - "backend/Makefile"
+      - "scripts/generate_multimedia_regression_report.sh"
+      - ".github/workflows/multimedia-regression-ci.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  multimedia-regression:
+    name: Multimedia Regression (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Multimedia regression tests
+        run: make test-multimedia
+
+      - name: Provider cache benchmark smoke
+        run: go test ./internal/gateway -run '^$' -bench 'BenchmarkChatAttachmentProviderCache_ProcessAttachments' -benchmem -benchtime=100ms -count=1

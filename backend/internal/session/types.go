@@ -106,6 +106,20 @@ type SessionEntry struct {
 
 	// Model provider (新增字段)
 	ModelProvider string `json:"modelProvider,omitempty"`
+
+	// 任务看板元数据（仅 task: session 使用）
+	TaskMeta *TaskMeta `json:"taskMeta,omitempty"`
+}
+
+// TaskMeta 任务看板元数据（仅 task: session 使用）。
+type TaskMeta struct {
+	Status      string `json:"status"`                // "queued" | "started" | "completed" | "failed"
+	Async       bool   `json:"async,omitempty"`       // 是否异步执行
+	Summary     string `json:"summary,omitempty"`     // 完成摘要
+	Error       string `json:"error,omitempty"`       // 错误信息
+	ToolName    string `json:"toolName,omitempty"`    // 当前/最后工具名
+	StartedAt   int64  `json:"startedAt,omitempty"`   // 开始时间 (UnixMilli)
+	CompletedAt int64  `json:"completedAt,omitempty"` // 完成时间 (UnixMilli)
 }
 
 // SessionOrigin 会话来源信息（与 TS SessionOrigin 完全对齐）。

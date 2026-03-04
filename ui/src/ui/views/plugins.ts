@@ -1,9 +1,9 @@
-import { html, nothing } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 import { t } from "../i18n.ts";
 import type { PluginInfo, ToolItem, BrowserToolConfig } from "../types.ts";
 
 export type PluginsProps = {
-  panel: "plugins" | "tools";
+  panel: "plugins" | "tools" | "skills";
   loading: boolean;
   plugins: PluginInfo[];
   error: string | null;
@@ -17,10 +17,11 @@ export type PluginsProps = {
   browserSaving: boolean;
   browserError: string | null;
   browserEdits: Record<string, string | boolean>;
+  skillsView?: TemplateResult;
   onEditChange: (pluginId: string, key: string, value: string) => void;
   onSave: (pluginId: string) => void;
   onGoToChannels: () => void;
-  onPanelChange: (panel: "plugins" | "tools") => void;
+  onPanelChange: (panel: "plugins" | "tools" | "skills") => void;
   onBrowserEditChange: (key: string, value: string | boolean) => void;
   onBrowserSave: () => void;
 };
@@ -39,18 +40,23 @@ export function renderPlugins(props: PluginsProps) {
       <div style="display: flex; gap: 0; margin-top: 16px; border-bottom: 1px solid var(--color-border, rgba(128,128,128,0.15));">
         ${renderSubTab(t("plugins.tab.plugins"), "plugins", props.panel, props.onPanelChange)}
         ${renderSubTab(t("plugins.tab.tools"), "tools", props.panel, props.onPanelChange)}
+        ${renderSubTab(t("plugins.tab.skills"), "skills", props.panel, props.onPanelChange)}
       </div>
 
-      ${props.panel === "plugins" ? renderPluginsPanel(props) : renderToolsPanel(props)}
+      ${props.panel === "plugins"
+        ? renderPluginsPanel(props)
+        : props.panel === "tools"
+          ? renderToolsPanel(props)
+          : props.skillsView ?? nothing}
     </section>
   `;
 }
 
 function renderSubTab(
   label: string,
-  value: "plugins" | "tools",
-  current: "plugins" | "tools",
-  onChange: (v: "plugins" | "tools") => void,
+  value: "plugins" | "tools" | "skills",
+  current: "plugins" | "tools" | "skills",
+  onChange: (v: "plugins" | "tools" | "skills") => void,
 ) {
   const active = current === value;
   return html`

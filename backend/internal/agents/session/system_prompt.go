@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/prompt"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/prompt"
 )
 
 // ---------- Context Files ----------

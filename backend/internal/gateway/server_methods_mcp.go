@@ -11,7 +11,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/mcpremote"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
 )
 
 // MCPRemoteHandlers 返回 MCP 远程工具 RPC 方法处理器。

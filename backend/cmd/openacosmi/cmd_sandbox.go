@@ -16,9 +16,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/sandbox"
-	"github.com/openacosmi/claw-acismi/internal/config"
-	"github.com/openacosmi/claw-acismi/internal/sessions"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/sandbox"
+	"github.com/Acosmi/ClawAcosmi/internal/config"
+	"github.com/Acosmi/ClawAcosmi/internal/sessions"
 )
 
 // ---------- sandbox 顶层命令 ----------

@@ -14,7 +14,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 )
 
 // ---------------------------------------------------------------------------

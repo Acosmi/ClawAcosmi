@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/channels/ratelimit"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/ratelimit"
 )
 
 // Telegram 媒体组发送 — 对应 TS src/telegram/send-media-group.ts

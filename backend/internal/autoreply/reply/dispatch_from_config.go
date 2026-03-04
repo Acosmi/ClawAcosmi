@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/internal/session"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // TS 对照: auto-reply/reply/dispatch-from-config.ts (459L)

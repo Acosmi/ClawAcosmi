@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels/ratelimit"
-	"github.com/openacosmi/claw-acismi/pkg/retry"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels/ratelimit"
+	"github.com/Acosmi/ClawAcosmi/pkg/retry"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 消息发送 — 继承自 src/telegram/send.ts (918L)

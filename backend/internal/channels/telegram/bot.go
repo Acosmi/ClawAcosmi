@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/autoreply"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram Bot 核心 — 继承自 src/telegram/bot.ts (499L)

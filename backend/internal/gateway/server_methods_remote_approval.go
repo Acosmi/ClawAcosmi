@@ -102,7 +102,7 @@ func handleRemoteApprovalTest(ctx *MethodHandlerContext) {
 	}
 
 	if err := notifier.TestProvider(provider); err != nil {
-		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "test failed: "+err.Error()))
+		ctx.Respond(false, nil, mapSendErrorToShape(err))
 		return
 	}
 

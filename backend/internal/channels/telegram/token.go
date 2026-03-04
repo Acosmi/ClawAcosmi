@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram Token 解析 — 继承自 src/telegram/token.ts (103L)

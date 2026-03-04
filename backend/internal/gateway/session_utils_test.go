@@ -3,8 +3,8 @@ package gateway
 import (
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/session"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/session"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- ClassifySessionKey ----------

@@ -56,6 +56,10 @@ type PlanDecisionLogger interface {
 	LogPlanDecision(record PlanDecisionRecord) error
 }
 
+// PlanConfirmRemoteNotifyFunc 方案确认远程通知回调（飞书/钉钉等非 Web 渠道）。
+// sessionKey 用于确定目标渠道（如 "feishu:<chatID>"），空字符串表示广播到所有已配置渠道。
+type PlanConfirmRemoteNotifyFunc func(req PlanConfirmationRequest, sessionKey string)
+
 // ---------- GateMode [R5] ----------
 
 const (
@@ -86,8 +90,9 @@ type PlanConfirmationManager struct {
 	mu      sync.Mutex
 	pending map[string]*planConfirmationEntry // id → pending entry (含过期时间)
 
-	broadcast      CoderConfirmBroadcastFunc // 复用 coder 广播类型（解耦 runner ↔ gateway）
-	decisionLogger PlanDecisionLogger        // [R9] 可选，nil = 不记录决策
+	broadcast      CoderConfirmBroadcastFunc   // 复用 coder 广播类型（解耦 runner ↔ gateway）
+	remoteNotify   PlanConfirmRemoteNotifyFunc // 远程通知回调（飞书卡片等），可为 nil
+	decisionLogger PlanDecisionLogger          // [R9] 可选，nil = 不记录决策
 
 	timeout  time.Duration // 默认 5min
 	gateMode string        // [R5] "full" | "smart" | "monitor"
@@ -100,17 +105,19 @@ type PlanConfirmationManager struct {
 // NewPlanConfirmationManager 创建方案确认管理器。
 func NewPlanConfirmationManager(
 	broadcastFn CoderConfirmBroadcastFunc,
+	remoteNotifyFn PlanConfirmRemoteNotifyFunc,
 	timeout time.Duration,
 ) *PlanConfirmationManager {
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
 	}
 	m := &PlanConfirmationManager{
-		pending:     make(map[string]*planConfirmationEntry),
-		broadcast:   broadcastFn,
-		timeout:     timeout,
-		gateMode:    GateModeFull, // Phase 1 硬编码 full
-		cleanupDone: make(chan struct{}),
+		pending:      make(map[string]*planConfirmationEntry),
+		broadcast:    broadcastFn,
+		remoteNotify: remoteNotifyFn,
+		timeout:      timeout,
+		gateMode:     GateModeFull, // Phase 1 硬编码 full
+		cleanupDone:  make(chan struct{}),
 	}
 	// [R4] 启动 TTL 清理 goroutine
 	go m.ttlCleanupLoop()
@@ -182,9 +189,14 @@ func (m *PlanConfirmationManager) RequestPlanConfirmation(ctx context.Context, r
 	}
 	m.mu.Unlock()
 
-	// 广播方案确认请求到前端
+	// 广播方案确认请求到前端（WebSocket）
 	if m.broadcast != nil {
 		m.broadcast("plan.confirm.requested", req)
+	}
+
+	// 推送远程通知到非 Web 渠道（飞书卡片等）
+	if m.remoteNotify != nil {
+		m.remoteNotify(req, "")
 	}
 
 	slog.Debug("plan confirmation requested",

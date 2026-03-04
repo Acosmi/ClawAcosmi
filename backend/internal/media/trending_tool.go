@@ -32,7 +32,8 @@ const (
 
 // CreateTrendingTool 创建热点采集工具。
 // agg 为 nil 时工具仍可构造，但 fetch/analyze 执行时返回错误。
-func CreateTrendingTool(agg *TrendingAggregator) *MediaTool {
+// stateStore 可为 nil（不做去重标记）。
+func CreateTrendingTool(agg *TrendingAggregator, stateStore MediaStateStore) *MediaTool {
 	return &MediaTool{
 		ToolName:  ToolTrendingTopics,
 		ToolLabel: "Trending Topics",
@@ -74,7 +75,7 @@ func CreateTrendingTool(agg *TrendingAggregator) *MediaTool {
 
 			switch TrendingAction(action) {
 			case TrendingActionFetch:
-				return executeTrendingFetch(ctx, agg, args)
+				return executeTrendingFetch(ctx, agg, stateStore, args)
 			case TrendingActionAnalyze:
 				return executeTrendingAnalyze(ctx, agg, args)
 			case TrendingActionListSources:
@@ -92,6 +93,7 @@ func CreateTrendingTool(agg *TrendingAggregator) *MediaTool {
 func executeTrendingFetch(
 	ctx context.Context,
 	agg *TrendingAggregator,
+	stateStore MediaStateStore,
 	args map[string]any,
 ) (*MediaToolResult, error) {
 	if agg == nil {
@@ -116,6 +118,7 @@ func executeTrendingFetch(
 		if err != nil {
 			return nil, fmt.Errorf("fetch from source %q: %w", source, err)
 		}
+		annotateProcessedTopics(topics, stateStore)
 		return jsonMediaResult(map[string]any{
 			"source": source,
 			"count":  len(topics),
@@ -125,6 +128,7 @@ func executeTrendingFetch(
 
 	// Otherwise fetch from all sources.
 	topics, results := agg.FetchAll(ctx, category, limit)
+	annotateProcessedTopics(topics, stateStore)
 
 	// Build per-source status summary.
 	sourceStatus := make([]map[string]any, 0, len(results))
@@ -213,4 +217,16 @@ func executeTrendingListSources(agg *TrendingAggregator) (*MediaToolResult, erro
 		"sources": names,
 		"count":   len(names),
 	}), nil
+}
+
+// annotateProcessedTopics 标记已处理过的热点（跨会话去重）。
+func annotateProcessedTopics(topics []TrendingTopic, store MediaStateStore) {
+	if store == nil || len(topics) == 0 {
+		return
+	}
+	for i := range topics {
+		if store.IsTopicProcessed(topics[i].Title) {
+			topics[i].Processed = true
+		}
+	}
 }

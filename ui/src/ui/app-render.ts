@@ -67,7 +67,7 @@ import {
 } from "./controllers/skills.ts";
 import { loadUsage, loadSessionTimeSeries, loadSessionLogs } from "./controllers/usage.ts";
 import { icons } from "./icons.ts";
-import { normalizeBasePath, getTabGroups, subtitleForTab, titleForTab } from "./navigation.ts";
+import { normalizeBasePath, getTabGroups, subtitleForTab, titleForTab, type Tab } from "./navigation.ts";
 
 // Module-scope debounce for usage date changes (avoids type-unsafe hacks on state object)
 let usageDateDebounceTimeout: number | null = null;
@@ -150,13 +150,64 @@ export function renderApp(state: AppViewState) {
     state.agentsList?.defaultId ??
     state.agentsList?.agents?.[0]?.id ??
     null;
+  const skillsView = renderSkills({
+    loading: state.skillsLoading,
+    report: state.skillsReport,
+    error: state.skillsError,
+    filter: state.skillsFilter,
+    edits: state.skillEdits,
+    messages: state.skillMessages,
+    busyKey: state.skillsBusyKey,
+    distributeLoading: state.distributeLoading,
+    distributeResult: state.distributeResult,
+    onFilterChange: (next) => (state.skillsFilter = next),
+    onRefresh: () => loadSkills(state, { clearMessages: true }),
+    onToggle: (key, enabled) => updateSkillEnabled(state, key, enabled),
+    onEdit: (key, value) => updateSkillEdit(state, key, value),
+    onSaveKey: (key) => saveSkillApiKey(state, key),
+    onInstall: (skillKey, name, installId) =>
+      installSkill(state, skillKey, name, installId),
+    onDistribute: () => distributeSkills(state),
+  });
+  const subagentTabIds = new Set((state.subagentsList ?? []).map((agent) => agent.id));
+  const activeSubagentsTab =
+    subagentTabIds.has(state.subagentsActiveTab) || state.subagentsActiveTab === "media"
+      ? state.subagentsActiveTab
+      : state.subagentsList?.[0]?.id ?? "media";
+  const overviewPanel = state.overviewPanel ?? "dashboard";
+  const showOverviewTabs = state.tab === "overview";
+  const showingOverviewDashboard = showOverviewTabs && overviewPanel === "dashboard";
+  const showingOverviewInstances =
+    state.tab === "instances" || (showOverviewTabs && overviewPanel === "instances");
+  const showingOverviewUsage =
+    state.tab === "usage" || (showOverviewTabs && overviewPanel === "usage");
+  const headerTab: Tab = showOverviewTabs
+    ? overviewPanel === "instances"
+      ? "instances"
+      : overviewPanel === "usage"
+        ? "usage"
+        : "overview"
+    : state.tab;
+  const hidePageHeading = state.tab === "usage";
 
   return html`
     <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}">
       <header class="topbar">
         <div class="topbar-left">
+          <div class="brand brand--topbar">
+            <div class="brand-logo">
+              <img src=${basePath ? `${basePath}/brand-logo.png` : "/brand-logo.png"} alt="创宇太虚" />
+            </div>
+            <div class="brand-text">
+              <div class="brand-title">
+                <span style="font-weight: bold; line-height: 28px;">创宇太虚</span><span style="font-weight: 300; line-height: 28px;">（Claw Acosmi）</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-status">
           <button
-            class="nav-collapse-toggle"
+            class="nav-collapse-toggle nav-collapse-toggle--workspace"
             @click=${() =>
       state.applySettings({
         ...state.settings,
@@ -167,50 +218,63 @@ export function renderApp(state: AppViewState) {
           >
             <span class="nav-collapse-toggle__icon">${icons.menu}</span>
           </button>
-          <div class="brand">
-            <div class="brand-logo">
-              <img src=${basePath ? `${basePath}/crab-logo.png` : "/crab-logo.png"} alt="OpenAcosmi" />
+          ${isChat ? renderChatControls(state) : nothing}
+          <div class="topbar-right-controls">
+            ${isChat ? html`
+              <button
+                class="btn btn--sm btn--icon"
+                @click=${() => {
+          state.memoryPanel = "media";
+          state.setTab("memory");
+          loadMediaConfig(state);
+        }}
+                title=${t("media.configTitle")}
+              >
+                ${icons.mic}
+              </button>
+              <button
+                class="btn btn--sm btn--icon"
+                @click=${() => {
+          state.setTab("memory");
+        }}
+                title=${t("memory.memoryManagement")}
+              >
+                ${icons.brainMemory}
+              </button>
+            ` : nothing}
+            <div class="pill">
+              <span class="statusDot ${state.connected ? "ok" : ""}"></span>
+              <span>${t("topbar.health")}</span>
+              <span class="mono">${state.connected ? t("topbar.ok") : t("topbar.offline")}</span>
             </div>
-            <div class="brand-text">
-              <div class="brand-title">
-                <span style="font-weight: bold; line-height: 28px;">${t("topbar.brandPrimary")}</span><span style="font-weight: 300; line-height: 28px;">${t("topbar.brandSecondary")}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="topbar-status">
-          <div class="pill">
-            <span class="statusDot ${state.connected ? "ok" : ""}"></span>
-            <span>${t("topbar.health")}</span>
-            <span class="mono">${state.connected ? t("topbar.ok") : t("topbar.offline")}</span>
-          </div>
-          
-          ${renderLocaleSwitch(state)}
-            ${renderThemeToggle(state)}
+            
+            ${renderLocaleSwitch(state)}
+              ${renderThemeToggle(state)}
 
-          <!-- Notification Bell and Dropdown Container -->
-          <div class="notification-container" style="position: relative;">
-            <button
-              class="notification-bell"
-              @click=${(e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      state.notificationsOpen = !state.notificationsOpen;
-      (state as any).requestUpdate?.();
-    }}
-              title="Notifications"
-              aria-label="Notifications"
-            >
-              ${icons.bell}
-              ${(() => {
-      const unreadCount = state.notifications?.filter((n) => !n.read).length || 0;
-      if (unreadCount > 0) {
-        return html`<span class="notification-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>`;
-      }
-      return nothing;
-    })()}
-            </button>
-            ${renderNotificationCenter(state)}
+            <!-- Notification Bell and Dropdown Container -->
+            <div class="notification-container" style="position: relative;">
+              <button
+                class="notification-bell"
+                @click=${(e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.notificationsOpen = !state.notificationsOpen;
+        (state as any).requestUpdate?.();
+      }}
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                ${icons.bell}
+                ${(() => {
+        const unreadCount = state.notifications?.filter((n) => !n.read).length || 0;
+        if (unreadCount > 0) {
+          return html`<span class="notification-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>`;
+        }
+        return nothing;
+      })()}
+              </button>
+              ${renderNotificationCenter(state)}
+            </div>
           </div>
         </div>
       </header>
@@ -218,25 +282,39 @@ export function renderApp(state: AppViewState) {
         ${getTabGroups().map((group) => {
       const isGroupCollapsed = state.settings.navGroupsCollapsed[group.label] ?? false;
       const hasActiveTab = group.tabs.some((tab) => tab === state.tab);
+      const hideGroupLabel = Boolean((group as { hideLabel?: boolean }).hideLabel);
+      const showGroupAsCollapsed = hideGroupLabel ? false : isGroupCollapsed && !hasActiveTab;
       return html`
-            <div class="nav-group ${isGroupCollapsed && !hasActiveTab ? "nav-group--collapsed" : ""}">
-              <button
-                class="nav-label"
-                @click=${() => {
-          const next = { ...state.settings.navGroupsCollapsed };
-          next[group.label] = !isGroupCollapsed;
-          state.applySettings({
-            ...state.settings,
-            navGroupsCollapsed: next,
-          });
-        }}
-                aria-expanded=${!isGroupCollapsed}
-              >
-                <span class="nav-label__text">${group.label}</span>
-                <span class="nav-label__chevron">${isGroupCollapsed ? "+" : "−"}</span>
-              </button>
+            <div class="nav-group ${showGroupAsCollapsed ? "nav-group--collapsed" : ""}">
+              ${hideGroupLabel
+          ? nothing
+          : html`
+                    <button
+                      class="nav-label"
+                      @click=${() => {
+              const next = { ...state.settings.navGroupsCollapsed };
+              next[group.label] = !isGroupCollapsed;
+              state.applySettings({
+                ...state.settings,
+                navGroupsCollapsed: next,
+              });
+            }}
+                      aria-expanded=${!isGroupCollapsed}
+                    >
+                      <span class="nav-label__text">${group.label}</span>
+                      <span class="nav-label__chevron">${isGroupCollapsed ? "+" : "−"}</span>
+                    </button>
+                  `}
               <div class="nav-group__items">
-                ${group.tabs.map((tab) => renderTab(state, tab))}
+                ${group.tabs.map((tab) => {
+          if (tab === "tasks") {
+            const activeCount = [...state.taskKanbanState.tasks.values()]
+              .filter(t => t.status === "queued" || t.status === "started" || t.status === "progress")
+              .length;
+            return renderTab(state, tab, activeCount);
+          }
+          return renderTab(state, tab);
+        })}
               </div>
             </div>
           `;
@@ -248,7 +326,7 @@ export function renderApp(state: AppViewState) {
           <div class="nav-group__items">
             <a
               class="nav-item nav-item--external"
-              href="https://github.com/Acosmi/Claw-Acismi"
+              href="https://github.com/Acosmi/ClawAcosmi"
               target="_blank"
               rel="noreferrer"
               title="${t("topbar.docsTooltip")}"
@@ -260,10 +338,11 @@ export function renderApp(state: AppViewState) {
         </div>
       </aside>
       <main class="content ${isChat ? "content--chat" : ""}">
+        ${isChat ? nothing : html`
         <section class="content-header">
           <div>
-            ${state.tab === "usage" ? nothing : html`<div class="page-title">${titleForTab(state.tab)}</div>`}
-            ${state.tab === "usage" ? nothing : html`<div class="page-sub">${subtitleForTab(state.tab)}</div>`}
+            ${hidePageHeading ? nothing : html`<div class="page-title">${titleForTab(headerTab)}</div>`}
+            ${hidePageHeading ? nothing : html`<div class="page-sub">${subtitleForTab(headerTab)}</div>`}
           </div>
           <div class="page-meta">
             ${state.tab === "memory" && state.memoryPanel === "uhms" ? html`
@@ -282,11 +361,39 @@ export function renderApp(state: AppViewState) {
               </div>
             ` : nothing}
             ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
-            ${isChat ? renderChatControls(state) : nothing}
           </div>
         </section>
+        `}
 
-        ${state.tab === "overview"
+        ${showOverviewTabs
+      ? html`
+          <div class="agent-tabs" style="margin-bottom: 16px;">
+            <button
+              class="agent-tab ${overviewPanel === "dashboard" ? "active" : ""}"
+              @click=${() => {
+          state.overviewPanel = "dashboard";
+          void state.loadOverview();
+        }}
+            >${t("overview.tab.dashboard")}</button>
+            <button
+              class="agent-tab ${overviewPanel === "instances" ? "active" : ""}"
+              @click=${() => {
+          state.overviewPanel = "instances";
+          void loadPresence(state);
+        }}
+            >${t("overview.tab.instances")}</button>
+            <button
+              class="agent-tab ${overviewPanel === "usage" ? "active" : ""}"
+              @click=${() => {
+          state.overviewPanel = "usage";
+          void loadUsage(state);
+        }}
+            >${t("overview.tab.usage")}</button>
+          </div>
+        `
+      : nothing}
+
+        ${showingOverviewDashboard
       ? renderOverview({
         connected: state.connected,
         hello: state.hello,
@@ -385,6 +492,7 @@ export function renderApp(state: AppViewState) {
         browserSaving: state.browserToolSaving,
         browserError: state.browserToolError,
         browserEdits: state.browserToolEdits,
+        skillsView,
         onEditChange: (pluginId, key, value) => {
           state.pluginsEditValues = {
             ...state.pluginsEditValues,
@@ -398,6 +506,8 @@ export function renderApp(state: AppViewState) {
           if (panel === "tools") {
             if (state.toolsList.length === 0) void loadTools(state);
             if (!state.browserToolConfig) void loadBrowserToolConfig(state);
+          } else if (panel === "skills") {
+            if (!state.skillsReport) void loadSkills(state, { clearMessages: true });
           }
         },
         onBrowserEditChange: (key, value) => {
@@ -408,7 +518,7 @@ export function renderApp(state: AppViewState) {
       : nothing
     }
 
-        ${state.tab === "instances"
+        ${showingOverviewInstances
       ? renderInstances({
         loading: state.presenceLoading,
         entries: state.presenceEntries,
@@ -419,7 +529,7 @@ export function renderApp(state: AppViewState) {
       : nothing
     }
 
-        ${state.tab === "usage"
+        ${showingOverviewUsage
       ? renderUsage({
         loading: state.usageLoading,
         error: state.usageError,
@@ -1054,25 +1164,7 @@ export function renderApp(state: AppViewState) {
     }
 
         ${state.tab === "skills"
-      ? renderSkills({
-        loading: state.skillsLoading,
-        report: state.skillsReport,
-        error: state.skillsError,
-        filter: state.skillsFilter,
-        edits: state.skillEdits,
-        messages: state.skillMessages,
-        busyKey: state.skillsBusyKey,
-        distributeLoading: state.distributeLoading,
-        distributeResult: state.distributeResult,
-        onFilterChange: (next) => (state.skillsFilter = next),
-        onRefresh: () => loadSkills(state, { clearMessages: true }),
-        onToggle: (key, enabled) => updateSkillEnabled(state, key, enabled),
-        onEdit: (key, value) => updateSkillEdit(state, key, value),
-        onSaveKey: (key) => saveSkillApiKey(state, key),
-        onInstall: (skillKey, name, installId) =>
-          installSkill(state, skillKey, name, installId),
-        onDistribute: () => distributeSkills(state),
-      })
+      ? skillsView
       : nothing
     }
 
@@ -1082,6 +1174,14 @@ export function renderApp(state: AppViewState) {
         agents: state.subagentsList ?? [],
         error: state.subagentsError ?? null,
         busyKey: state.subagentsBusyKey ?? null,
+        activeTab: activeSubagentsTab,
+        onTabChange: (tabId) => {
+          state.subagentsActiveTab = tabId;
+          if (tabId === "media") {
+            void loadMediaDashboard(state);
+          }
+        },
+        renderMediaTab: () => renderMediaDashboard(state),
         onToggle: (agentId, enabled) => {
           import("./controllers/subagents.ts").then((m) =>
             m.toggleSubAgent(state as any, agentId, enabled),
@@ -1106,6 +1206,9 @@ export function renderApp(state: AppViewState) {
           import("./controllers/subagents.ts").then((m) =>
             m.loadSubAgents(state as any),
           );
+          if (activeSubagentsTab === "media") {
+            void loadMediaDashboard(state);
+          }
         },
         onStartOpenCoderWizard: () => {
           import("./views/wizard.ts").then((m) =>
@@ -1129,6 +1232,9 @@ export function renderApp(state: AppViewState) {
             state.taskKanbanState = m.pruneCompletedTasks(state.taskKanbanState);
             state.requestUpdate();
           });
+        },
+        onRequestUpdate: () => {
+          state.requestUpdate();
         },
       })
       : nothing
@@ -1376,6 +1482,7 @@ export function renderApp(state: AppViewState) {
         onDraftChange: (next) => (state.chatMessage = next),
         attachments: state.chatAttachments,
         onAttachmentsChange: (next) => (state.chatAttachments = next),
+        onAttachmentRejected: (message) => state.addNotification(message, "error", state.sessionKey),
         voiceRecording: state.voiceRecording,
         voiceRecordingDuration: state.voiceRecordingDuration,
         voiceSupported: state.voiceSupported,
@@ -1437,6 +1544,25 @@ export function renderApp(state: AppViewState) {
           },
         },
       })}
+        <button
+          class="compress-fab"
+          ?disabled=${state.chatLoading || !state.connected || Boolean(state.chatRunId)}
+          @click=${(e: Event) => {
+          const btn = e.currentTarget as HTMLElement;
+          if (btn.classList.contains('compress-fab--confirm')) {
+            btn.classList.remove('compress-fab--confirm');
+            state.handleSendChat("/compact");
+          } else {
+            btn.classList.add('compress-fab--confirm');
+            setTimeout(() => btn.classList.remove('compress-fab--confirm'), 3000);
+          }
+        }}
+          title="压缩上下文"
+          aria-label="压缩上下文"
+        >
+          <span class="compress-fab__text">压缩</span>
+          <span class="compress-fab__confirm-text">确认?</span>
+        </button>
       `
       : nothing
     }

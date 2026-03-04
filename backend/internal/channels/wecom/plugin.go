@@ -7,10 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // WeComPlugin 企业微信频道插件
@@ -89,7 +90,13 @@ func (p *WeComPlugin) Start(accountID string) error {
 	capturedAccountID := accountID
 	handler := NewCallbackHandler(CallbackHandlerConfig{
 		Client: client,
-		OnMessage: func(msgType, content, fromUser string) {
+		OnMessage: func(msg *channels.ChannelMessage, fromUser string) {
+			msgType := ""
+			content := ""
+			if msg != nil {
+				msgType = msg.MessageType
+				content = msg.Text
+			}
 			slog.Info("wecom message received (plugin)",
 				"account", capturedAccountID,
 				"msg_type", msgType,
@@ -100,13 +107,8 @@ func (p *WeComPlugin) Start(accountID string) error {
 			// 路由到 Agent 管线获取回复（优先多模态）
 			var dispatchReply *channels.DispatchReply
 			if p.DispatchMultimodalFunc != nil {
-				// 构建 ChannelMessage（包含 msgType，Phase B 可扩展）
-				cm := &channels.ChannelMessage{
-					Text:        content,
-					MessageType: msgType,
-				}
 				dispatchReply = p.DispatchMultimodalFunc(
-					"wecom", capturedAccountID, fromUser, fromUser, cm)
+					"wecom", capturedAccountID, fromUser, fromUser, msg)
 			} else if p.DispatchFunc != nil {
 				replyText := p.DispatchFunc(context.Background(),
 					"wecom", capturedAccountID, fromUser, fromUser, content)
@@ -118,12 +120,18 @@ func (p *WeComPlugin) Start(accountID string) error {
 					"account", capturedAccountID)
 			}
 
-			if dispatchReply != nil && dispatchReply.Text != "" {
+			if dispatchReply != nil {
 				sender := p.GetSender(capturedAccountID)
 				if sender != nil {
-					if err := sender.SendText(context.Background(), fromUser, dispatchReply.Text); err != nil {
-						slog.Error("wecom: failed to send reply",
+					if err := p.sendDispatchReplyMedia(context.Background(), sender, dispatchReply, fromUser); err != nil {
+						slog.Warn("wecom: failed to send media reply",
 							"account", capturedAccountID, "to", fromUser, "error", err)
+					}
+					if dispatchReply.Text != "" {
+						if err := sender.SendText(context.Background(), fromUser, dispatchReply.Text); err != nil {
+							slog.Error("wecom: failed to send reply",
+								"account", capturedAccountID, "to", fromUser, "error", err)
+						}
 					}
 				}
 			}
@@ -166,6 +174,16 @@ func (p *WeComPlugin) GetSender(accountID string) *WeComSender {
 	return p.senders[accountID]
 }
 
+// GetClient 获取 API 客户端（用于资源下载等场景）。
+func (p *WeComPlugin) GetClient(accountID string) *WeComClient {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if accountID == "" {
+		accountID = channels.DefaultAccountID
+	}
+	return p.clients[accountID]
+}
+
 // GetCallbackHandler 获取回调处理器
 func (p *WeComPlugin) GetCallbackHandler(accountID string) *CallbackHandler {
 	p.mu.Lock()
@@ -184,7 +202,11 @@ func (p *WeComPlugin) SendMessage(params channels.OutboundSendParams) (*channels
 	}
 	sender := p.GetSender(accountID)
 	if sender == nil {
-		return nil, fmt.Errorf("wecom sender not available for account %s", accountID)
+		return nil, channels.NewSendError(channels.ChannelWeCom, channels.SendErrUnavailable,
+			fmt.Sprintf("wecom sender not available for account %s", accountID)).
+			WithOperation("send.init").
+			WithRetryable(true).
+			WithDetails(map[string]interface{}{"accountId": accountID})
 	}
 
 	ctx := params.Ctx
@@ -192,11 +214,92 @@ func (p *WeComPlugin) SendMessage(params channels.OutboundSendParams) (*channels
 		ctx = context.Background()
 	}
 
-	if err := sender.SendText(ctx, params.To, params.Text); err != nil {
-		return nil, err
+	outboundText := strings.TrimSpace(params.Text)
+	if mediaURLFallback := wecomMediaURLFallbackText(params.MediaURL, len(params.MediaData) > 0); mediaURLFallback != "" {
+		if outboundText == "" {
+			outboundText = mediaURLFallback
+		} else {
+			outboundText += "\n" + mediaURLFallback
+		}
 	}
+
+	mediaSent := false
+	if len(params.MediaData) > 0 {
+		if err := sender.SendBinaryMedia(ctx, params.To, params.MediaData, params.MediaMimeType, ""); err != nil {
+			slog.Warn("wecom: binary media send failed, fallback to text",
+				"to", params.To, "mimeType", params.MediaMimeType, "error", err)
+			if outboundText == "" {
+				return nil, channels.WrapSendError(channels.ChannelWeCom, channels.SendErrUpstream,
+					"send.media", "wecom binary media send failed", err).
+					WithRetryable(true).
+					WithDetails(map[string]interface{}{
+						"to":       params.To,
+						"mimeType": params.MediaMimeType,
+					})
+			}
+		} else {
+			mediaSent = true
+		}
+	}
+
+	textSent := false
+	if outboundText != "" {
+		if err := sender.SendText(ctx, params.To, outboundText); err != nil {
+			return nil, channels.WrapSendError(channels.ChannelWeCom, channels.SendErrUpstream,
+				"send.text", "wecom text send failed", err).
+				WithRetryable(true).
+				WithDetails(map[string]interface{}{"to": params.To})
+		}
+		textSent = true
+	}
+
+	if !textSent && !mediaSent {
+		return nil, channels.NewSendError(channels.ChannelWeCom, channels.SendErrInvalidRequest,
+			"wecom: empty outbound message").
+			WithOperation("send.validate").
+			WithDetails(map[string]interface{}{
+				"to":           params.To,
+				"hasMediaData": len(params.MediaData) > 0,
+				"hasMediaURL":  strings.TrimSpace(params.MediaURL) != "",
+			})
+	}
+
 	return &channels.OutboundSendResult{
 		Channel: string(channels.ChannelWeCom),
 		ChatID:  params.To,
 	}, nil
+}
+
+func (p *WeComPlugin) sendDispatchReplyMedia(ctx context.Context, sender *WeComSender, reply *channels.DispatchReply, toUser string) error {
+	if reply == nil || sender == nil {
+		return nil
+	}
+
+	if len(reply.MediaItems) > 0 {
+		for _, item := range reply.MediaItems {
+			if len(item.Data) == 0 {
+				continue
+			}
+			if err := sender.SendBinaryMedia(ctx, toUser, item.Data, item.MimeType, ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if len(reply.MediaData) > 0 {
+		return sender.SendBinaryMedia(ctx, toUser, reply.MediaData, reply.MediaMimeType, "")
+	}
+	return nil
+}
+
+func wecomMediaURLFallbackText(mediaURL string, hasMediaData bool) string {
+	if hasMediaData {
+		return ""
+	}
+	urlText := strings.TrimSpace(mediaURL)
+	if urlText == "" {
+		return ""
+	}
+	return "[该消息包含媒体链接，当前企微通道暂不支持自动抓取外部媒体]\n媒体链接：" + urlText
 }

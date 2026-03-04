@@ -14,9 +14,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms"
-	"github.com/openacosmi/claw-acismi/internal/memory/uhms/vectoradapter"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
+	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms/vectoradapter"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // UHMSHandlers 返回 memory.uhms.* 静态方法映射。

@@ -1,7 +1,7 @@
 package reply
 
 import (
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- Block Streaming Config 解析 ----------

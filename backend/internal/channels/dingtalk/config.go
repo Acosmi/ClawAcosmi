@@ -5,8 +5,8 @@ package dingtalk
 import (
 	"fmt"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ResolvedDingTalkAccount 已解析的钉钉账号信息

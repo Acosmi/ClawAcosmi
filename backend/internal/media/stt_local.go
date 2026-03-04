@@ -10,10 +10,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // LocalWhisperSTT 本地 whisper.cpp 实现
@@ -44,11 +43,20 @@ func (s *LocalWhisperSTT) Transcribe(ctx context.Context, audioData []byte, mime
 	}
 
 	// 写入临时文件
-	tmpDir := os.TempDir()
 	ext := mimeTypeToExt(mimeType)
-	tmpFile := filepath.Join(tmpDir, fmt.Sprintf("stt_input_%d%s", os.Getpid(), ext))
-	if err := os.WriteFile(tmpFile, audioData, 0644); err != nil {
+	tmpHandle, err := os.CreateTemp("", "stt-input-*"+normalizeTempExtension(ext))
+	if err != nil {
 		return "", fmt.Errorf("stt/local: write temp file: %w", err)
+	}
+	tmpFile := tmpHandle.Name()
+	if _, err := tmpHandle.Write(audioData); err != nil {
+		_ = tmpHandle.Close()
+		_ = os.Remove(tmpFile)
+		return "", fmt.Errorf("stt/local: write temp file: %w", err)
+	}
+	if err := tmpHandle.Close(); err != nil {
+		_ = os.Remove(tmpFile)
+		return "", fmt.Errorf("stt/local: close temp file: %w", err)
 	}
 	defer os.Remove(tmpFile)
 

@@ -7,6 +7,8 @@ package gateway
 import (
 	"context"
 	"time"
+
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // MediaHandlers 返回媒体子系统 RPC 方法处理器。
@@ -17,6 +19,8 @@ func MediaHandlers() map[string]GatewayMethodHandler {
 		"media.drafts.list":      handleMediaDraftsList,
 		"media.drafts.get":       handleMediaDraftsGet,
 		"media.drafts.delete":    handleMediaDraftsDelete,
+		"media.publish.list":     handleMediaPublishList,
+		"media.publish.get":      handleMediaPublishGet,
 	}
 }
 
@@ -156,4 +160,70 @@ func handleMediaDraftsDelete(ctx *MethodHandlerContext) {
 		"deleted": true,
 		"id":      id,
 	}, nil)
+}
+
+// ---------- media.publish.list ----------
+
+func handleMediaPublishList(ctx *MethodHandlerContext) {
+	sub := ctx.Context.MediaSubsystem
+	if sub == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "media subsystem not available"))
+		return
+	}
+	if sub.PublishHistory == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "publish history not available"))
+		return
+	}
+
+	var opts *media.PublishListOptions
+	limit, hasLimit := ctx.Params["limit"].(float64)
+	offset, hasOffset := ctx.Params["offset"].(float64)
+	if hasLimit || hasOffset {
+		opts = &media.PublishListOptions{}
+		if hasLimit && limit > 0 {
+			opts.Limit = int(limit)
+		}
+		if hasOffset && offset > 0 {
+			opts.Offset = int(offset)
+		}
+	}
+
+	records, err := sub.PublishHistory.List(opts)
+	if err != nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "list publish history: "+err.Error()))
+		return
+	}
+
+	ctx.Respond(true, map[string]interface{}{
+		"records": records,
+		"count":   len(records),
+	}, nil)
+}
+
+// ---------- media.publish.get ----------
+
+func handleMediaPublishGet(ctx *MethodHandlerContext) {
+	sub := ctx.Context.MediaSubsystem
+	if sub == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "media subsystem not available"))
+		return
+	}
+	if sub.PublishHistory == nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "publish history not available"))
+		return
+	}
+
+	id, _ := ctx.Params["id"].(string)
+	if id == "" {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeBadRequest, "missing publish record id"))
+		return
+	}
+
+	record, err := sub.PublishHistory.Get(id)
+	if err != nil {
+		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "get publish record: "+err.Error()))
+		return
+	}
+
+	ctx.Respond(true, record, nil)
 }

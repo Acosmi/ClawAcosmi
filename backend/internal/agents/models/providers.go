@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // ---------- 供应商配置 ----------
@@ -28,27 +28,27 @@ type ProviderDefaults struct {
 // TS 参考: models-config.providers.ts 常量定义
 var providerDefaults = map[string]ProviderDefaults{
 	"minimax": {
-		BaseURL:       "https://api.minimax.chat/v1",
-		DefaultModel:  "MiniMax-M2.5",
-		ContextWindow: 200_000,
+		BaseURL:       "https://api.minimax.io/v1",
+		DefaultModel:  "MiniMax-Text-01",
+		ContextWindow: 1_000_000,
 		MaxTokens:     8192,
 	},
 	"minimax-portal": {
 		BaseURL:       "https://api.minimax.io/anthropic",
 		DefaultModel:  "MiniMax-M2.5",
-		ContextWindow: 200_000,
+		ContextWindow: 1_000_000,
 		MaxTokens:     8192,
 	},
 	"moonshot": {
 		BaseURL:       "https://api.moonshot.ai/v1",
-		DefaultModel:  "kimi-k2.5",
-		ContextWindow: 256_000,
-		MaxTokens:     8192,
+		DefaultModel:  "moonshot-v1-kimi-k2", // K2.5 稳定别名（2026-01-27）
+		ContextWindow: 131_072,
+		MaxTokens:     16384,
 	},
 	"qwen-portal": {
 		BaseURL:       "https://portal.qwen.ai/v1",
-		DefaultModel:  "coder-model",
-		ContextWindow: 128_000,
+		DefaultModel:  "qwen-max",
+		ContextWindow: 131_072,
 		MaxTokens:     8192,
 	},
 	"ollama": {
@@ -57,28 +57,52 @@ var providerDefaults = map[string]ProviderDefaults{
 		ContextWindow: 128_000,
 		MaxTokens:     8192,
 	},
-	"qianfan": {
-		BaseURL:       "https://qianfan.baidubce.com/v2",
-		DefaultModel:  "deepseek-v3.2",
-		ContextWindow: 98304,
-		MaxTokens:     32768,
-	},
-	"xiaomi": {
-		BaseURL:       "https://api.xiaomimimo.com/anthropic",
-		DefaultModel:  "mimo-v2-flash",
-		ContextWindow: 262_144,
-		MaxTokens:     8192,
-	},
 	"deepseek": {
 		BaseURL:       "https://api.deepseek.com/v1",
 		DefaultModel:  "deepseek-chat",
-		ContextWindow: 128_000,
+		ContextWindow: 131_072, // DeepSeek-V3.2 实际 128K
 		MaxTokens:     8192,
 	},
 	"google": {
 		BaseURL:       "https://generativelanguage.googleapis.com/v1beta",
-		DefaultModel:  "gemini-3-flash-preview",
+		DefaultModel:  "gemini-2.5-flash",
 		ContextWindow: 1_000_000,
+		MaxTokens:     8192,
+	},
+	"doubao": {
+		BaseURL:       "https://ark.cn-beijing.volces.com/api/v3",
+		DefaultModel:  "doubao-pro-32k",
+		ContextWindow: 32_768,
+		MaxTokens:     4096,
+	},
+	"qwen": {
+		BaseURL:       "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		DefaultModel:  "qwen-max",
+		ContextWindow: 131_072,
+		MaxTokens:     8192,
+	},
+	"zai": {
+		BaseURL:       "https://open.bigmodel.cn/api/paas/v4",
+		DefaultModel:  "glm-4-plus",
+		ContextWindow: 128_000,
+		MaxTokens:     4096,
+	},
+	"openai": {
+		BaseURL:       "https://api.openai.com/v1",
+		DefaultModel:  "gpt-4o",
+		ContextWindow: 128_000,
+		MaxTokens:     16384,
+	},
+	"anthropic": {
+		BaseURL:       "https://api.anthropic.com/v1",
+		DefaultModel:  "claude-sonnet-4-20250514",
+		ContextWindow: 200_000,
+		MaxTokens:     8192,
+	},
+	"xai": {
+		BaseURL:       "https://api.x.ai/v1",
+		DefaultModel:  "grok-3",
+		ContextWindow: 131_072,
 		MaxTokens:     8192,
 	},
 }
@@ -86,44 +110,28 @@ var providerDefaults = map[string]ProviderDefaults{
 // EnvApiKeyVarNames 供应商 API Key 环境变量名映射。
 // P4-DRIFT4: 对齐 TS model-auth.ts L287-307 完整映射。
 var EnvApiKeyVarNames = map[string]string{
-	"anthropic":             "ANTHROPIC_API_KEY",
-	"openai":                "OPENAI_API_KEY",
-	"google":                "GEMINI_API_KEY",
-	"google-vertex":         "GOOGLE_API_KEY",
-	"mistral":               "MISTRAL_API_KEY",
-	"groq":                  "GROQ_API_KEY",
-	"deepseek":              "DEEPSEEK_API_KEY",
-	"qwen":                  "DASHSCOPE_API_KEY",
-	"qwen-portal":           "DASHSCOPE_API_KEY",
-	"moonshot":              "MOONSHOT_API_KEY",
-	"minimax":               "MINIMAX_API_KEY",
-	"minimax-portal":        "MINIMAX_API_KEY",
-	"xai":                   "XAI_API_KEY",
-	"zai":                   "XAI_API_KEY",
-	"venice":                "VENICE_API_KEY",
-	"qianfan":               "QIANFAN_API_KEY",
-	"xiaomi":                "TIZI_API_KEY",
-	"voyage":                "VOYAGE_API_KEY",
-	"deepgram":              "DEEPGRAM_API_KEY",
-	"cerebras":              "CEREBRAS_API_KEY",
-	"openrouter":            "OPENROUTER_API_KEY",
-	"vercel-ai-gateway":     "AI_GATEWAY_API_KEY",
-	"cloudflare-ai-gateway": "CLOUDFLARE_AI_GATEWAY_API_KEY",
-	"synthetic":             "SYNTHETIC_API_KEY",
-	"openacosmi":            "OPENACOSMI_API_KEY",
-	"ollama":                "OLLAMA_API_KEY",
-	"chutes":                "CHUTES_API_KEY",
-	"kimi-coding":           "MOONSHOT_API_KEY",
+	"anthropic":      "ANTHROPIC_API_KEY",
+	"openai":         "OPENAI_API_KEY",
+	"google":         "GEMINI_API_KEY",
+	"deepseek":       "DEEPSEEK_API_KEY",
+	"qwen":           "DASHSCOPE_API_KEY",
+	"qwen-portal":    "DASHSCOPE_API_KEY",
+	"moonshot":       "MOONSHOT_API_KEY",
+	"minimax":        "MINIMAX_API_KEY",
+	"minimax-portal": "MINIMAX_API_KEY",
+	"xai":            "XAI_API_KEY",
+	"zai":            "ZAI_API_KEY",
+	"doubao":         "ARK_API_KEY",
+	"openacosmi":     "OPENACOSMI_API_KEY",
+	"ollama":         "OLLAMA_API_KEY",
 }
 
 // EnvApiKeyFallbacks OAuth/令牌回退链。
 // TS 参考: model-auth.ts resolveEnvApiKey 中的 fallback 链。
 var EnvApiKeyFallbacks = map[string][]string{
 	"anthropic":      {"ANTHROPIC_OAUTH_TOKEN"},
-	"zai":            {"ZAI_API_KEY"},
 	"qwen-portal":    {"QWEN_PORTAL_API_KEY"},
 	"minimax-portal": {"MINIMAX_PORTAL_API_KEY"},
-	"kimi-coding":    {"KIMI_CODING_API_KEY"},
 }
 
 // ResolveEnvApiKeyVarName 解析供应商 API Key 环境变量名。
@@ -225,7 +233,6 @@ var ToolEnvApiKeyVarNames = map[string]string{
 	"brave_search":  "BRAVE_API_KEY",
 	"firecrawl":     "FIRECRAWL_API_KEY",
 	"perplexity":    "PERPLEXITY_API_KEY",
-	"openrouter":    "OPENROUTER_API_KEY",
 	"elevenlabs":    "ELEVENLABS_API_KEY",
 	"elevenlabs_xi": "XI_API_KEY",
 }

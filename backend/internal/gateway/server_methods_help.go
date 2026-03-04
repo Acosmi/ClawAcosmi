@@ -8,7 +8,7 @@ package gateway
 import (
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
 )
 
 func timeNowMs() int64 {

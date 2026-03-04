@@ -5,7 +5,7 @@ package gateway
 // WebSocket RPC: plan.confirm.resolve — 前端回调方案确认决策
 
 import (
-	"github.com/openacosmi/claw-acismi/internal/agents/runner"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/runner"
 )
 
 // PlanConfirmHandlers 返回方案确认相关的 RPC 处理器。

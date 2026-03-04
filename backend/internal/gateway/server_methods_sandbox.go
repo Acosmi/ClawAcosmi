@@ -11,7 +11,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/sandbox"
+	"github.com/Acosmi/ClawAcosmi/internal/sandbox"
 )
 
 // handleSandboxConfigGet 获取沙箱配置

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/security"
+	"github.com/Acosmi/ClawAcosmi/internal/security"
 )
 
 // TS 对照: media/fetch.ts (220L)

@@ -14,7 +14,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/openacosmi/claw-acismi/internal/agents/llmclient"
+	"github.com/Acosmi/ClawAcosmi/internal/agents/llmclient"
 )
 
 // ---------- 子智能体生成回调类型 ----------

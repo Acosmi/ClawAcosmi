@@ -11,7 +11,7 @@ package media
 import (
 	"time"
 
-	"github.com/openacosmi/claw-acismi/internal/channels"
+	"github.com/Acosmi/ClawAcosmi/internal/channels"
 )
 
 // ---------- Channel IDs (P0-3) ----------
@@ -93,6 +93,8 @@ type TrendingTopic struct {
 	HeatScore float64   `json:"heat_score"`
 	Category  string    `json:"category,omitempty"`
 	FetchedAt time.Time `json:"fetched_at"`
+	// Processed 标记此热点是否已在之前的会话中被处理过（跨会话去重）。
+	Processed bool `json:"processed,omitempty"`
 }
 
 // ContentDraft represents a content draft awaiting review or publication.

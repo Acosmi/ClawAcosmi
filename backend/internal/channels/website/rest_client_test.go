@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openacosmi/claw-acismi/internal/media"
+	"github.com/Acosmi/ClawAcosmi/internal/media"
 )
 
 // ---------- helpers ----------

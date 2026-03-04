@@ -250,45 +250,8 @@ export function renderMessageGroup(
   `;
 }
 
-function renderAvatar(role: string, assistant?: Pick<AssistantIdentity, "name" | "avatar">) {
-  const normalized = normalizeRoleForGrouping(role);
-  const assistantName = assistant?.name?.trim() || t("chat.assistantName");
-  const assistantAvatar = assistant?.avatar?.trim() || "";
-  const initial =
-    normalized === "user"
-      ? "U"
-      : normalized === "assistant"
-        ? assistantName.charAt(0).toUpperCase() || "A"
-        : normalized === "tool"
-          ? "⚙"
-          : "?";
-  const className =
-    normalized === "user"
-      ? "user"
-      : normalized === "assistant"
-        ? "assistant"
-        : normalized === "tool"
-          ? "tool"
-          : "other";
-
-  if (assistantAvatar && normalized === "assistant") {
-    if (isAvatarUrl(assistantAvatar)) {
-      return html`<img
-        class="chat-avatar ${className}"
-        src="${assistantAvatar}"
-        alt="${assistantName}"
-      />`;
-    }
-    return html`<div class="chat-avatar ${className}">${assistantAvatar}</div>`;
-  }
-
-  return html`<div class="chat-avatar ${className}">${initial}</div>`;
-}
-
-function isAvatarUrl(value: string): boolean {
-  return (
-    /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/") // Relative paths from avatar endpoint
-  );
+function renderAvatar(_role: string, _assistant?: Pick<AssistantIdentity, "name" | "avatar">) {
+  return nothing;
 }
 
 function renderMessageImages(images: ImageBlock[]) {
@@ -470,7 +433,6 @@ export function renderProcessingCard(
   assistant?: AssistantIdentity,
 ) {
   const elapsed = Date.now() - startedAt;
-  const elapsedSeconds = Math.floor(elapsed / 1000);
   const elapsedStr = formatElapsed(elapsed);
   const hasContent = stream !== null && stream.trim().length > 0;
 
@@ -480,14 +442,20 @@ export function renderProcessingCard(
       <div class="chat-group-messages">
         <div class="chat-processing-card ${!hasContent ? 'chat-processing-card--waiting' : ''}">
           <div class="chat-processing-card__content">
-            <div class="chat-processing-card__icon-wrap">
+            <div class="chat-processing-card__icon-wrap" aria-hidden="true">
               <svg class="chat-processing-card__anim-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 6v6l4 2"></path>
+                <circle cx="12" cy="12" r="7"></circle>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
               </svg>
             </div>
             <div class="chat-processing-card__text-wrap">
-              <span class="chat-processing-card__title">任务正在处理中 (${elapsedSeconds}s)</span>
+              <span class="chat-processing-card__title">${t("chat.processing")}</span>
+              <span class="chat-processing-card__timer">${t("chat.processingTime", { time: elapsedStr })}</span>
+            </div>
+            <div class="chat-processing-card__pulse-dots" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
             </div>
           </div>
           ${hasContent
@@ -511,4 +479,3 @@ export function renderProcessingCard(
     </div>
   `;
 }
-

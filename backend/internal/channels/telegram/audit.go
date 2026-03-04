@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openacosmi/claw-acismi/pkg/types"
+	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
 // Telegram 群组成员审计 — 继承自 src/telegram/audit.ts (163L)
