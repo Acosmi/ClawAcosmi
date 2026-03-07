@@ -35,6 +35,28 @@ func MediaHandlers() map[string]GatewayMethodHandler {
 	}
 }
 
+// appendSharedMediaTools 追加共享 runner 工具到工具列表（去重 webSearch 逻辑）。
+func appendSharedMediaTools(tools []map[string]interface{}, cfg *types.OpenAcosmiConfig) []map[string]interface{} {
+	webSearchEnabled := false
+	if cfg != nil && cfg.Tools != nil && cfg.Tools.Web != nil &&
+		cfg.Tools.Web.Search != nil && cfg.Tools.Web.Search.Bocha != nil {
+		webSearchEnabled = cfg.Tools.Web.Search.Bocha.Enabled == nil || *cfg.Tools.Web.Search.Bocha.Enabled
+	}
+	tools = append(tools, map[string]interface{}{
+		"name":        "web_search",
+		"description": "Search the web for information and references",
+		"enabled":     webSearchEnabled,
+		"scope":       "shared",
+	})
+	tools = append(tools, map[string]interface{}{
+		"name":        "report_progress",
+		"description": "Report intermediate progress to the user",
+		"enabled":     true,
+		"scope":       "shared",
+	})
+	return tools
+}
+
 // ---------- media.trending.fetch ----------
 
 func handleMediaTrendingFetch(ctx *MethodHandlerContext) {
@@ -400,20 +422,25 @@ func handleMediaConfigGet(ctx *MethodHandlerContext) {
 		})
 	}
 
-	// 工具列表
-	toolNames := sub.ToolNames()
-	tools := make([]map[string]interface{}, 0, len(toolNames))
-	for _, tn := range toolNames {
-		_, desc, ok := sub.GetToolDef(tn)
-		if !ok {
-			continue
-		}
+	// 工具列表 — 使用 DefaultMediaToolDefs 获取 enabled/scope 完整信息
+	toolsCfg := media.MediaToolsConfig{
+		DraftStore:     sub.DraftStore,
+		Aggregator:     sub.Aggregator,
+		EnablePublish:  sub.PublishHistory != nil,
+		EnableInteract: sub.GetTool(media.ToolSocialInteract) != nil,
+	}
+	toolDefs := media.DefaultMediaToolDefs(toolsCfg)
+	tools := make([]map[string]interface{}, 0, len(toolDefs)+2)
+	for _, d := range toolDefs {
 		tools = append(tools, map[string]interface{}{
-			"name":        tn,
-			"description": desc,
-			"status":      "registered",
+			"name":        d.Name,
+			"description": d.Description,
+			"enabled":     d.Enabled,
+			"scope":       "media",
 		})
 	}
+	// 共享 runner 工具
+	tools = appendSharedMediaTools(tools, liveCfg)
 
 	// 发布器
 	publishers := make([]string, 0)
@@ -454,16 +481,46 @@ func handleMediaConfigGet(ctx *MethodHandlerContext) {
 		}
 	}
 
+	// 高级热点策略配置
+	trendingStrategy := map[string]interface{}{
+		"hotKeywords":        []string{},
+		"monitorIntervalMin": 30,
+		"trendingThreshold":  float64(10000),
+		"contentCategories":  []string{},
+		"autoDraftEnabled":   false,
+	}
+	// 来源配置状态（区分 nil 未配置 vs [] 显式全禁用）
+	enabledSourcesConfigured := false
+	if liveCfg != nil && liveCfg.SubAgents != nil && liveCfg.SubAgents.MediaAgent != nil {
+		ma := liveCfg.SubAgents.MediaAgent
+		enabledSourcesConfigured = ma.EnabledSources != nil
+		if len(ma.HotKeywords) > 0 {
+			trendingStrategy["hotKeywords"] = ma.HotKeywords
+		}
+		if ma.MonitorIntervalMin > 0 {
+			trendingStrategy["monitorIntervalMin"] = ma.MonitorIntervalMin
+		}
+		if ma.TrendingThreshold != nil {
+			trendingStrategy["trendingThreshold"] = *ma.TrendingThreshold
+		}
+		if len(ma.ContentCategories) > 0 {
+			trendingStrategy["contentCategories"] = ma.ContentCategories
+		}
+		trendingStrategy["autoDraftEnabled"] = ma.AutoDraftEnabled
+	}
+
 	ctx.Respond(true, map[string]interface{}{
-		"agent_id":           "oa-media",
-		"label":              "媒体运营智能体",
-		"status":             configStatus,
-		"trending_sources":   sources,
-		"tools":              tools,
-		"publishers":         publishers,
-		"publish_enabled":    sub.PublishHistory != nil,
-		"publish_configured": publishConfigured,
-		"llm":                llmConfig,
+		"agent_id":                   "oa-media",
+		"label":                      "媒体运营智能体",
+		"status":                     configStatus,
+		"trending_sources":           sources,
+		"tools":                      tools,
+		"publishers":                 publishers,
+		"publish_enabled":            sub.PublishHistory != nil,
+		"publish_configured":         publishConfigured,
+		"llm":                        llmConfig,
+		"trending_strategy":          trendingStrategy,
+		"enabled_sources_configured": enabledSourcesConfigured,
 	}, nil)
 }
 
@@ -524,6 +581,41 @@ func handleMediaConfigUpdate(ctx *MethodHandlerContext) {
 		ma.MaxAutoSpawnsPerDay = int(v)
 	}
 
+	// 高级热点策略字段
+	if v, ok := ctx.Params["hotKeywords"].([]interface{}); ok {
+		keywords := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				keywords = append(keywords, s)
+			}
+		}
+		ma.HotKeywords = keywords
+	}
+	if v, ok := ctx.Params["monitorIntervalMin"].(float64); ok && v > 0 {
+		if v < 5 {
+			v = 5 // 最小 5 分钟
+		}
+		if v > 1440 { // 最大 24 小时
+			v = 1440
+		}
+		ma.MonitorIntervalMin = int(v)
+	}
+	if v, ok := ctx.Params["trendingThreshold"].(float64); ok && v >= 0 {
+		ma.TrendingThreshold = &v
+	}
+	if v, ok := ctx.Params["contentCategories"].([]interface{}); ok {
+		cats := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				cats = append(cats, s)
+			}
+		}
+		ma.ContentCategories = cats
+	}
+	if v, ok := ctx.Params["autoDraftEnabled"].(bool); ok {
+		ma.AutoDraftEnabled = v
+	}
+
 	// 写入配置文件
 	if err := loader.WriteConfigFile(cfg); err != nil {
 		ctx.Respond(false, nil, NewErrorShape(ErrCodeInternalError, "failed to save config: "+err.Error()))
@@ -558,14 +650,24 @@ func handleMediaToolsList(ctx *MethodHandlerContext) {
 	}
 	defs := media.DefaultMediaToolDefs(cfg)
 
-	result := make([]map[string]interface{}, 0, len(defs))
+	result := make([]map[string]interface{}, 0, len(defs)+3)
 	for _, d := range defs {
 		result = append(result, map[string]interface{}{
 			"name":        d.Name,
 			"description": d.Description,
 			"enabled":     d.Enabled,
+			"scope":       "media",
 		})
 	}
+
+	// 共享 runner 工具（媒体子智能体运行时自动获得）— 热加载配置
+	liveCfg := ctx.Context.Config
+	if ctx.Context.ConfigLoader != nil {
+		if fresh, err := ctx.Context.ConfigLoader.LoadConfig(); err == nil {
+			liveCfg = fresh
+		}
+	}
+	result = appendSharedMediaTools(result, liveCfg)
 
 	ctx.Respond(true, map[string]interface{}{
 		"tools": result,
@@ -657,6 +759,12 @@ func handleMediaSourcesToggle(ctx *MethodHandlerContext) {
 		cfg.SubAgents.MediaAgent = &types.MediaAgentSettings{}
 	}
 	ma := cfg.SubAgents.MediaAgent
+
+	// nil 语义: nil=全部启用。首次 toggle 时展开为完整列表再操作。
+	if ma.EnabledSources == nil {
+		allSources := []string{"weibo", "baidu", "zhihu"}
+		ma.EnabledSources = allSources
+	}
 
 	if enabled {
 		// 从 EnabledSources 中确保存在

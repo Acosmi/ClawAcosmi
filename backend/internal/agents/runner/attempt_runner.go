@@ -69,6 +69,15 @@ type RemoteMCPBridgeForAgent interface {
 	AgentCallRemoteTool(ctx context.Context, name string, args json.RawMessage, timeout time.Duration) (string, error)
 }
 
+// LocalMCPBridgeForAgent 本地 MCP 工具接口（从 git 安装的 MCP 服务器）。
+// 工具名格式: mcp_{server}_{tool}。由 mcpinstall.McpLocalManager adapter 实现。
+type LocalMCPBridgeForAgent interface {
+	// AgentLocalMcpTools 返回所有就绪本地 MCP 服务器的工具列表（带 mcp_ 前缀）。
+	AgentLocalMcpTools() []RemoteToolDef
+	// AgentCallLocalMcpTool 调用本地 MCP 工具。prefixedName 格式: mcp_{server}_{tool}。
+	AgentCallLocalMcpTool(ctx context.Context, prefixedName string, args json.RawMessage, timeout time.Duration) (string, error)
+}
+
 const (
 	// maxToolLoopIterations 防止无限工具调用循环。
 	// Bug#11: 从 30 降到 15 — 审计中 6 轮已过多，30 完全不合理。
@@ -144,6 +153,7 @@ type EmbeddedAttemptRunner struct {
 	ArgusBridge ArgusBridgeForAgent // 可选，nil = Argus 不可用
 	// (Phase 2A: CoderBridge 已删除 — oa-coder 升级为 spawn_coder_agent)
 	RemoteMCPBridge   RemoteMCPBridgeForAgent   // 可选，nil = 远程 MCP 工具不可用
+	LocalMCPBridge    LocalMCPBridgeForAgent    // 可选，nil = 本地 MCP 工具不可用
 	NativeSandbox     NativeSandboxForAgent     // 可选，nil = 使用 Docker fallback
 	UHMSBridge        UHMSBridgeForAgent        // 可选，nil = UHMS 记忆系统不可用
 	CoderConfirmation *CoderConfirmationManager // 可选，nil = coder 工具不需要确认
@@ -283,8 +293,22 @@ func (r *EmbeddedAttemptRunner) RunAttempt(ctx context.Context, params AttemptPa
 	// 5a. 按意图裁剪历史（greeting 靠 boot brief 感知上下文，不需要历史）
 	priorMessages = trimHistoryByIntent(priorMessages, tier)
 
-	// 5b. 组装消息列表
-	messages := append(priorMessages, llmclient.TextMessage("user", params.Prompt))
+	// 5b. 组装消息列表（含附件图片多模态注入）
+	userMsg := llmclient.TextMessage("user", params.Prompt)
+	// 将 image 类型附件注入到 LLM user message，启用多模态视觉
+	for _, att := range params.Attachments {
+		if att.Type == "image" && att.Source != nil && att.Source.Data != "" {
+			userMsg.Content = append(userMsg.Content, llmclient.ContentBlock{
+				Type: "image",
+				Source: &llmclient.ImageSource{
+					Type:      att.Source.Type,
+					MediaType: att.Source.MediaType,
+					Data:      att.Source.Data,
+				},
+			})
+		}
+	}
+	messages := append(priorMessages, userMsg)
 
 	// 5b.1 Transcript 持久化保障: 使用 defer 确保即使 LLM 失败/超时也能持久化用户消息。
 	transcriptPersisted := params.SuppressTranscript
@@ -1850,9 +1874,14 @@ func (r *EmbeddedAttemptRunner) persistToTranscript(params AttemptParams, messag
 			}
 		}
 		if shouldWriteUser {
+			// 构建 user 消息 content blocks: 文本 + 附件
+			userContent := []session.ContentBlock{{Type: "text", Text: params.Prompt}}
+			if len(params.Attachments) > 0 {
+				userContent = append(userContent, params.Attachments...)
+			}
 			userEntry := session.TranscriptEntry{
 				Role:      "user",
-				Content:   []session.ContentBlock{{Type: "text", Text: params.Prompt}},
+				Content:   userContent,
 				Timestamp: time.Now().UnixMilli(),
 			}
 			if err := mgr.AppendMessage(params.SessionID, params.SessionFile, userEntry); err != nil {
@@ -1883,7 +1912,7 @@ func (r *EmbeddedAttemptRunner) persistToTranscript(params AttemptParams, messag
 				if block.Source != nil && block.Source.Data != "" {
 					blocks = append(blocks, session.ContentBlock{
 						Type: "image",
-						Source: &session.ImageSource{
+						Source: &session.MediaSource{
 							Type:      block.Source.Type,
 							MediaType: block.Source.MediaType,
 							Data:      block.Source.Data,

@@ -245,6 +245,14 @@ func filterToolsByIntent(tools []llmclient.ToolDef, tier intentTier) []llmclient
 			continue
 		}
 
+		// mcp_* 前缀工具（本地安装的 MCP 服务器）: task_light 及以上
+		if strings.HasPrefix(name, "mcp_") {
+			if tier == intentTaskLight || tier == intentTaskWrite {
+				filtered = append(filtered, t)
+			}
+			continue
+		}
+
 		// 普通工具: 按 allowlist 过滤
 		if allowed[name] {
 			filtered = append(filtered, t)

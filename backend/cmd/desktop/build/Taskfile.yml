@@ -1,15 +1,35 @@
 version: '3'
 
+vars:
+  APPICON_SOURCE: "../../../logo1.png"
+
 tasks:
   stage:ui:
-    desc: Explain the staged Control UI flow for desktop builds
+    desc: Stage Control UI assets into the desktop embed directory
+    dir: '{{.USER_WORKING_DIR}}'
     cmds:
-      - echo "Control UI staging script: ../../../scripts/desktop/stage_control_ui.sh"
-      - echo "Staging target: backend/cmd/desktop/frontend/dist"
-      - echo "This safe scaffold does not invoke the script automatically."
+      - ../../../scripts/desktop/stage_control_ui.sh
+
+  prepare:appicon:
+    desc: Copy the canonical desktop icon source into the build workspace
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - test -f {{.APPICON_SOURCE}}
+      - cp {{.APPICON_SOURCE}} build/appicon.png
+
+  generate:icons:
+    desc: Generate macOS and Windows icon assets from the app icon
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: prepare:appicon
+    cmds:
+      - '{{.WAILS3_BIN}} generate icons -input build/appicon.png -macfilename build/darwin/icons.icns -windowsfilename build/windows/icon.ico'
 
   verify:layout:
-    desc: Explain the expected desktop build layout
+    desc: Check the expected desktop build layout
+    dir: '{{.USER_WORKING_DIR}}'
     cmds:
-      - echo "Expected taskfiles: build/windows/Taskfile.yml build/linux/Taskfile.yml build/darwin/Taskfile.yml"
-      - echo "Expected CI templates: build/ci/*.example"
+      - test -f main.go
+      - test -f main_wails.go
+      - test -f wails_app.go
+      - test -f ../../../scripts/desktop/stage_control_ui.sh

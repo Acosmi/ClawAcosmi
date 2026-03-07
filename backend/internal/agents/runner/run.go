@@ -169,6 +169,7 @@ func RunEmbeddedPiAgent(ctx context.Context, params RunEmbeddedPiAgentParams, de
 			AgentChannel:       params.AgentChannel,
 			AgentType:          params.AgentType,
 			SuppressTranscript: params.SuppressTranscript,
+			Attachments:        params.Attachments,
 		})
 		if err != nil {
 			return nil, err

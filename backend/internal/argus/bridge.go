@@ -25,6 +25,22 @@ import (
 	"github.com/Acosmi/ClawAcosmi/internal/mcpclient"
 )
 
+// waitWithTimeout waits for cmd to exit with a deadline.
+// If the process doesn't exit in time, it abandons the wait
+// to prevent the gateway from hanging on uninterruptible processes.
+func waitWithTimeout(cmd *exec.Cmd, timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		slog.Warn("argus: cmd.Wait timeout, abandoning", "pid", cmd.Process.Pid, "timeout", timeout)
+	}
+}
+
 // ---------- 结构化错误 ----------
 
 // ArgusStartError 结构化启动失败错误。
@@ -242,7 +258,7 @@ func (b *Bridge) spawnAndHandshake() error {
 	if err != nil {
 		client.Close()
 		cmd.Process.Kill()
-		cmd.Wait()
+		waitWithTimeout(cmd, 3*time.Second)
 		return fmt.Errorf("argus: MCP initialize: %w", err)
 	}
 	slog.Info("argus: MCP initialized",
@@ -259,7 +275,7 @@ func (b *Bridge) spawnAndHandshake() error {
 	if err != nil {
 		client.Close()
 		cmd.Process.Kill()
-		cmd.Wait()
+		waitWithTimeout(cmd, 3*time.Second)
 		return fmt.Errorf("argus: tools/list: %w", err)
 	}
 
@@ -468,7 +484,7 @@ func (b *Bridge) Stop() {
 		case <-time.After(gracefulShutdownWait):
 			slog.Warn("argus: force killing process")
 			cmd.Process.Kill()
-			cmd.Wait()
+			waitWithTimeout(cmd, 3*time.Second)
 		}
 	}
 

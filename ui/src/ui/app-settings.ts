@@ -240,6 +240,10 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "tasks") {
     await loadTasks(host);
   }
+  if (host.tab === "mcp") {
+    const { loadMcpDashboard } = await import("./controllers/mcp-servers.ts");
+    await loadMcpDashboard(host as any);
+  }
   if (host.tab === "plugins") {
     await loadPlugins(host as any);
     if ((host as any).pluginsPanel === "tools") {

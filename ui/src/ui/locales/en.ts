@@ -45,6 +45,7 @@ export const enMessages: Record<string, string> = {
   "nav.tab.media": "Media Ops",
   "nav.tab.plugins": "Plugins/Tools/Skills",
   "nav.tab.tasks": "Task Board",
+  "nav.tab.mcp": "MCP Servers",
 
   // ── Tab subtitles ──
   "nav.sub.agents": "Manage agent workspaces, tools, and identities.",
@@ -66,6 +67,30 @@ export const enMessages: Record<string, string> = {
   "nav.sub.media": "Trending topics, content drafts, and publish management.",
   "nav.sub.plugins": "Manage plugins, system tools, and skills configuration.",
   "nav.sub.tasks": "Background task execution status and async task board.",
+  "nav.sub.mcp": "Manage local MCP server installation, lifecycle, and tools.",
+
+  // ── MCP Servers ──
+  "mcp.title": "MCP Server Management",
+  "mcp.tab.servers": "Servers",
+  "mcp.tab.tools": "Tools",
+  "mcp.empty": "No MCP servers installed",
+  "mcp.empty.hint": "Use CLI: openacosmi mcp install <url>",
+  "mcp.toolCount": "tools",
+  "mcp.action.start": "Start",
+  "mcp.action.stop": "Stop",
+  "mcp.action.uninstall": "Uninstall",
+  "mcp.confirm.uninstall": "Are you sure you want to uninstall this MCP server?",
+  "mcp.field.transport": "Transport",
+  "mcp.field.type": "Type",
+  "mcp.field.source": "Source",
+  "mcp.field.installedAt": "Installed",
+  "mcp.state.ready": "Running",
+  "mcp.state.starting": "Starting",
+  "mcp.state.degraded": "Degraded",
+  "mcp.state.stopped": "Stopped",
+  "mcp.state.init": "Init",
+  "mcp.tools.empty": "No tools available (start a server first)",
+  "mcp.tools.count": "{count} tools available",
 
   // ── Task Board ──
   "tasks.title": "Task Board",
@@ -328,6 +353,7 @@ export const enMessages: Record<string, string> = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.call": "Call",
+  "common.dismiss": "Dismiss",
   "common.noData": "No data",
 
   // ── Sessions view ──
@@ -1230,8 +1256,8 @@ export const enMessages: Record<string, string> = {
   "docconv.wizard.reconfigure": "Reconfigure",
 
   // ─── Media config panel ───
-  "media.tab.title": "Media",
-  "media.configTitle": "Media Configuration",
+  "media.tab.title": "Media Processing",
+  "media.configTitle": "Media Processing Configuration",
   "media.stt.title": "Speech-to-Text (STT)",
   "media.stt.configured": "Configured",
   "media.stt.notConfigured": "Not configured",
@@ -1711,6 +1737,7 @@ export const enMessages: Record<string, string> = {
   "media.subtab.drafts": "Drafts",
   "media.subtab.publish": "Publish History",
   "media.subtab.patrol": "Patrol Schedule",
+  "media.subtab.strategy": "Trending Strategy",
   "media.overview.notConfigured": "LLM not configured. Click the button below to set up.",
   "media.overview.configureNow": "Configure Now",
   "subagents.media.manage": "Manage",

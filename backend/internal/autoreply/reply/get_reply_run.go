@@ -77,7 +77,7 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 		baseBody = msgCtx.Body
 	}
 	baseBodyTrimmed := strings.TrimSpace(baseBody)
-	if baseBodyTrimmed == "" {
+	if baseBodyTrimmed == "" && len(msgCtx.Attachments) == 0 {
 		if params.Typing != nil {
 			_ = params.Typing.OnReplyStart()
 			params.Typing.Cleanup()
@@ -85,6 +85,11 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 		return []autoreply.ReplyPayload{
 			{Text: "I didn't receive any text in your message. Please resend or add a caption."},
 		}, nil
+	}
+	// 附件-only 场景：确保有占位 prompt 供 LLM 处理
+	if baseBodyTrimmed == "" && len(msgCtx.Attachments) > 0 {
+		baseBody = "[用户发送了附件]"
+		baseBodyTrimmed = baseBody
 	}
 
 	// 2. 空重置检测
@@ -121,6 +126,7 @@ func RunPreparedReply(ctx context.Context, params PreparedReplyParams) ([]autore
 		OriginatingAccountID: msgCtx.AccountID,
 		OriginatingThreadID:  msgCtx.MessageThreadID,
 		OriginatingChatType:  msgCtx.ChatType,
+		Attachments:          msgCtx.Attachments,
 		Run: FollowupRunParams{
 			SessionID:         sessionID,
 			SessionKey:        params.SessionKey,

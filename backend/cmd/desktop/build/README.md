@@ -1,19 +1,18 @@
-# Desktop Build Skeleton
+# Desktop Build Assets
 
-This directory stores the non-destructive Phase 3 build scaffold for the
+This directory stores the active Phase 3 build and packaging assets for the
 desktop shell.
 
-Scope of this scaffold:
+Scope of this directory:
 
 - keep build and packaging conventions in one isolated place
-- document expected platform assets and metadata
-- avoid touching the current runtime, CLI naming, or active CI workflows
+- hold platform metadata, installers, and packaging templates
+- provide reusable local build entry points without changing runtime behavior
 
-Current constraints:
+Current state:
 
-- `Taskfile.yml` files are placeholders only
-- example metadata files are not wired into any live build
-- active GitHub Actions workflows are intentionally not added yet
-
-When runtime-safe build wiring is approved later, this directory is the place
-to turn the examples into active assets.
+- top-level and platform `Taskfile.yml` entries are active
+- macOS local packaging is already wired
+- Windows NSIS packaging is already wired
+- Linux now includes a reusable container build path in `build/linux/Dockerfile`
+- active GitHub Actions workflows are still intentionally not added yet

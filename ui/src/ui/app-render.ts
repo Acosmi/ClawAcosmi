@@ -104,8 +104,6 @@ import { renderRemoteApproval } from "./views/remote-approval-view.ts";
 import { renderMemory, renderMemoryTypeCapsules, resetLLMDraft } from "./views/memory.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
-// renderSubAgents 已迁移到 agents 标签页内的子智能体详情面板
-// import { renderSubAgents } from "./views/subagents.ts";
 import { renderUsage } from "./views/usage.ts";
 import { renderWizardV2 } from "./views/wizard-v2.ts";
 import { renderNotificationCenter } from "./views/notification-center.ts";
@@ -113,6 +111,8 @@ import { renderMediaConfig, loadMediaConfig } from "./views/media-config.ts";
 import { renderMediaManage } from "./views/media-manage.ts";
 import { loadMediaDashboard } from "./controllers/media-dashboard.ts";
 import { renderTaskKanban } from "./views/task-kanban.ts";
+import { renderMcpServers } from "./views/mcp-servers.ts";
+import { loadMcpDashboard } from "./controllers/mcp-servers.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
@@ -1214,9 +1214,8 @@ export function renderApp(state: AppViewState) {
       : nothing
     }
 
-        ${/* subagents tab 已统一到 agents 标签页，保留空分支用于向后兼容重定向 */
-    state.tab === "subagents"
-      ? nothing
+        ${state.tab === "mcp"
+      ? renderMcpServers(state)
       : nothing
     }
 

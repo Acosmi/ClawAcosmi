@@ -412,15 +412,21 @@ func handleChatSend(ctx *MethodHandlerContext) {
 		// 下方 result.Error 分支用 ensureUserTranscriptOnError 做兜底，确保用户消息不丢失。
 
 		// 处理附件：音频→STT 转录，文档→DocConv 转换
-		enhancedText := processAttachmentsForChat(pipelineCtx, text, attachments, ctx.Context.ConfigLoader)
+		enhancedText, attachmentBlocks := processAttachmentsForChat(pipelineCtx, text, attachments, ctx.Context.ConfigLoader)
+
+		// 附件-only 场景（无文字但有附件）：构建占位 prompt 防止管线空文本早退
+		effectiveText := enhancedText
+		if effectiveText == "" && len(attachmentBlocks) > 0 {
+			effectiveText = "[用户发送了附件]"
+		}
 
 		// 构建 MsgContext
 		msgCtx := &autoreply.MsgContext{
-			Body:               enhancedText,
-			BodyForAgent:       enhancedText,
-			BodyForCommands:    enhancedText,
+			Body:               effectiveText,
+			BodyForAgent:       effectiveText,
+			BodyForCommands:    effectiveText,
 			RawBody:            text,
-			CommandBody:        enhancedText,
+			CommandBody:        effectiveText,
 			SessionID:          resolvedSessionId,
 			SessionKey:         sessionKey,
 			Provider:           "webchat",
@@ -429,6 +435,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			ChatType:           "direct",
 			CommandAuthorized:  true,
 			MessageSid:         runId,
+			Attachments:        attachmentBlocks,
 		}
 
 		// 任务频道：懒创建 task:<runID> session，仅在有工具调用时才创建
@@ -552,7 +559,7 @@ func handleChatSend(ctx *MethodHandlerContext) {
 			)
 			// 兜底: 如果管线在 RunAttempt 之前就失败，defer 不会执行，用户消息未持久化。
 			// 此处确保用户消息至少写入 transcript，刷新后不会完全消失。
-			ensureUserTranscriptOnError(resolvedSessionId, storePath, enhancedText)
+			ensureUserTranscriptOnError(resolvedSessionId, storePath, effectiveText, attachmentBlocks)
 			// 广播 task.failed 结构化看板事件
 			if broadcaster != nil {
 				broadcaster.Broadcast(EventTaskFailed, TaskFailedEvent{
@@ -843,8 +850,11 @@ func handleChatInject(ctx *MethodHandlerContext) {
 // RunAttempt 内的 defer persistToTranscript 不会执行，用户消息未被持久化。
 // 此函数检查 transcript 是否已包含该消息（避免与 RunAttempt 的 defer 双写），
 // 若 transcript 尾部已有同文本 user 消息则跳过。
-func ensureUserTranscriptOnError(sessionId, storePath, text string) {
-	if sessionId == "" || storePath == "" || strings.TrimSpace(text) == "" {
+func ensureUserTranscriptOnError(sessionId, storePath, text string, attachments []session.ContentBlock) {
+	if sessionId == "" || storePath == "" {
+		return
+	}
+	if strings.TrimSpace(text) == "" && len(attachments) == 0 {
 		return
 	}
 	mgr := session.NewSessionManager("")
@@ -864,9 +874,16 @@ func ensureUserTranscriptOnError(sessionId, storePath, text string) {
 		slog.Debug("ensureUserTranscriptOnError: ensure file failed", "error", err)
 		return
 	}
+	content := []session.ContentBlock{}
+	if strings.TrimSpace(text) != "" {
+		content = append(content, session.ContentBlock{Type: "text", Text: text})
+	}
+	if len(attachments) > 0 {
+		content = append(content, attachments...)
+	}
 	entry := session.TranscriptEntry{
 		Role:      "user",
-		Content:   []session.ContentBlock{{Type: "text", Text: text}},
+		Content:   content,
 		Timestamp: time.Now().UnixMilli(),
 	}
 	if err := mgr.AppendMessage(sessionId, sessionFile, entry); err != nil {
@@ -991,10 +1008,10 @@ func chatAttachmentConfigSignature(v interface{}) string {
 }
 
 // processAttachmentsForChat 处理 chat.send 附件：音频→STT，文档→DocConv。
-// 将转录/转换结果追加到消息文本中返回增强后的文本。
+// 返回增强文本（用于 LLM prompt）和附件 content blocks（用于 transcript 持久化）。
 func processAttachmentsForChat(ctx context.Context, text string, attachments []map[string]interface{}, cfgLoader interface {
 	LoadConfig() (*types.OpenAcosmiConfig, error)
-}) string {
+}) (string, []session.ContentBlock) {
 	return processAttachmentsForChatWithCache(ctx, text, attachments, cfgLoader, defaultChatAttachmentProviderCache)
 }
 
@@ -1006,9 +1023,9 @@ func processAttachmentsForChatWithCache(
 		LoadConfig() (*types.OpenAcosmiConfig, error)
 	},
 	providerCache *chatAttachmentProviderCache,
-) string {
+) (string, []session.ContentBlock) {
 	if len(attachments) == 0 || cfgLoader == nil {
-		return text
+		return text, nil
 	}
 	if providerCache == nil {
 		providerCache = defaultChatAttachmentProviderCache
@@ -1016,7 +1033,7 @@ func processAttachmentsForChatWithCache(
 
 	cfg, err := cfgLoader.LoadConfig()
 	if err != nil || cfg == nil {
-		return text
+		return text, nil
 	}
 	providerSnapshot := providerCache.Resolve(cfg)
 
@@ -1025,11 +1042,14 @@ func processAttachmentsForChatWithCache(
 		parts = append(parts, text)
 	}
 
+	var blocks []session.ContentBlock
+
 	for _, att := range attachments {
 		attType, _ := att["type"].(string)
 		contentB64, _ := att["content"].(string)
 		mimeType, _ := att["mimeType"].(string)
 		fileName, _ := att["fileName"].(string)
+		fileSize, _ := att["fileSize"].(float64) // JSON numbers are float64
 
 		if contentB64 == "" {
 			continue
@@ -1043,7 +1063,49 @@ func processAttachmentsForChatWithCache(
 		}
 
 		switch attType {
+		case "image":
+			blocks = append(blocks, session.ContentBlock{
+				Type:     "image",
+				FileName: fileName,
+				FileSize: int64(fileSize),
+				MimeType: mimeType,
+				Source: &session.MediaSource{
+					Type:      "base64",
+					MediaType: mimeType,
+					Data:      contentB64,
+				},
+			})
+
+		case "video":
+			blocks = append(blocks, session.ContentBlock{
+				Type:     "video",
+				FileName: fileName,
+				FileSize: int64(fileSize),
+				MimeType: mimeType,
+				Source: &session.MediaSource{
+					Type:      "base64",
+					MediaType: mimeType,
+					Data:      contentB64,
+				},
+			})
+
 		case "audio":
+			if mimeType == "" {
+				mimeType = "audio/webm"
+			}
+			// Always build the audio content block for transcript persistence
+			blocks = append(blocks, session.ContentBlock{
+				Type:     "audio",
+				FileName: fileName,
+				FileSize: int64(fileSize),
+				MimeType: mimeType,
+				Source: &session.MediaSource{
+					Type:      "base64",
+					MediaType: mimeType,
+					Data:      contentB64,
+				},
+			})
+			// STT text enhancement for LLM prompt
 			if cfg.STT == nil || cfg.STT.Provider == "" {
 				parts = append(parts, "[语音附件: 语音转文字(STT)未配置，请前往 设置→Speech to Text 配置语音识别服务]")
 				continue
@@ -1065,9 +1127,6 @@ func processAttachmentsForChatWithCache(
 				parts = append(parts, "[语音附件: 数据过大]")
 				continue
 			}
-			if mimeType == "" {
-				mimeType = "audio/webm"
-			}
 			sttCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			transcript, sttErr := providerSnapshot.sttProvider.Transcribe(sttCtx, data, mimeType)
 			cancel()
@@ -1079,14 +1138,22 @@ func processAttachmentsForChatWithCache(
 			}
 
 		case "document":
+			if fileName == "" {
+				fileName = "untitled"
+			}
+			// Always build the document content block for transcript persistence (metadata only, no raw data)
+			blocks = append(blocks, session.ContentBlock{
+				Type:     "document",
+				FileName: fileName,
+				FileSize: int64(fileSize),
+				MimeType: mimeType,
+			})
+			// DocConv text enhancement for LLM prompt
 			if cfg.DocConv == nil || cfg.DocConv.Provider == "" {
 				if fileName != "" {
 					parts = append(parts, fmt.Sprintf("[文件: %s]", fileName))
 				}
 				continue
-			}
-			if fileName == "" {
-				fileName = "untitled"
 			}
 			if !media.IsSupportedFormat(fileName) {
 				parts = append(parts, fmt.Sprintf("[文件: %s, 格式不支持转换]", fileName))
@@ -1121,8 +1188,9 @@ func processAttachmentsForChatWithCache(
 		}
 	}
 
-	if len(parts) <= 1 {
-		return text
+	enhancedText := text
+	if len(parts) > 1 {
+		enhancedText = strings.Join(parts, "\n")
 	}
-	return strings.Join(parts, "\n")
+	return enhancedText, blocks
 }

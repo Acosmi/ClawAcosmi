@@ -34,6 +34,72 @@ export type ConfigState = {
   lastError: string | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasNonEmptyConfigValue(value: unknown): boolean {
+  if (value == null) {
+    return false;
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some(hasNonEmptyConfigValue);
+  }
+  if (isRecord(value)) {
+    return Object.values(value).some(hasNonEmptyConfigValue);
+  }
+  return true;
+}
+
+export function needsInitialSetup(snapshot: ConfigSnapshot | null | undefined): boolean {
+  if (!snapshot) {
+    return false;
+  }
+  if (snapshot.exists === false) {
+    return true;
+  }
+  if (snapshot.valid === false) {
+    return false;
+  }
+  if (!isRecord(snapshot.config)) {
+    return false;
+  }
+
+  const wizard = isRecord(snapshot.config.wizard) ? snapshot.config.wizard : null;
+  if (typeof wizard?.lastRunAt === "string" && wizard.lastRunAt.trim().length > 0) {
+    return false;
+  }
+
+  const meaningfulSections = [
+    "models",
+    "agents",
+    "channels",
+    "memory",
+    "skills",
+    "tools",
+    "gateway",
+    "subAgents",
+    "stt",
+    "docConv",
+    "imageUnderstanding",
+    "browser",
+    "plugins",
+    "cron",
+    "hooks",
+    "discovery",
+    "canvasHost",
+    "talk",
+  ];
+
+  return !meaningfulSections.some((key) => hasNonEmptyConfigValue(snapshot.config?.[key]));
+}
+
 export async function loadConfig(state: ConfigState) {
   if (!state.client || !state.connected) {
     return;

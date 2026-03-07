@@ -91,8 +91,8 @@ func TestProcessAttachmentsForChat_ProviderCacheReuse(t *testing.T) {
 	loader := &staticCfgLoader{cfg: testChatAttachmentConfig("openai")}
 	attachments := testAttachments()
 
-	out1 := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
-	out2 := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	out1, _ := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	out2, _ := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 
 	if !strings.Contains(out1, "[语音转录]: hello from stt") || !strings.Contains(out1, "[文件: note.txt]") {
 		t.Fatalf("first process output missing expected conversions: %q", out1)
@@ -123,9 +123,9 @@ func TestProcessAttachmentsForChat_ProviderCacheRefreshOnTTL(t *testing.T) {
 	loader := &staticCfgLoader{cfg: testChatAttachmentConfig("openai")}
 	attachments := testAttachments()
 
-	_ = processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	_, _ = processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 	time.Sleep(15 * time.Millisecond)
-	_ = processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	_, _ = processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 
 	if got := atomic.LoadInt32(&sttInitCount); got < 2 {
 		t.Fatalf("stt provider should refresh after TTL expiry, got init count=%d", got)
@@ -150,13 +150,13 @@ func TestProcessAttachmentsForChat_ProviderCacheRefreshOnConfigChange(t *testing
 	loader := &staticCfgLoader{cfg: testChatAttachmentConfig("openai")}
 	attachments := testAttachments()
 
-	out1 := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	out1, _ := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 	if !strings.Contains(out1, "cfg-openai") {
 		t.Fatalf("expected first output to use openai config, got %q", out1)
 	}
 
 	loader.cfg = testChatAttachmentConfig("qwen")
-	out2 := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+	out2, _ := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 	if !strings.Contains(out2, "cfg-qwen") {
 		t.Fatalf("expected second output to use updated config, got %q", out2)
 	}
@@ -191,7 +191,7 @@ func TestProcessAttachmentsForChat_ProviderCacheConcurrentReuse(t *testing.T) {
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
-			out := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
+			out, _ := processAttachmentsForChatWithCache(context.Background(), "base", attachments, loader, cache)
 			if !strings.Contains(out, "concurrent-stt") {
 				t.Errorf("expected concurrent stt transcript in output, got %q", out)
 			}
@@ -238,7 +238,7 @@ func TestProcessAttachmentsForChat_ProviderInitFailureMessage(t *testing.T) {
 		return nil, fmt.Errorf("mock docconv init failure")
 	}
 	loader := &staticCfgLoader{cfg: testChatAttachmentConfig("openai")}
-	out := processAttachmentsForChatWithCache(context.Background(), "base", testAttachments(), loader, cache)
+	out, _ := processAttachmentsForChatWithCache(context.Background(), "base", testAttachments(), loader, cache)
 	if !strings.Contains(out, "[语音附件: STT 初始化失败]") {
 		t.Fatalf("expected STT init failure hint, got %q", out)
 	}

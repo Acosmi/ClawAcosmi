@@ -5,8 +5,11 @@ shell.
 
 Planned active assets later:
 
-- version metadata derived from `info.json.example`
-- process manifest derived from `wails.exe.manifest.example`
-- Wails build/package tasks replacing the current placeholder `echo` commands
+- version metadata from `info.json`
+- process manifest from `wails.exe.manifest`
+- artifact naming conventions documented in `artifact-plan.md`
+- NSIS packaging resources in `nsis/`
+- Wails Windows build/package tasks in `Taskfile.yml`
 
-Nothing in this directory is wired into a live build yet.
+The files in this directory are now wired into `wails3 task windows:*`.
+They are still not activated in a live CI workflow.

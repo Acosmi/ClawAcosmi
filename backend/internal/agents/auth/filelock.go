@@ -1,3 +1,5 @@
+//go:build !windows
+
 // auth/filelock.go — 跨进程文件排他锁。
 // TS 参考: proper-lockfile npm 包 (隐式依赖于 store.ts 的磁盘写入路径)
 //

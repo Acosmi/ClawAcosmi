@@ -477,16 +477,17 @@ func wsConnectionLoop(conn *websocket.Conn, r *http.Request, cfg WsServerConfig)
 			ArgusBridge:            cfg.State.ArgusBridge(),            // Argus 视觉子智能体
 			CronService:            cfg.CronService,
 			CronStorePath:          cfg.CronStorePath,
-			SkillStoreClient:       cfg.SkillStoreClient,          // 技能商店客户端
-			RemoteMCPBridge:        cfg.RemoteMCPBridge,           // P2: MCP 远程工具
-			UHMSManager:            cfg.State.UHMSManager(),       // P3: UHMS 记忆系统
-			UHMSBootMgr:            cfg.State.UHMSBootMgr(),       // Boot 状态管理
-			CoderConfirmMgr:        cfg.State.CoderConfirmMgr(),   // Coder 确认流
-			PlanConfirmMgr:         cfg.State.PlanConfirmMgr(),    // Phase 1: 方案确认门控
-			ResultApprovalMgr:      cfg.State.ResultApprovalMgr(), // Phase 3: 结果签收门控
-			ContractStore:          cfg.State.ContractStore(),     // Phase 8: 合约持久化
-			State:                  cfg.State,                     // Phase 4: 子智能体求助通道查找
-			MediaSubsystem:         cfg.MediaSubsystem,            // Phase 5+6: 媒体子系统
+			SkillStoreClient:       cfg.SkillStoreClient,             // 技能商店客户端
+			RemoteMCPBridge:        cfg.RemoteMCPBridge,              // P2: MCP 远程工具
+			UHMSManager:            cfg.State.UHMSManager(),          // P3: UHMS 记忆系统
+			UHMSBootMgr:            cfg.State.UHMSBootMgr(),          // Boot 状态管理
+			CoderConfirmMgr:        cfg.State.CoderConfirmMgr(),      // Coder 确认流
+			PlanConfirmMgr:         cfg.State.PlanConfirmMgr(),       // Phase 1: 方案确认门控
+			ResultApprovalMgr:      cfg.State.ResultApprovalMgr(),    // Phase 3: 结果签收门控
+			ContractStore:          cfg.State.ContractStore(),        // Phase 8: 合约持久化
+			State:                  cfg.State,                        // Phase 4: 子智能体求助通道查找
+			MediaSubsystem:         cfg.MediaSubsystem,               // Phase 5+6: 媒体子系统
+			ChannelMonitorMgr:      cfg.State.GetChannelMonitorMgr(), // Monitor 频道热更新
 		}
 
 		// 创建同步 respond 回调

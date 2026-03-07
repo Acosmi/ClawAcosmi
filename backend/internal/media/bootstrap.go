@@ -31,7 +31,8 @@ type MediaSubsystemConfig struct {
 	// EnableInteract 启用互动工具（Phase 3+）。
 	EnableInteract bool
 
-	// EnabledSources 启用的热点源名称列表（空=全部启用）。
+	// EnabledSources 启用的热点源名称列表。
+	// nil = 全部启用（未配置），[] = 全部禁用（显式空），["weibo"] = 仅指定源启用。
 	EnabledSources []string
 
 	// Publishers 各平台发布器（按 Platform 注册）。

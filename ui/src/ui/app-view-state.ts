@@ -451,4 +451,13 @@ export type AppViewState = {
   browserToolSaving: boolean;
   browserToolError: string | null;
   browserToolEdits: Record<string, string | boolean>;
+
+  // MCP Local Servers
+  mcpServersLoading: boolean;
+  mcpServersList: import("./controllers/mcp-servers.js").McpServerStatus[];
+  mcpServersError: string | null;
+  mcpServersBusy: string | null;
+  mcpToolsLoading: boolean;
+  mcpToolsList: import("./controllers/mcp-servers.js").McpToolEntry[];
+  mcpSubTab: string;
 };

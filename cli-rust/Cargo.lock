@@ -1333,6 +1333,7 @@ dependencies = [
  "oa-cmd-health",
  "oa-cmd-hooks",
  "oa-cmd-logs",
+ "oa-cmd-mcp",
  "oa-cmd-memory",
  "oa-cmd-models",
  "oa-cmd-node",
@@ -1353,6 +1354,7 @@ dependencies = [
  "oa-coder",
  "oa-config",
  "oa-infra",
+ "oa-mcp-install",
  "oa-sandbox",
  "oa-terminal",
  "oa-types",
@@ -1726,6 +1728,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "oa-cmd-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colored",
+ "dialoguer",
+ "oa-gateway-rpc",
+ "oa-mcp-install",
+ "oa-terminal",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "oa-cmd-memory"
 version = "0.1.0"
 dependencies = [
@@ -2090,6 +2108,26 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "oa-mcp-install"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs",
+ "oa-types",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

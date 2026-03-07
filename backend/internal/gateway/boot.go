@@ -14,6 +14,7 @@ import (
 	"github.com/Acosmi/ClawAcosmi/internal/channels"
 	"github.com/Acosmi/ClawAcosmi/internal/memory/uhms"
 	"github.com/Acosmi/ClawAcosmi/internal/sandbox"
+	"github.com/Acosmi/ClawAcosmi/pkg/mcpinstall"
 	"github.com/Acosmi/ClawAcosmi/pkg/mcpremote"
 )
 
@@ -54,6 +55,9 @@ type GatewayState struct {
 	// MCP 远程工具 Bridge（可选 — 仅配置启用时初始化）
 	remoteMCPBridge *mcpremote.RemoteBridge
 
+	// MCP 本地安装服务器管理器（可选 — 仅注册表非空时初始化）
+	mcpLocalManager *mcpinstall.McpLocalManager
+
 	// 原生沙箱 Worker Bridge（可选 — 仅 CLI 二进制可用时初始化）
 	nativeSandboxBridge *sandbox.NativeSandboxBridge
 
@@ -86,6 +90,9 @@ type GatewayState struct {
 	// Phase 2: Extension Relay 服务器（可选 — 浏览器启用时创建）
 	// 桥接 Chrome 扩展和 Agent 工具层，关闭时需 Close() 释放。
 	extensionRelay extensionRelayInstance
+
+	// Monitor 频道热更新管理器（由 server.go 在 startMonitorChannels 替代时注入）
+	channelMonitorMgr *ChannelMonitorManager
 }
 
 // managedChromeInstance is an interface for an auto-launched Chrome process.
@@ -456,6 +463,19 @@ func (s *GatewayState) StopRemoteMCP() {
 	}
 }
 
+// McpLocalManager 返回 MCP 本地安装服务器管理器（可能为 nil）。
+func (s *GatewayState) McpLocalManager() *mcpinstall.McpLocalManager { return s.mcpLocalManager }
+
+// SetMcpLocalManager 设置 MCP 本地安装服务器管理器（由 server.go 启动时注入）。
+func (s *GatewayState) SetMcpLocalManager(m *mcpinstall.McpLocalManager) { s.mcpLocalManager = m }
+
+// StopLocalMCP 优雅关闭所有本地安装的 MCP 服务器。
+func (s *GatewayState) StopLocalMCP() {
+	if s.mcpLocalManager != nil {
+		s.mcpLocalManager.StopAll()
+	}
+}
+
 // NativeSandboxBridge 返回原生沙箱 Worker Bridge（可能为 nil）。
 func (s *GatewayState) NativeSandboxBridge() *sandbox.NativeSandboxBridge {
 	return s.nativeSandboxBridge
@@ -466,6 +486,20 @@ func (s *GatewayState) StopNativeSandbox() {
 	if s.nativeSandboxBridge != nil {
 		s.nativeSandboxBridge.Stop()
 	}
+}
+
+// SetChannelMonitorMgr 设置 Monitor 频道管理器（由 server.go 启动时注入）。
+func (s *GatewayState) SetChannelMonitorMgr(mgr *ChannelMonitorManager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.channelMonitorMgr = mgr
+}
+
+// GetChannelMonitorMgr 返回 Monitor 频道管理器（可能为 nil）。
+func (s *GatewayState) GetChannelMonitorMgr() *ChannelMonitorManager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.channelMonitorMgr
 }
 
 // UHMSManager 返回 UHMS 记忆管理器（可能为 nil）。

@@ -1,0 +1,156 @@
+/* ══════════════════════════════════════════
+   Media Management Page Styles
+   ══════════════════════════════════════════ */
+
+/* Overview stat cards */
+.media-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.media-stat-card {
+    padding: 16px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    text-align: center;
+}
+
+.media-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.media-stat-value--warn {
+    color: #f59e0b;
+}
+
+.media-stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Tool cards */
+.media-tool-card {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.media-tool-card--disabled {
+    opacity: 0.5;
+}
+
+.media-tool-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.media-tool-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.media-tool-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.media-tool-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+/* Source toggle panel */
+.media-source-panel {
+    padding: 14px 16px;
+}
+
+.media-source-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.media-source-grid {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.media-source-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+.media-source-status {
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+/* Section headers in tools/strategy tabs */
+.media-section-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.media-section-title--spaced {
+    margin-top: 8px;
+}
+
+/* Strategy form */
+.media-strategy-panel {
+    padding: 14px 16px;
+}
+
+.media-strategy-input {
+    width: 160px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.media-strategy-input--wide {
+    width: 100%;
+}
+
+/* Tool grid layout */
+.media-tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+/* Config panel inline overrides */
+.media-config-summary {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.media-config-field {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.media-config-field-label {
+    font-size: 12px;
+}

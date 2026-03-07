@@ -51,6 +51,8 @@ members = [
     "crates/oa-cmd-security",
     "crates/oa-cmd-hooks",
     "crates/oa-cmd-browser",
+    "crates/oa-mcp-install",
+    "crates/oa-cmd-mcp",
     "crates/oa-cli",
 ]
 
@@ -179,6 +181,8 @@ oa-cmd-plugins = { path = "crates/oa-cmd-plugins" }
 oa-cmd-security = { path = "crates/oa-cmd-security" }
 oa-cmd-hooks = { path = "crates/oa-cmd-hooks" }
 oa-cmd-browser = { path = "crates/oa-cmd-browser" }
+oa-mcp-install = { path = "crates/oa-mcp-install" }
+oa-cmd-mcp = { path = "crates/oa-cmd-mcp" }
 oa-cli = { path = "crates/oa-cli" }
 
 [workspace.lints.rust]

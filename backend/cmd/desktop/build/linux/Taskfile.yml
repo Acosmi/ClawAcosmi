@@ -3,19 +3,126 @@ version: '3'
 includes:
   common: ../Taskfile.yml
 
+vars:
+  DOCKER_IMAGE: '{{.DOCKER_IMAGE | default "clawacosmi-desktop-linux-builder:bookworm"}}'
+  DOCKER_PLATFORM: '{{.DOCKER_PLATFORM | default "linux/arm64"}}'
+  DOCKER_WORKDIR: '{{.DOCKER_WORKDIR | default "/workspace"}}'
+  WORKSPACE_ROOT:
+    sh: cd {{.USER_WORKING_DIR}}/../../.. && pwd
+
 tasks:
   build:
-    desc: Placeholder Linux desktop build task
-    cmds:
+    summary: Builds the desktop host for Linux
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: common:verify:layout
       - task: common:stage:ui
-      - echo "Placeholder only: Linux wails3 build wiring is deferred."
+      - task: common:generate:icons
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -tags "desktopwails desktopembed" -trimpath -buildvcs=false -ldflags "-w -s -X main.version={{.VERSION}}" -o {{.BIN_DIR}}/{{.APP_NAME}} .
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+      VERSION: '{{.VERSION | default "0.0.0-dev"}}'
+    env:
+      GOOS: linux
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_ENABLED: 1
 
   package:
-    desc: Placeholder Linux desktop package task
+    summary: Packages a production build of the desktop host for Linux
+    deps:
+      - task: build
+        vars:
+          ARCH:
+            ref: .ARCH
+          VERSION:
+            ref: .VERSION
     cmds:
-      - echo "Placeholder only: Linux AppImage/deb/rpm packaging wiring is deferred."
+      - task: create:appimage
+      - task: create:deb
+      - task: create:rpm
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+      VERSION: '{{.VERSION | default "0.0.0-dev"}}'
+
+  create:appimage:
+    summary: Creates an AppImage
+    dir: '{{.USER_WORKING_DIR}}/build/linux/appimage'
+    deps:
+      - task: build
+        vars:
+          ARCH:
+            ref: .ARCH
+          VERSION:
+            ref: .VERSION
+      - task: generate:dotdesktop
+    cmds:
+      - cp {{.APP_BINARY}} {{.APP_NAME}}
+      - cp ../../appicon.png {{.APP_NAME}}.png
+      - '{{.WAILS3_BIN}} generate appimage -binary {{.APP_NAME}} -icon {{.ICON}} -desktopfile {{.DESKTOP_FILE}} -outputdir {{.OUTPUT_DIR}} -builddir {{.USER_WORKING_DIR}}/build/linux/appimage/build'
+    vars:
+      APP_NAME: '{{.APP_NAME}}'
+      APP_BINARY: '{{.USER_WORKING_DIR}}/bin/{{.APP_NAME}}'
+      ICON: '{{.APP_NAME}}.png'
+      DESKTOP_FILE: '{{.USER_WORKING_DIR}}/build/linux/{{.APP_NAME}}.desktop'
+      OUTPUT_DIR: '{{.USER_WORKING_DIR}}/bin'
+      ARCH: '{{.ARCH | default ARCH}}'
+      VERSION: '{{.VERSION | default "0.0.0-dev"}}'
+
+  create:deb:
+    summary: Creates a deb package
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: generate:dotdesktop
+    cmds:
+      - '{{.WAILS3_BIN}} tool package -name {{.PACKAGE_NAME}} -format deb -config ./build/linux/nfpm/nfpm.yaml -out {{.USER_WORKING_DIR}}/bin'
+    vars:
+      PACKAGE_NAME: 'clawacosmi-desktop'
+
+  create:rpm:
+    summary: Creates an rpm package
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: generate:dotdesktop
+    cmds:
+      - '{{.WAILS3_BIN}} tool package -name {{.PACKAGE_NAME}} -format rpm -config ./build/linux/nfpm/nfpm.yaml -out {{.USER_WORKING_DIR}}/bin'
+    vars:
+      PACKAGE_NAME: 'clawacosmi-desktop'
+
+  generate:dotdesktop:
+    summary: Generates a `.desktop` file
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - mkdir -p build/linux/appimage
+      - '{{.WAILS3_BIN}} generate .desktop -name "{{.PRODUCT_NAME}}" -exec "{{.APP_NAME}}" -icon "{{.ICON}}" -outputfile build/linux/{{.APP_NAME}}.desktop -categories "{{.CATEGORIES}}"'
+    vars:
+      ICON: 'clawacosmi-desktop'
+      CATEGORIES: 'Development;Utility;'
 
   run:
-    desc: Placeholder Linux desktop run task
+    dir: '{{.USER_WORKING_DIR}}'
     cmds:
-      - echo "Placeholder only: Linux desktop run wiring is deferred."
+      - '{{.BIN_DIR}}/{{.APP_NAME}}'
+
+  container:image:
+    summary: Builds the reusable Linux packaging image
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - docker build --platform {{.DOCKER_PLATFORM}} -t {{.DOCKER_IMAGE}} -f build/linux/Dockerfile build/linux
+
+  container:build:
+    summary: Builds the Linux desktop host inside a Linux container
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: container:image
+    cmds:
+      - docker run --rm --platform {{.DOCKER_PLATFORM}} -e PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin -e WAILS3_BIN=wails3 -v "{{.WORKSPACE_ROOT}}:{{.DOCKER_WORKDIR}}" -w {{.DOCKER_WORKDIR}} {{.DOCKER_IMAGE}} bash -c 'cd backend/cmd/desktop && wails3 task linux:build'
+
+  container:package:
+    summary: Packages the Linux desktop host inside a Linux container
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: container:image
+    cmds:
+      - docker run --rm --platform {{.DOCKER_PLATFORM}} -e PATH=/usr/local/go/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin -e WAILS3_BIN=wails3 -v "{{.WORKSPACE_ROOT}}:{{.DOCKER_WORKDIR}}" -w {{.DOCKER_WORKDIR}} {{.DOCKER_IMAGE}} bash -c 'cd backend/cmd/desktop && wails3 task linux:package'

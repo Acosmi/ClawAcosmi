@@ -8,12 +8,21 @@ import type { AppViewState } from "../app-view-state.ts";
 export interface MediaToolInfo {
   name: string;
   description: string;
-  status: string; // "registered" | "configured"
+  enabled: boolean;
+  scope: string; // "media" | "shared"
 }
 
 export interface MediaSourceInfo {
   name: string;
   status: string; // "registered" | "configured"
+}
+
+export interface TrendingStrategy {
+  hotKeywords: string[];
+  monitorIntervalMin: number;
+  trendingThreshold: number;
+  contentCategories: string[];
+  autoDraftEnabled: boolean;
 }
 
 export interface MediaConfig {
@@ -33,6 +42,8 @@ export interface MediaConfig {
     autoSpawnEnabled: boolean;
     maxAutoSpawnsPerDay: number;
   };
+  trending_strategy?: TrendingStrategy;
+  enabled_sources_configured?: boolean;
 }
 
 export interface SourceHealthInfo {

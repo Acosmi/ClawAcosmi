@@ -19,7 +19,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Acosmi/ClawAcosmi/internal/browser"
@@ -94,6 +93,8 @@ type ToolExecParams struct {
 	CoderConfirmation *CoderConfirmationManager
 	// MCP 远程工具（可选，nil = 不可用）
 	RemoteMCPBridge RemoteMCPBridgeForAgent
+	// MCP 本地工具（可选，nil = 不可用）— 从 git 安装的 MCP 服务器
+	LocalMCPBridge LocalMCPBridgeForAgent
 	// 原生沙箱 Worker（可选，nil = 使用 Docker fallback）
 	NativeSandbox NativeSandboxForAgent
 	// 技能按需加载缓存: skill name → full SKILL.md content
@@ -312,6 +313,9 @@ func ExecuteToolCall(ctx context.Context, name string, inputJSON json.RawMessage
 		if strings.HasPrefix(name, "remote_") && params.RemoteMCPBridge != nil {
 			return executeRemoteTool(ctx, name, inputJSON, params)
 		}
+		if strings.HasPrefix(name, "mcp_") && params.LocalMCPBridge != nil {
+			return executeLocalMcpTool(ctx, name, inputJSON, params)
+		}
 		return fmt.Sprintf("[Tool %q is not yet implemented]", name), nil
 	}
 }
@@ -385,10 +389,10 @@ func executeReportProgress(ctx context.Context, inputJSON json.RawMessage, param
 
 // ---------- Process group management ----------
 
-// processTracker 跟踪正在运行的子进程，供 kill-tree 使用。
+// processTracker 跟踪正在运行的子进程组/进程标识，供 kill-tree 使用。
 var processTracker = struct {
 	mu  sync.Mutex
-	pgs map[int]struct{} // 进程组 ID 集合
+	pgs map[int]struct{} // Unix: 进程组 ID; Windows: 进程 PID
 }{pgs: make(map[int]struct{})}
 
 // trackProcessGroup 注册进程组 ID。
@@ -408,7 +412,7 @@ func untrackProcessGroup(pgid int) {
 // KillTree 终止进程及其所有子进程（通过进程组）。
 // TS 对照: pi-tools.ts killTree()
 func KillTree(pid int) error {
-	pgid, err := syscall.Getpgid(pid)
+	pgid, err := trackedProcessID(pid)
 	if err != nil {
 		// 进程可能已退出
 		return nil
@@ -420,13 +424,13 @@ func KillTree(pid int) error {
 	)
 
 	// 先发 SIGTERM
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+	if err := terminateTrackedProcess(pgid); err != nil {
 		slog.Debug("kill_tree: SIGTERM failed, trying SIGKILL",
 			"pgid", pgid,
 			"error", err,
 		)
 		// 再发 SIGKILL
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		_ = forceKillTrackedProcess(pgid)
 	}
 
 	untrackProcessGroup(pgid)
@@ -445,7 +449,7 @@ func KillAllTrackedProcesses() {
 
 	for _, pgid := range pgs {
 		slog.Debug("kill_tree: cleanup tracked process group", "pgid", pgid)
-		_ = syscall.Kill(-pgid, syscall.SIGTERM)
+		_ = terminateTrackedProcess(pgid)
 		untrackProcessGroup(pgid)
 	}
 }
@@ -689,8 +693,7 @@ func executeBash(ctx context.Context, inputJSON json.RawMessage, params ToolExec
 
 	cmd := exec.CommandContext(ctx, "bash", "-c", input.Command)
 	cmd.Dir = params.WorkspaceDir
-	// 使用进程组以支持 kill-tree
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureCommandForProcessTracking(cmd)
 
 	// 限制输出大小
 	output, err := cmd.CombinedOutput()
@@ -701,7 +704,7 @@ func executeBash(ctx context.Context, inputJSON json.RawMessage, params ToolExec
 
 	// 追踪进程组用于清理
 	if cmd.Process != nil {
-		if pgid, pgErr := syscall.Getpgid(cmd.Process.Pid); pgErr == nil {
+		if pgid, pgErr := trackedProcessID(cmd.Process.Pid); pgErr == nil {
 			trackProcessGroup(pgid)
 			defer untrackProcessGroup(pgid)
 		}
@@ -1740,6 +1743,20 @@ func executeRemoteTool(ctx context.Context, name string, inputJSON json.RawMessa
 	output, err := params.RemoteMCPBridge.AgentCallRemoteTool(ctx, mcpToolName, inputJSON, 30*time.Second)
 	if err != nil {
 		return fmt.Sprintf("[Remote tool error: %s]", err), nil
+	}
+	return output, nil
+}
+
+// ---------- local MCP (本地安装的 MCP 服务器工具) ----------
+
+// executeLocalMcpTool 将 mcp_ 前缀的工具调用转发给本地 MCP Bridge。
+// 工具名格式: mcp_{server}_{tool}，由 McpLocalManager 解析路由。
+func executeLocalMcpTool(ctx context.Context, name string, inputJSON json.RawMessage, params ToolExecParams) (string, error) {
+	slog.Debug("local MCP tool call", "prefixed_name", name)
+
+	output, err := params.LocalMCPBridge.AgentCallLocalMcpTool(ctx, name, inputJSON, 30*time.Second)
+	if err != nil {
+		return fmt.Sprintf("[MCP tool error: %s]", err), nil
 	}
 	return output, nil
 }

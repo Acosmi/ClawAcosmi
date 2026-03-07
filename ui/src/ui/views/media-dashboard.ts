@@ -185,9 +185,9 @@ export function renderConfigPanel(state: AppViewState): TemplateResult {
                 <div style="flex:1;min-width:0;">
                   <div style="display:flex;align-items:center;gap:6px;">
                     <span style="font-size:12px;font-weight:600;">${TOOL_LABELS[tool.name] || tool.name}</span>
-                    ${tool.status === "configured"
-          ? html`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#22c55e22;color:#22c55e;">已配置</span>`
-          : html`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#f59e0b22;color:#f59e0b;">已注册</span>`}
+                    ${tool.enabled
+          ? html`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#22c55e22;color:#22c55e;">已启用</span>`
+          : html`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#f59e0b22;color:#f59e0b;">未启用</span>`}
                   </div>
                   <div style="font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${tool.description}</div>
                 </div>

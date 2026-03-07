@@ -91,10 +91,6 @@ func writeCapabilities(b *strings.Builder) {
 	b.WriteString("处理小红书社交互动时 |\n")
 	b.WriteString("| `web_search` | 搜索网络信息和参考资料 | ")
 	b.WriteString("调研话题、核实事实或查找素材时 |\n")
-	b.WriteString("| `web_fetch` | 获取并阅读网页内容 | ")
-	b.WriteString("需要读取特定 URL 作为参考时 |\n")
-	b.WriteString("| `image` | 生成内容配图 | ")
-	b.WriteString("为帖子创建视觉素材时 |\n")
 	b.WriteString("| `report_progress` | 向用户汇报中间进度 | ")
 	b.WriteString("完成重要步骤、开始新阶段、或任务耗时较长时 |\n\n")
 }
@@ -186,9 +182,8 @@ func writeToolUsage(b *strings.Builder) {
 	b.WriteString("- **内容创作工具链模式**：\n")
 	b.WriteString("  1. `trending_topics` (fetch) → 选择最佳话题\n")
 	b.WriteString("  2. `web_search`（可选）→ 收集更多素材\n")
-	b.WriteString("  3. `image`（可选）→ 生成配图\n")
-	b.WriteString("  4. `content_compose` (draft) → 创建并保存草稿\n")
-	b.WriteString("  5. `report_progress` → 汇报草稿完成、等待审批\n")
+	b.WriteString("  3. `content_compose` (draft) → 创建并保存草稿\n")
+	b.WriteString("  4. `report_progress` → 汇报草稿完成、等待审批\n")
 	b.WriteString("- **进度汇报**：任务耗时较长时，在完成关键步骤后用 `report_progress` 汇报进度，")
 	b.WriteString("让用户了解当前状态\n\n")
 }

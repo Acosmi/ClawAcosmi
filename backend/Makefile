@@ -12,7 +12,7 @@
 #   make clean          # 清理构建产物
 
 .PHONY: gateway cli build-all build-cpp test test-multimedia report-multimedia lint clean fmt vet help \
-        gateway-dev gateway-run test-rust install-cli build-go-cli-deprecated
+        gateway-dev gateway-run test-rust install-cli build-go-cli-deprecated gateway-ffi
 
 # 版本信息
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -22,6 +22,7 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)"
 # 目录
 CPP_BUILD_DIR := build/cpp
 GATEWAY_BIN := build/acosmi
+RUST_FFI_WORKSPACE := ../cli-rust/libs/openviking-rs
 
 # --- 默认目标 ---
 help: ## 显示帮助信息
@@ -33,7 +34,16 @@ help: ## 显示帮助信息
 	@echo ""
 
 # --- Go Gateway 构建 ---
-gateway: fmt vet ## 编译 Go Gateway (acosmi)
+gateway-ffi: ## 编译 Gateway 所需的 Rust FFI (openviking-ffi)
+ifeq ($(CGO_ENABLED),0)
+	@echo "ℹ️  CGO_ENABLED=0，跳过 Rust FFI 编译，使用纯 Go fallback"
+else
+	@echo "🦀 编译 Rust FFI (openviking-ffi)..."
+	cd $(RUST_FFI_WORKSPACE) && cargo build -p openviking-ffi --release
+	@echo "✅ Rust FFI 编译完成"
+endif
+
+gateway: gateway-ffi fmt vet ## 编译 Go Gateway (acosmi)
 	@echo "🔨 编译 Go Gateway..."
 	go build $(LDFLAGS) -o $(GATEWAY_BIN) ./cmd/acosmi
 	@echo "✅ 编译完成: $(GATEWAY_BIN)"

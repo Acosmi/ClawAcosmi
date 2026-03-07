@@ -17,15 +17,16 @@ import {
   renderPublishDetailModal,
   renderDraftEditModal,
 } from "./media-dashboard.ts";
-import { toggleMediaTool, toggleMediaSource } from "../controllers/media-dashboard.ts";
+import { toggleMediaTool, toggleMediaSource, updateMediaConfig } from "../controllers/media-dashboard.ts";
 
-export type MediaSubTab = "overview" | "llm" | "sources" | "tools" | "drafts" | "publish" | "patrol";
+export type MediaSubTab = "overview" | "llm" | "sources" | "tools" | "drafts" | "publish" | "patrol" | "strategy";
 
 const SUB_TABS: { id: MediaSubTab; labelKey: string }[] = [
   { id: "overview", labelKey: "media.subtab.overview" },
   { id: "llm", labelKey: "media.subtab.llm" },
   { id: "sources", labelKey: "media.subtab.sources" },
   { id: "tools", labelKey: "media.subtab.tools" },
+  { id: "strategy", labelKey: "media.subtab.strategy" },
   { id: "drafts", labelKey: "media.subtab.drafts" },
   { id: "publish", labelKey: "media.subtab.publish" },
   { id: "patrol", labelKey: "media.subtab.patrol" },
@@ -88,6 +89,8 @@ function dispatchSubTab(tab: MediaSubTab, state: AppViewState): TemplateResult |
       return renderPublishPanel(state);
     case "patrol":
       return renderPatrolTab(state);
+    case "strategy":
+      return renderStrategyTab(state);
     default:
       return nothing;
   }
@@ -107,24 +110,24 @@ function renderOverviewTab(state: AppViewState): TemplateResult {
       ${renderProgressBanner(state)}
       ${renderHeartbeatPanel(state.mediaHeartbeat)}
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
-        <div style="padding:16px;border-radius:10px;background:var(--bg-secondary);text-align:center;">
-          <div style="font-size:24px;font-weight:700;color:var(--accent);">${toolCount}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${t("media.subtab.tools")}</div>
+      <div class="media-stat-grid">
+        <div class="media-stat-card">
+          <div class="media-stat-value">${toolCount}</div>
+          <div class="media-stat-label">${t("media.subtab.tools")}</div>
         </div>
-        <div style="padding:16px;border-radius:10px;background:var(--bg-secondary);text-align:center;">
-          <div style="font-size:24px;font-weight:700;color:var(--accent);">${sourceCount}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${t("media.subtab.sources")}</div>
+        <div class="media-stat-card">
+          <div class="media-stat-value">${sourceCount}</div>
+          <div class="media-stat-label">${t("media.subtab.sources")}</div>
         </div>
-        <div style="padding:16px;border-radius:10px;background:var(--bg-secondary);text-align:center;">
-          <div style="font-size:24px;font-weight:700;color:var(--accent);">${draftCount}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${t("media.subtab.drafts")}</div>
+        <div class="media-stat-card">
+          <div class="media-stat-value">${draftCount}</div>
+          <div class="media-stat-label">${t("media.subtab.drafts")}</div>
         </div>
-        <div style="padding:16px;border-radius:10px;background:var(--bg-secondary);text-align:center;">
-          <div style="font-size:24px;font-weight:700;color:${isConfigured ? "var(--accent)" : "#f59e0b"};">
+        <div class="media-stat-card">
+          <div class="${isConfigured ? "media-stat-value" : "media-stat-value media-stat-value--warn"}">
             ${isConfigured ? "LLM" : "—"}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${t("media.subtab.llm")}</div>
+          <div class="media-stat-label">${t("media.subtab.llm")}</div>
         </div>
       </div>
 
@@ -153,6 +156,8 @@ const TOOL_ICONS: Record<string, string> = {
   content_compose: "✍️",
   media_publish: "🚀",
   social_interact: "💬",
+  web_search: "🔍",
+  report_progress: "📢",
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -160,6 +165,8 @@ const TOOL_LABELS: Record<string, string> = {
   content_compose: "内容创作",
   media_publish: "多平台发布",
   social_interact: "社交互动",
+  web_search: "网页搜索",
+  report_progress: "进度汇报",
 };
 
 // 可切换的工具（media_publish / social_interact）
@@ -171,49 +178,56 @@ function renderToolsTab(state: AppViewState): TemplateResult {
     return html`<div class="muted">${t("common.loading")}</div>`;
   }
 
-  // 从 config 中推断当前启用状态
-  const enabledTools = new Set((config.tools || []).map((ti: any) => ti.name));
+  const allTools = config.tools || [];
+  const mediaTools = allTools.filter((ti: any) => ti.scope !== "shared");
+  const sharedTools = allTools.filter((ti: any) => ti.scope === "shared");
 
-  // 所有已知工具（含未启用的）
-  const allToolNames = ["trending_topics", "content_compose", "media_publish", "social_interact"];
+  const renderToolCard = (tool: any, toggleable: boolean) => {
+    const name = tool.name;
+    const enabled = tool.enabled;
+    return html`
+      <div class="media-tool-card ${enabled ? "" : "media-tool-card--disabled"}">
+        <span class="media-tool-icon">${TOOL_ICONS[name] || "🔧"}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="media-tool-name">${TOOL_LABELS[name] || name}</span>
+            ${enabled
+              ? html`<span class="chip chip-ok" style="font-size:10px;">已启用</span>`
+              : html`<span class="chip chip-muted" style="font-size:10px;">未启用</span>`}
+          </div>
+          <div class="media-tool-desc">
+            ${tool.description || TOOL_LABELS[name] || name}
+          </div>
+          ${toggleable ? html`
+            <label class="media-tool-toggle">
+              <input
+                type="checkbox"
+                .checked=${enabled}
+                @change=${(e: Event) => {
+                  const checked = (e.target as HTMLInputElement).checked;
+                  void toggleMediaTool(state, name, checked);
+                }}
+              />
+              ${enabled ? "启用中" : "已关闭"}
+            </label>
+          ` : nothing}
+        </div>
+      </div>
+    `;
+  };
 
   return html`
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-      ${allToolNames.map((name) => {
-        const tool = (config.tools || []).find((ti: any) => ti.name === name);
-        const enabled = enabledTools.has(name);
-        const toggleable = TOGGLEABLE_TOOLS.has(name);
-
-        return html`
-          <div style="padding:14px 16px;border-radius:10px;background:var(--bg-secondary);display:flex;align-items:flex-start;gap:10px;opacity:${enabled ? 1 : 0.5};">
-            <span style="font-size:20px;flex-shrink:0;">${TOOL_ICONS[name] || "🔧"}</span>
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:13px;font-weight:600;">${TOOL_LABELS[name] || name}</span>
-                ${enabled
-                  ? html`<span class="chip chip-ok" style="font-size:10px;">${tool?.status === "configured" ? "已配置" : "已启用"}</span>`
-                  : html`<span class="chip chip-muted" style="font-size:10px;">未启用</span>`}
-              </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4;">
-                ${tool?.description || TOOL_LABELS[name] || name}
-              </div>
-              ${toggleable ? html`
-                <label style="display:flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;font-size:12px;">
-                  <input
-                    type="checkbox"
-                    .checked=${enabled}
-                    @change=${(e: Event) => {
-                      const checked = (e.target as HTMLInputElement).checked;
-                      void toggleMediaTool(state, name, checked);
-                    }}
-                  />
-                  ${enabled ? "启用中" : "已关闭"}
-                </label>
-              ` : nothing}
-            </div>
-          </div>
-        `;
-      })}
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="media-section-title">媒体专属工具</div>
+      <div class="media-tool-grid">
+        ${mediaTools.map((tool: any) => renderToolCard(tool, TOGGLEABLE_TOOLS.has(tool.name)))}
+      </div>
+      ${sharedTools.length > 0 ? html`
+        <div class="media-section-title media-section-title--spaced">共享工具（运行时自动获得）</div>
+        <div class="media-tool-grid">
+          ${sharedTools.map((tool: any) => renderToolCard(tool, false))}
+        </div>
+      ` : nothing}
     </div>
   `;
 }
@@ -229,17 +243,21 @@ const SOURCE_LABELS: Record<string, string> = {
 
 function renderSourcesTab(state: AppViewState): TemplateResult {
   const config = state.mediaConfig;
-  // 当前启用的源（空=全部启用）
+  // 语义: enabled_sources_configured=false (nil) → 全部启用
+  //        enabled_sources_configured=true, trending_sources=[] → 全部禁用
+  //        enabled_sources_configured=true, trending_sources=[...] → 仅列出的启用
+  const sourcesConfigured = config?.enabled_sources_configured === true;
   const registeredSources = (config?.trending_sources || []).map((si: any) => si.name);
-  // nil（未配置）= 全部启用；空数组 = 全部禁用
-  const hasExplicitConfig = Array.isArray(config?.trending_sources) && config.trending_sources.length > 0;
-  const allEnabled = !hasExplicitConfig;
+  const allEnabled = !sourcesConfigured; // nil = 全部启用
 
   return html`
     <div style="display:flex;flex-direction:column;gap:16px;">
-      <div class="card" style="padding:14px 16px;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">热点来源开关</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div class="card media-source-panel">
+        <div class="media-source-title">热点来源开关</div>
+        ${allEnabled ? html`
+          <div class="media-source-status">当前为默认模式：全部来源已启用</div>
+        ` : nothing}
+        <div class="media-source-grid">
           ${ALL_SOURCES.map((name) => {
             const enabled = allEnabled || registeredSources.includes(name);
             return html`
@@ -257,11 +275,102 @@ function renderSourcesTab(state: AppViewState): TemplateResult {
             `;
           })}
         </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
-          取消勾选将禁用该来源的热点抓取（需重启子系统生效）
+        <div class="media-source-hint">
+          取消勾选将禁用该来源的热点抓取（需重启子系统生效）。
+          首次修改后将切换为显式配置模式。
         </div>
       </div>
       ${renderTrendingPanel(state)}
+    </div>
+  `;
+}
+
+// ---------- Strategy 子 tab ----------
+
+function renderStrategyTab(state: AppViewState): TemplateResult {
+  const config = state.mediaConfig;
+  const strategy = config?.trending_strategy;
+  const hotKeywords = strategy?.hotKeywords ?? [];
+  const monitorInterval = strategy?.monitorIntervalMin ?? 30;
+  const threshold = strategy?.trendingThreshold ?? 10000;
+  const categories = strategy?.contentCategories ?? [];
+  const autoDraft = strategy?.autoDraftEnabled ?? false;
+
+  return html`
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card media-strategy-panel">
+        <div class="media-section-title" style="margin-bottom:12px;">热点策略配置</div>
+
+        <label class="field" style="margin-bottom:12px;">
+          <span class="media-config-field-label">热度阈值（低于此值的话题将被跳过）</span>
+          <input
+            type="number"
+            class="media-strategy-input"
+            .value=${String(threshold)}
+            @change=${(e: Event) => {
+              const v = parseFloat((e.target as HTMLInputElement).value);
+              if (!isNaN(v) && v >= 0) void updateMediaConfig(state, { trendingThreshold: v });
+            }}
+          />
+        </label>
+
+        <label class="field" style="margin-bottom:12px;">
+          <span class="media-config-field-label">监控频率（分钟）</span>
+          <input
+            type="number"
+            class="media-strategy-input"
+            min="5"
+            max="1440"
+            .value=${String(monitorInterval)}
+            @change=${(e: Event) => {
+              const v = parseInt((e.target as HTMLInputElement).value, 10);
+              if (!isNaN(v) && v >= 5) void updateMediaConfig(state, { monitorIntervalMin: v });
+            }}
+          />
+        </label>
+
+        <label class="field" style="margin-bottom:12px;">
+          <span class="media-config-field-label">自定义关键词（逗号分隔）</span>
+          <input
+            type="text"
+            class="media-strategy-input media-strategy-input--wide"
+            .value=${hotKeywords.join(", ")}
+            @change=${(e: Event) => {
+              const v = (e.target as HTMLInputElement).value;
+              const keywords = v.split(",").map(s => s.trim()).filter(Boolean);
+              void updateMediaConfig(state, { hotKeywords: keywords });
+            }}
+            placeholder="例如: AI, 科技, 创业"
+          />
+        </label>
+
+        <label class="field" style="margin-bottom:12px;">
+          <span class="media-config-field-label">内容领域偏好（逗号分隔）</span>
+          <input
+            type="text"
+            class="media-strategy-input media-strategy-input--wide"
+            .value=${categories.join(", ")}
+            @change=${(e: Event) => {
+              const v = (e.target as HTMLInputElement).value;
+              const cats = v.split(",").map(s => s.trim()).filter(Boolean);
+              void updateMediaConfig(state, { contentCategories: cats });
+            }}
+            placeholder="例如: 科技, 教育, 商业"
+          />
+        </label>
+
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input
+            type="checkbox"
+            .checked=${autoDraft}
+            @change=${(e: Event) => {
+              const checked = (e.target as HTMLInputElement).checked;
+              void updateMediaConfig(state, { autoDraftEnabled: checked });
+            }}
+          />
+          自动生成草稿（发现匹配热点时自动创建内容草稿）
+        </label>
+      </div>
     </div>
   `;
 }

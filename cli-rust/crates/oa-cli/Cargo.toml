@@ -51,6 +51,8 @@ oa-cmd-plugins.workspace = true
 oa-cmd-security.workspace = true
 oa-cmd-hooks.workspace = true
 oa-cmd-browser.workspace = true
+oa-cmd-mcp.workspace = true
+oa-mcp-install.workspace = true
 # Infrastructure
 oa-types.workspace = true
 oa-config.workspace = true

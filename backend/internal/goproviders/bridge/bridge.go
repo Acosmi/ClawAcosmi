@@ -197,13 +197,16 @@ var defaultModelRefs = map[string]struct {
 		},
 	},
 	"qwen": {
-		ModelRef: "qwen/qwen-max",
+		ModelRef: "qwen/qwen3.5-plus",
 		API:      "openai-completions",
 		BaseURL:  "https://dashscope.aliyuncs.com/compatible-mode/v1",
 		DefaultModels: []gptypes.ModelDefinitionConfig{
-			{ID: "qwen-max", Name: "Qwen Max", Reasoning: false, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
-			{ID: "qwen3-235b-a22b", Name: "Qwen 3 235B", Reasoning: true, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
-			{ID: "qwq-plus", Name: "QwQ Plus", Reasoning: true, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
+			{ID: "qwen3.5-plus", Name: "Qwen3.5 Plus (旗舰多模态)", Reasoning: false, Input: []string{"text", "image"}, ContextWindow: 1000000, MaxTokens: 81920},
+			{ID: "qwen3-max", Name: "Qwen3 Max (旗舰推理)", Reasoning: true, Input: []string{"text"}, ContextWindow: 256000, MaxTokens: 32000},
+			{ID: "qwen3-coder-plus", Name: "Qwen3 Coder Plus (代码)", Reasoning: false, Input: []string{"text"}, ContextWindow: 262000, MaxTokens: 65536},
+			{ID: "qwen3-235b-a22b", Name: "Qwen 3 235B (开源旗舰)", Reasoning: true, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
+			{ID: "qwq-plus", Name: "QwQ Plus (推理专家)", Reasoning: true, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
+			{ID: "qwen-max", Name: "Qwen Max (经典)", Reasoning: false, Input: []string{"text"}, ContextWindow: 131072, MaxTokens: 16384},
 		},
 	},
 	"github-copilot": {

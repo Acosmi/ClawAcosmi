@@ -180,6 +180,10 @@ pub enum Commands {
     /// Browser automation (status, start, stop, tabs, open, screenshot, profiles).
     #[command(subcommand_required = true, arg_required_else_help = true)]
     Browser(BrowserCommand),
+
+    /// MCP server management (install, list, status, update, uninstall, start, stop).
+    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Mcp(McpCommand),
 }
 
 // ---------------------------------------------------------------------------
@@ -2897,6 +2901,15 @@ pub struct BrowserResetProfileArgs {
     pub browser_profile: Option<String>,
 }
 
+// -- MCP subcommands --------------------------------------------------------
+
+/// MCP server management subcommand group.
+#[derive(Debug, Args)]
+pub struct McpCommand {
+    #[command(subcommand)]
+    pub action: oa_cmd_mcp::McpAction,
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -3136,6 +3149,10 @@ pub async fn dispatch(cmd: Commands, json: bool, verbose: bool) -> Result<()> {
         }
         Commands::Hooks(cmd) => dispatch_hooks(cmd, json).await,
         Commands::Browser(cmd) => dispatch_browser(cmd, json).await,
+        Commands::Mcp(cmd) => {
+            let mcp_cmd = oa_cmd_mcp::McpCommand { action: cmd.action };
+            oa_cmd_mcp::dispatch(mcp_cmd, json).await
+        }
 
         // -- Shell completions -----------------------------------------------
         Commands::Completion(args) => {

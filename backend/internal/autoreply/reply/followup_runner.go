@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	agentsession "github.com/Acosmi/ClawAcosmi/internal/agents/session"
 	"github.com/Acosmi/ClawAcosmi/internal/autoreply"
 	"github.com/Acosmi/ClawAcosmi/internal/session"
 	"github.com/Acosmi/ClawAcosmi/pkg/types"
@@ -25,6 +26,7 @@ type FollowupRun struct {
 	OriginatingAccountID string
 	OriginatingThreadID  string
 	OriginatingChatType  string
+	Attachments          []agentsession.ContentBlock // 用户附件 content blocks（用于 transcript 持久化）
 }
 
 // FollowupRunParams 后续运行核心参数。

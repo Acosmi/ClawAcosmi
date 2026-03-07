@@ -134,6 +134,9 @@ type GatewayMethodContext struct {
 
 	// Phase 5+6: 媒体子系统（可选，nil = media.* RPC 不可用）
 	MediaSubsystem *media.MediaSubsystem
+
+	// Monitor 频道热更新管理器（可选，nil = 不支持热更新）
+	ChannelMonitorMgr *ChannelMonitorManager
 }
 
 // ---------- 权限常量 ----------

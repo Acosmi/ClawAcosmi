@@ -1,0 +1,28 @@
+name: Desktop Windows Template
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.40
+
+      - name: Build control UI
+        run: npm ci --prefix ui && npm run build --prefix ui
+
+      - name: Package desktop app
+        working-directory: backend/cmd/desktop
+        run: wails3 task windows:package

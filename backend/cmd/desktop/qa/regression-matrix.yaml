@@ -1,0 +1,142 @@
+version: 1
+phase: P4
+mode: non_destructive
+updated: 2026-03-07
+owner: desktop-shell
+cases:
+  - id: desktop.attach-existing-gateway
+    priority: P1
+    scenario: 固定端口上已有健康 Gateway 时，桌面壳应附着而不是重复拉起
+    current_status: partially_covered
+    existing_evidence:
+      automated:
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestPrepareDesktopBootstrap_AttachesExistingGateway
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestResolveDesktopPort
+      code_path:
+        - file: backend/cmd/desktop/runtime.go
+          symbol: prepareDesktopBootstrap
+        - file: backend/cmd/desktop/runtime.go
+          symbol: startOrAttachGateway
+    remaining_gap:
+      - 尚未做真实进程级附着验证
+      - 尚未验证附着已有实例后不会误关闭对方 runtime
+    planned_followup:
+      - 后续增加真实 /health listener 的进程级集成验证
+
+  - id: desktop.foreign-port-conflict
+    priority: P1
+    scenario: 固定端口被非 Gateway 进程占用时，桌面壳应明确失败
+    current_status: uncovered
+    existing_evidence:
+      automated: []
+      code_path:
+        - file: backend/cmd/desktop/runtime.go
+          symbol: startOrAttachGateway
+    remaining_gap:
+      - 当前没有专门的冲突端口回归用例
+      - 尚未把“健康 Gateway”和“非 Gateway 占用”分成独立集成场景
+    planned_followup:
+      - 后续增加临时 HTTP/TCP listener 占端口的失败路径验证
+
+  - id: desktop.spa-deep-link-refresh
+    priority: P1
+    scenario: /ui/chat 与 /ui/overview 等深链刷新时应回退到 index.html
+    current_status: covered_handler_only
+    existing_evidence:
+      automated:
+        - file: backend/internal/gateway/control_ui_test.go
+          test: TestNewControlUIHandler_ServesRootAndRouteFallback
+        - file: backend/internal/gateway/control_ui_test.go
+          test: TestNewControlUIHandler_MissingAssetWithExtensionReturns404
+        - file: backend/internal/gateway/control_ui_test.go
+          test: TestNewControlUIHandler_CustomIndexAndPathCleaning
+      code_path:
+        - file: backend/internal/gateway/control_ui.go
+          symbol: newControlUIHandler
+        - file: backend/internal/gateway/server.go
+          symbol: StartGatewayServer
+    remaining_gap:
+      - 已覆盖 handler 行为，但尚未覆盖桌面窗口层的实际刷新行为
+    planned_followup:
+      - 后续增加 localhost 集成验证和桌面窗口手工验收
+
+  - id: desktop.onboarding-routing
+    priority: P1
+    scenario: 配置不存在与配置已存在两种情况下，初始 URL 分流必须正确
+    current_status: covered_unit
+    existing_evidence:
+      automated:
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestNeedsOnboarding
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestBuildDesktopURL
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestPrepareDesktopBootstrap_StartsGatewayAndBuildsURL
+      code_path:
+        - file: backend/cmd/desktop/runtime.go
+          symbol: needsOnboarding
+        - file: backend/cmd/desktop/runtime.go
+          symbol: buildDesktopURL
+    remaining_gap:
+      - 尚未覆盖窗口已创建后的重新配置入口跳转
+    planned_followup:
+      - 后续增加托盘“重新配置向导”路径的手工验收
+
+  - id: desktop.tray-exit-runtime-close
+    priority: P1
+    scenario: 显式退出桌面壳时，只关闭自己拥有的 runtime
+    current_status: manual_only
+    existing_evidence:
+      automated: []
+      code_path:
+        - file: backend/cmd/desktop/wails_app.go
+          symbol: onShutdown
+        - file: backend/cmd/desktop/wails_app.go
+          symbol: configureSystemTray
+    remaining_gap:
+      - 当前没有 Wails 生命周期自动化测试
+      - 尚未区分 attachedExisting 与 owned runtime 的真实退出行为
+    planned_followup:
+      - 后续增加 GUI 生命周期模拟或手工验收录屏
+
+  - id: desktop.control-ui-source-required
+    priority: P2
+    scenario: 若本地要新启动 Gateway，缺少任何 Control UI 资源源时应直接失败
+    current_status: covered_unit
+    existing_evidence:
+      automated:
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestStartOrAttachGateway_RequiresControlUIWhenStarting
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestResolveDesktopGatewayOptions_LeavesSourceEmptyWhenUnavailable
+      code_path:
+        - file: backend/cmd/desktop/runtime.go
+          symbol: resolveDesktopGatewayOptions
+        - file: backend/cmd/desktop/runtime.go
+          symbol: startOrAttachGateway
+    remaining_gap:
+      - 尚未覆盖构建产物 staging 丢失时的整体启动 UX
+    planned_followup:
+      - 后续增加 CLI/GUI 层错误提示一致性校验
+
+  - id: desktop.probe-failure-runtime-close
+    priority: P2
+    scenario: 新启动 Gateway 后若 /ui/ 探测失败，应回收 runtime 并返回错误
+    current_status: covered_unit
+    existing_evidence:
+      automated:
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestPrepareDesktopBootstrap_ProbeFailureClosesRuntime
+        - file: backend/cmd/desktop/runtime_test.go
+          test: TestStartOrAttachGateway_TimeoutClosesRuntime
+      code_path:
+        - file: backend/cmd/desktop/runtime.go
+          symbol: prepareDesktopBootstrap
+        - file: backend/cmd/desktop/runtime.go
+          symbol: startOrAttachGateway
+    remaining_gap:
+      - 尚未覆盖真实 localhost 超时场景
+    planned_followup:
+      - 后续增加集成级超时注入用例

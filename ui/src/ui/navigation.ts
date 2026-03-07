@@ -10,7 +10,7 @@ export function getTabGroups() {
     },
     {
       label: t("nav.group.control"),
-      tabs: ["overview", "channels", "plugins", "memory", "cron", "security"] as const,
+      tabs: ["overview", "channels", "plugins", "mcp", "memory", "cron", "security"] as const,
     },
     { label: t("nav.group.settings"), tabs: ["config", "debug", "logs"] as const },
   ];
@@ -34,7 +34,8 @@ export type Tab =
   | "logs"
   | "subagents"
   | "media"
-  | "tasks";
+  | "tasks"
+  | "mcp";
 
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
@@ -55,6 +56,7 @@ const TAB_PATHS: Record<Tab, string> = {
   subagents: "/subagents", // deprecated: 重定向到 /agents
   media: "/media",
   tasks: "/tasks",
+  mcp: "/mcp",
 };
 
 const PATH_TO_TAB = new Map(Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab as Tab]));
@@ -183,6 +185,8 @@ export function iconForTab(tab: Tab): IconName {
       return "monitor";
     case "media":
       return "barChart";
+    case "mcp":
+      return "puzzle";
     case "tasks":
       return "loader";
     default:

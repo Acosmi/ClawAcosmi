@@ -292,6 +292,12 @@ func TestResolveDesktopGatewayOptions_UsesEmbeddedAssets(t *testing.T) {
 }
 
 func TestResolveDesktopGatewayOptions_UsesConfiguredDiskRoot(t *testing.T) {
+	restore := desktopEmbeddedAssetsFunc
+	desktopEmbeddedAssetsFunc = func() fs.FS { return nil }
+	defer func() {
+		desktopEmbeddedAssetsFunc = restore
+	}()
+
 	cfg := &types.OpenAcosmiConfig{
 		Gateway: &types.GatewayConfig{
 			ControlUI: &types.GatewayControlUiConfig{Root: "/workspace/dist/control-ui"},

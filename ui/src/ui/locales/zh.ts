@@ -46,6 +46,7 @@ export const zhMessages: Record<string, string> = {
   "nav.tab.media": "媒体运营",
   "nav.tab.plugins": "插件/工具/技能",
   "nav.tab.tasks": "任务看板",
+  "nav.tab.mcp": "MCP 服务器",
 
   // ── Tab 副标题 ──
   "nav.sub.agents": "管理代理工作区、工具和身份。",
@@ -68,6 +69,30 @@ export const zhMessages: Record<string, string> = {
   "nav.sub.media": "热点趋势、内容草稿和发布管理。",
   "nav.sub.plugins": "管理插件、系统工具与技能配置。",
   "nav.sub.tasks": "后台任务执行状态和异步任务看板。",
+  "nav.sub.mcp": "管理本地 MCP 服务器的安装、启停和工具。",
+
+  // ── MCP 服务器 ──
+  "mcp.title": "MCP 服务器管理",
+  "mcp.tab.servers": "服务器",
+  "mcp.tab.tools": "工具列表",
+  "mcp.empty": "暂无已安装的 MCP 服务器",
+  "mcp.empty.hint": "使用 CLI 命令 openacosmi mcp install <url> 安装服务器",
+  "mcp.toolCount": "个工具",
+  "mcp.action.start": "启动",
+  "mcp.action.stop": "停止",
+  "mcp.action.uninstall": "卸载",
+  "mcp.confirm.uninstall": "确定要卸载此 MCP 服务器吗？",
+  "mcp.field.transport": "传输",
+  "mcp.field.type": "类型",
+  "mcp.field.source": "来源",
+  "mcp.field.installedAt": "安装时间",
+  "mcp.state.ready": "运行中",
+  "mcp.state.starting": "启动中",
+  "mcp.state.degraded": "降级",
+  "mcp.state.stopped": "已停止",
+  "mcp.state.init": "初始化",
+  "mcp.tools.empty": "暂无可用工具（请先启动服务器）",
+  "mcp.tools.count": "共 {count} 个工具",
 
   // ── 任务看板 ──
   "tasks.title": "任务看板",
@@ -326,6 +351,7 @@ export const zhMessages: Record<string, string> = {
   "common.save": "保存",
   "common.cancel": "取消",
   "common.call": "调用",
+  "common.dismiss": "关闭",
   "common.noData": "暂无数据",
 
   // ── Sessions 视图 ──
@@ -1748,8 +1774,8 @@ export const zhMessages: Record<string, string> = {
   "docconv.wizard.reconfigure": "重新配置",
 
   // ─── Media config panel ───
-  "media.tab.title": "多媒体",
-  "media.configTitle": "多媒体配置",
+  "media.tab.title": "多媒体处理",
+  "media.configTitle": "多媒体处理配置",
   "media.stt.title": "语音转录 (STT)",
   "media.stt.configured": "已配置",
   "media.stt.notConfigured": "未配置",
@@ -2243,6 +2269,7 @@ export const zhMessages: Record<string, string> = {
   "media.subtab.drafts": "内容草稿",
   "media.subtab.publish": "发布记录",
   "media.subtab.patrol": "巡检计划",
+  "media.subtab.strategy": "热点策略",
   "media.overview.notConfigured": "尚未配置 LLM，点击下方按钮开始配置",
   "media.overview.configureNow": "立即配置",
   "subagents.media.manage": "管理",

@@ -502,6 +502,15 @@ export class OpenAcosmiApp extends LitElement {
   @state() subagentsBusyKey: string | null = null;
   @state() subagentsActiveTab = "";
 
+  // MCP Local Servers
+  @state() mcpServersLoading = false;
+  @state() mcpServersList: import("./controllers/mcp-servers.js").McpServerStatus[] = [];
+  @state() mcpServersError: string | null = null;
+  @state() mcpServersBusy: string | null = null;
+  @state() mcpToolsLoading = false;
+  @state() mcpToolsList: import("./controllers/mcp-servers.js").McpToolEntry[] = [];
+  @state() mcpSubTab = "servers";
+
   // Task Kanban
   @state() taskKanbanState: import("./controllers/task-kanban.js").TaskKanbanState = { tasks: new Map(), sortedIds: [] };
 

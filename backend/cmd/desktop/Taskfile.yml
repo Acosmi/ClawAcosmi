@@ -7,31 +7,28 @@ includes:
   darwin: ./build/darwin/Taskfile.yml
 
 vars:
-  APP_NAME: "ClawAcosmi"
+  APP_NAME: "ClawAcosmi-desktop"
+  PRODUCT_NAME: "ClawAcosmi"
+  BIN_DIR: "bin"
+  WAILS3_BIN: '{{.WAILS3_BIN | default "/Users/fushihua/go/bin/wails3"}}'
 
 tasks:
-  explain:
-    desc: Explain the current non-destructive desktop build scaffold
-    cmds:
-      - echo "Desktop build scaffold is present, but real build wiring is intentionally deferred."
-      - echo "The current Taskfiles are placeholders and templates only."
-
   stage:ui:
-    desc: Explain how Control UI assets are staged for desktop builds
+    desc: Stage Control UI assets for desktop embed builds
     cmds:
       - task: common:stage:ui
 
   build:
-    desc: Placeholder platform build entrypoint
+    desc: Build the desktop host for the current platform
     cmds:
-      - echo "Placeholder only. See build/windows/Taskfile.yml and build/linux/Taskfile.yml for templates."
+      - task: "{{OS}}:build"
 
   package:
-    desc: Placeholder platform package entrypoint
+    desc: Package the desktop host for the current platform
     cmds:
-      - echo "Placeholder only. Packaging wiring remains deferred until runtime-safe review."
+      - task: "{{OS}}:package"
 
   run:
-    desc: Placeholder platform run entrypoint
+    desc: Run the desktop host for the current platform
     cmds:
-      - echo "Placeholder only. Runtime execution stays on the existing desktop bootstrap path."
+      - task: "{{OS}}:run"

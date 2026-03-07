@@ -47,9 +47,9 @@ var providerDefaults = map[string]ProviderDefaults{
 	},
 	"qwen-portal": {
 		BaseURL:       "https://portal.qwen.ai/v1",
-		DefaultModel:  "qwen-max",
-		ContextWindow: 131_072,
-		MaxTokens:     8192,
+		DefaultModel:  "qwen3.5-plus",
+		ContextWindow: 1_000_000,
+		MaxTokens:     81920,
 	},
 	"ollama": {
 		BaseURL:       "http://127.0.0.1:11434/v1",
@@ -77,9 +77,9 @@ var providerDefaults = map[string]ProviderDefaults{
 	},
 	"qwen": {
 		BaseURL:       "https://dashscope.aliyuncs.com/compatible-mode/v1",
-		DefaultModel:  "qwen-max",
-		ContextWindow: 131_072,
-		MaxTokens:     8192,
+		DefaultModel:  "qwen3.5-plus",
+		ContextWindow: 1_000_000,
+		MaxTokens:     81920,
 	},
 	"zai": {
 		BaseURL:       "https://open.bigmodel.cn/api/paas/v4",

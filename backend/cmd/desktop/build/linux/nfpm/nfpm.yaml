@@ -1,0 +1,40 @@
+name: "clawacosmi-desktop"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.0.0-dev"
+section: "default"
+priority: "extra"
+maintainer: Acosmi <devnull@acosmi.local>
+description: "ClawAcosmi desktop shell"
+vendor: "Acosmi"
+homepage: "https://v3alpha.wails.io"
+license: "Proprietary"
+release: "1"
+
+contents:
+  - src: "./bin/ClawAcosmi-desktop"
+    dst: "/usr/local/bin/ClawAcosmi-desktop"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/clawacosmi-desktop.png"
+  - src: "./build/linux/ClawAcosmi-desktop.desktop"
+    dst: "/usr/share/applications/ClawAcosmi-desktop.desktop"
+
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+
+overrides:
+  rpm:
+    depends:
+      - gtk3
+      - webkit2gtk4.1
+  archlinux:
+    depends:
+      - gtk3
+      - webkit2gtk-4.1
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
+  preinstall: "./build/linux/nfpm/scripts/preinstall.sh"
+  preremove: "./build/linux/nfpm/scripts/preremove.sh"
+  postremove: "./build/linux/nfpm/scripts/postremove.sh"

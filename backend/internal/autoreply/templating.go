@@ -3,6 +3,8 @@ package autoreply
 import (
 	"fmt"
 	"strings"
+
+	"github.com/Acosmi/ClawAcosmi/internal/agents/session"
 )
 
 // TS 对照: auto-reply/templating.ts (193L)
@@ -74,6 +76,7 @@ type MsgContext struct {
 	SpawnedBy          string                 // TS: spawnedBy — 发起者标识
 	ClientCapabilities map[string]interface{} // TS: clientCapabilities — 客户端能力
 	Images             []MessageImage         // TS: parsed attachment images
+	Attachments        []session.ContentBlock // chat.send 附件 content blocks（用于 transcript 持久化 + LLM 多模态）
 }
 
 // MessageImage 消息图片附件。

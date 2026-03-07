@@ -30,7 +30,7 @@ func BenchmarkChatAttachmentProviderCache_ProcessAttachments(b *testing.B) {
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = processAttachmentsForChatWithCache(ctx, "base", attachments, loader, cache)
+			_, _ = processAttachmentsForChatWithCache(ctx, "base", attachments, loader, cache)
 		}
 		b.StopTimer()
 
@@ -60,7 +60,7 @@ func BenchmarkChatAttachmentProviderCache_ProcessAttachments(b *testing.B) {
 			} else {
 				loader.cfg = testChatAttachmentConfig("qwen")
 			}
-			_ = processAttachmentsForChatWithCache(ctx, "base", attachments, loader, cache)
+			_, _ = processAttachmentsForChatWithCache(ctx, "base", attachments, loader, cache)
 		}
 		b.StopTimer()
 

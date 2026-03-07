@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 
+	"github.com/Acosmi/ClawAcosmi/internal/agents/session"
 	"github.com/Acosmi/ClawAcosmi/pkg/types"
 )
 
@@ -209,6 +210,8 @@ type RunEmbeddedPiAgentParams struct {
 	AgentType string `json:"agentType,omitempty"`
 	// SuppressTranscript Bug#11: 在 model fallback 场景下跳过 transcript 持久化。
 	SuppressTranscript bool `json:"-"`
+	// Attachments 用户附件 content blocks（用于 transcript 持久化 + LLM 多模态注入）。
+	Attachments []session.ContentBlock `json:"-"`
 }
 
 // ---------- ToolEvent 工具事件 ----------

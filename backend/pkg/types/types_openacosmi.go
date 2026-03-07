@@ -103,10 +103,17 @@ type MediaAgentSettings struct {
 	Model               string   `json:"model,omitempty"`               // LLM model: "deepseek-chat" 等
 	APIKey              string   `json:"apiKey,omitempty"`              // 独立 API key（自动脱敏）
 	BaseURL             string   `json:"baseUrl,omitempty"`             // OpenAI 兼容端点
-	EnabledSources      []string `json:"enabledSources,omitempty"`      // 启用的热点源（空=全部启用）
+	EnabledSources      []string `json:"enabledSources,omitempty"`      // 启用的热点源（nil=全部启用，[]=全部禁用）
 	EnablePublish       *bool    `json:"enablePublish,omitempty"`       // 是否启用发布工具（nil=默认true）
 	EnableInteract      *bool    `json:"enableInteract,omitempty"`      // 是否启用互动工具（nil=默认false）
 	WizardCompleted     bool     `json:"wizardCompleted,omitempty"`     // 向导是否已完成
+
+	// 高级热点策略配置
+	HotKeywords        []string `json:"hotKeywords,omitempty"`        // 自定义热点关键词过滤
+	MonitorIntervalMin int      `json:"monitorIntervalMin,omitempty"` // 热点监控频率（分钟，默认 30）
+	TrendingThreshold  *float64 `json:"trendingThreshold,omitempty"`  // 热度阈值（低于此值跳过，nil=默认 10000，0=不过滤）
+	ContentCategories  []string `json:"contentCategories,omitempty"`  // 内容领域偏好
+	AutoDraftEnabled   bool     `json:"autoDraftEnabled,omitempty"`   // 自动生成草稿开关
 }
 
 // OpenCoderSettings open-coder 编程子智能体独立配置。

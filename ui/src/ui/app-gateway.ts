@@ -22,6 +22,7 @@ import { loadChannels } from "./controllers/channels.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import { handleChatEvent, type ChatEventPayload } from "./controllers/chat.ts";
+import { loadConfig, needsInitialSetup } from "./controllers/config.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import {
   addCoderConfirm,
@@ -73,6 +74,7 @@ type GatewayHost = {
   lastError: string | null;
   onboarding?: boolean;
   wizardAutoStarted?: boolean;
+  wizardV2Open?: boolean;
   eventLogBuffer: EventLogEntry[];
   eventLog: EventLogEntry[];
   tab: Tab;
@@ -157,6 +159,27 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
   }
 }
 
+async function maybeAutoStartSetupWizard(host: GatewayHost) {
+  if (host.wizardAutoStarted || host.wizardV2Open) {
+    return;
+  }
+
+  const app = host as unknown as OpenAcosmiApp;
+  if (host.onboarding) {
+    host.wizardAutoStarted = true;
+    await app.handleStartWizardV2();
+    return;
+  }
+
+  await loadConfig(app);
+  if (!needsInitialSetup(app.configSnapshot)) {
+    return;
+  }
+
+  host.wizardAutoStarted = true;
+  await app.handleStartWizardV2();
+}
+
 export function connectGateway(host: GatewayHost) {
   host.lastError = null;
   host.hello = null;
@@ -204,12 +227,7 @@ export function connectGateway(host: GatewayHost) {
           }).catch(() => { /* escalation status load failure is non-critical */ });
         }
       }
-      // Auto-start setup wizard when ?onboarding=1 is in the URL (once only)
-      if (host.onboarding && !host.wizardAutoStarted) {
-        host.wizardAutoStarted = true;
-        const app = host as unknown as OpenAcosmiApp;
-        void app.handleStartWizardV2();
-      }
+      void maybeAutoStartSetupWizard(host);
     },
     onClose: ({ code, reason }) => {
       host.connected = false;

@@ -195,6 +195,13 @@ func handleConfigSet(ctx *MethodHandlerContext) {
 	}
 
 	loader.ClearCache()
+
+	// 触发 Monitor 频道热更新（无需重启 Gateway）
+	if mgr := ctx.Context.ChannelMonitorMgr; mgr != nil {
+		if newCfg, err := loader.LoadConfig(); err == nil && newCfg != nil {
+			mgr.Reload(newCfg)
+		}
+	}
 	ctx.Respond(true, map[string]interface{}{
 		"ok":     true,
 		"path":   loader.ConfigPath(),
@@ -275,7 +282,13 @@ func handleConfigApply(ctx *MethodHandlerContext) {
 	}
 	loader.ClearCache()
 
-	// 解析 sessionKey / note / restartDelayMs（对应 TS L409-L421）
+	// 触发 Monitor 频道热更新（无需重启 Gateway）
+	if mgr := ctx.Context.ChannelMonitorMgr; mgr != nil {
+		if newCfg, err := loader.LoadConfig(); err == nil && newCfg != nil {
+			mgr.Reload(newCfg)
+		}
+	}
+
 	sessionKey, _ := ctx.Params["sessionKey"].(string)
 	sessionKey = strings.TrimSpace(sessionKey)
 	note, _ := ctx.Params["note"].(string)
@@ -432,7 +445,13 @@ func handleConfigPatch(ctx *MethodHandlerContext) {
 	}
 	loader.ClearCache()
 
-	// 解析 sessionKey / note / restartDelayMs（对应 TS L298-L310）
+	// 触发 Monitor 频道热更新（无需重启 Gateway）
+	if mgr := ctx.Context.ChannelMonitorMgr; mgr != nil {
+		if newCfg, err := loader.LoadConfig(); err == nil && newCfg != nil {
+			mgr.Reload(newCfg)
+		}
+	}
+
 	sessionKey, _ := ctx.Params["sessionKey"].(string)
 	sessionKey = strings.TrimSpace(sessionKey)
 	note, _ := ctx.Params["note"].(string)
