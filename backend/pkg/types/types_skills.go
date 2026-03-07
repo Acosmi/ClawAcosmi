@@ -23,11 +23,29 @@ type SkillsInstallConfig struct {
 	NodeManager string `json:"nodeManager,omitempty"` // "npm"|"pnpm"|"yarn"|"bun"
 }
 
+// SkillsStoreOAuthConfig 技能商店 OAuth 配置
+type SkillsStoreOAuthConfig struct {
+	Enabled   bool   `json:"enabled,omitempty" yaml:"enabled"`
+	IssuerURL string `json:"issuerUrl,omitempty" yaml:"issuerUrl"`
+	ClientID  string `json:"clientId,omitempty" yaml:"clientId"`
+}
+
 // SkillsStoreConfig 技能商店连接配置（nexus-v4 云端）
 type SkillsStoreConfig struct {
-	URL   string               `json:"url,omitempty"`   // nexus-v4 基础 URL，如 "https://chat.acosmi.com"
-	Token string               `json:"token,omitempty"` // JWT Bearer token (P1 REST + P2 OAuth bootstrap)
-	MCP   *MCPConnectionConfig `json:"mcp,omitempty"`   // MCP 远程工具连接配置 (P2)
+	URL   string                  `json:"url,omitempty"`   // nexus-v4 基础 URL，如 "https://chat.acosmi.com"
+	Token string                  `json:"token,omitempty"` // JWT Bearer token (P1 REST + P2 OAuth bootstrap)
+	MCP   *MCPConnectionConfig    `json:"mcp,omitempty"`   // MCP 远程工具连接配置 (P2)
+	OAuth *SkillsStoreOAuthConfig `json:"oauth,omitempty" yaml:"oauth"` // OAuth 2.1 + PKCE 配置 (P2)
+}
+
+// AuthState 登录态（供 Gateway 其他模块消费）
+type AuthState struct {
+	IsAuthenticated bool          `json:"isAuthenticated"`
+	UserID          string        `json:"userId,omitempty"`
+	Email           string        `json:"email,omitempty"`
+	DisplayName     string        `json:"displayName,omitempty"`
+	Entitlements    []Entitlement `json:"entitlements,omitempty"`
+	TokenExpiresAt  string        `json:"tokenExpiresAt,omitempty"`
 }
 
 // MCPConnectionConfig MCP 远程工具执行连接配置。

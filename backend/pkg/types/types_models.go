@@ -93,9 +93,36 @@ const (
 	ModelsConfigReplace ModelsConfigMode = "replace"
 )
 
+// ModelSource 模型来源
+type ModelSource string
+
+const (
+	ModelSourceManaged ModelSource = "managed"
+	ModelSourceCustom  ModelSource = "custom"
+)
+
+// ManagedModelEntry 托管模型条目（从 nexus-v4 拉取）
+type ManagedModelEntry struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Provider     string  `json:"provider"`
+	ModelID      string  `json:"modelId"`
+	MaxTokens    int     `json:"maxTokens,omitempty"`
+	PricePerMTok float64 `json:"pricePerMTok,omitempty"` // 每百万 token 价格
+	IsDefault    bool    `json:"isDefault,omitempty"`
+}
+
+// ManagedModelsConfig 托管模型配置
+type ManagedModelsConfig struct {
+	Enabled       bool   `json:"enabled,omitempty" yaml:"enabled"`
+	CatalogURL    string `json:"catalogUrl,omitempty" yaml:"catalogUrl"`       // nexus-v4 模型目录 API
+	ProxyEndpoint string `json:"proxyEndpoint,omitempty" yaml:"proxyEndpoint"` // 托管模型代理端点
+}
+
 // ModelsConfig 模型总配置
 type ModelsConfig struct {
 	Mode             ModelsConfigMode                `json:"mode,omitempty"`
 	Providers        map[string]*ModelProviderConfig `json:"providers,omitempty"`
 	BedrockDiscovery *BedrockDiscoveryConfig         `json:"bedrockDiscovery,omitempty"`
+	ManagedModels    *ManagedModelsConfig            `json:"managedModels,omitempty" yaml:"managedModels"`
 }
