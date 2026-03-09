@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="./claw-crab-logo.png" alt="Crab Claw（蟹爪）架构图 / Architecture Diagram" width="160" />
+  <img src="./logo1.png" alt="Crab Claw（蟹爪）架构图 / Architecture Diagram" width="160" />
   
 # <span style="color: #c9ccc6;">Crab Claw（蟹爪） @ Acosmi.ai</span>
 
